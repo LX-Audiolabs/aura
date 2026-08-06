@@ -1,4 +1,5 @@
 /target
+/target-check
 crates/*/target
 examples/*/target
 tools/*/target

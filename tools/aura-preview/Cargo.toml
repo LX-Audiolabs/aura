@@ -1,0 +1,18 @@
+[package]
+name = "aura-preview"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Hot-reload preview for AURA plugin .slint UIs (@aura widgets + bundled fonts)"
+publish = false
+
+[dependencies]
+aura-build = { workspace = true }
+slint-interpreter = { workspace = true }
+notify = "8"
+spin_on = "0.1"
+
+[lints]
+workspace = true

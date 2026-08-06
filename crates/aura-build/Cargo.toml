@@ -19,5 +19,9 @@ include = [
 [dependencies]
 slint-build = { workspace = true }
 
+[dev-dependencies]
+slint-interpreter = { workspace = true }
+spin_on = "0.1"
+
 [lints]
 workspace = true

@@ -27,6 +27,10 @@ impl<'a, S: Sample> AudioBuffer<'a, S> {
         }
     }
 
+    /// Checked variant of [`from_slices`](Self::from_slices).
+    ///
+    /// # Panics
+    /// Panics if any channel has fewer than `num_samples` elements.
     #[must_use]
     pub fn from_slices_checked(
         inputs: &'a [&'a [S]],

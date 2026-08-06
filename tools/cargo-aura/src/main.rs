@@ -7,6 +7,7 @@
 //!   cargo aura new my-plugin
 //!   cargo aura build [--clap|--vst3|--lv2]
 //!   cargo aura install [--clap|--vst3|--lv2]
+//!   cargo aura preview [path] [--no-watch]
 //!   cargo aura doctor
 
 use std::env;
@@ -21,11 +22,12 @@ fn main() -> ExitCode {
         args.remove(0);
     }
 
-    let cmd = args.first().map(String::as_str).unwrap_or("help");
+    let cmd = args.first().map_or("help", String::as_str);
     match cmd {
         "new" => cmd_new(&args[1..]),
         "build" => cmd_build(&args[1..]),
         "install" => cmd_install(&args[1..]),
+        "preview" => cmd_preview(&args[1..]),
         "doctor" => cmd_doctor(),
         "help" | "--help" | "-h" => {
             print_help();
@@ -53,6 +55,8 @@ Commands:
                           cargo build with format feature(s)
   install [--clap|--vst3|--lv2] [--release]
                           build + copy artifact into host search path
+  preview [path] [--component N] [--no-watch]
+                          hot-reload the plugin .slint UI (default ui/main.slint)
   doctor                  Check toolchain / AURA path / clap-validator
   help                    This message
 
@@ -188,6 +192,8 @@ fn cmd_new(args: &[String]) -> ExitCode {
     ExitCode::SUCCESS
 }
 
+// Template emission is long but linear — splitting it would only obscure it.
+#[allow(clippy::too_many_lines)]
 fn write_scaffold(
     dest: &Path,
     name: &str,
@@ -371,6 +377,41 @@ fn _aura_surface() {{
 }
 
 // ---------------------------------------------------------------------------
+// preview
+// ---------------------------------------------------------------------------
+
+/// `cargo aura preview [path] [--component N] [--no-watch]` — hot-reload the
+/// plugin's `.slint` UI without compiling the plugin. Delegates to the
+/// `aura-preview` binary in the AURA workspace.
+fn cmd_preview(args: &[String]) -> ExitCode {
+    let root = match aura_root() {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let mut cmd = Command::new("cargo");
+    cmd.arg("run")
+        .arg("-p")
+        .arg("aura-preview")
+        .arg("--manifest-path")
+        .arg(root.join("Cargo.toml"))
+        .arg("--")
+        .args(args);
+
+    match cmd.status() {
+        Ok(s) if s.success() => ExitCode::SUCCESS,
+        Ok(s) => ExitCode::from(u8::try_from(s.code().unwrap_or(1)).unwrap_or(1)),
+        Err(e) => {
+            eprintln!("failed to run cargo: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // build / install
 // ---------------------------------------------------------------------------
 
@@ -404,7 +445,7 @@ fn cmd_build(args: &[String]) -> ExitCode {
 
     match cmd.status() {
         Ok(s) if s.success() => ExitCode::SUCCESS,
-        Ok(s) => ExitCode::from(s.code().unwrap_or(1) as u8),
+        Ok(s) => ExitCode::from(u8::try_from(s.code().unwrap_or(1)).unwrap_or(1)),
         Err(e) => {
             eprintln!("failed to run cargo: {e}");
             ExitCode::FAILURE
@@ -472,7 +513,11 @@ fn install_clap(target_dir: &Path, profile: &str) -> Result<(), String> {
             .to_string_lossy()
             .into_owned();
         // Normalize to .clap on copy when we only have .dll/.so/.dylib
-        let dest_name = if file_name.ends_with(".clap") {
+        let dest_name = if src
+            .extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|e| e.eq_ignore_ascii_case("clap"))
+        {
             file_name
         } else if let Some(stem) = strip_lib_prefix(&file_name) {
             format!("{stem}.clap")
@@ -502,15 +547,15 @@ fn find_plugin_artifacts(dir: &Path) -> Result<Vec<PathBuf>, String> {
             continue;
         }
         let name = p.file_name().and_then(|s| s.to_str()).unwrap_or("");
+        let ext = p
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(str::to_ascii_lowercase);
         // Skip deps, build scripts, cargo-aura itself, rlibs
-        if name.ends_with(".d") || name.ends_with(".rlib") || name.ends_with(".rmeta") {
+        if matches!(ext.as_deref(), Some("d" | "rlib" | "rmeta")) {
             continue;
         }
-        if name.ends_with(".clap")
-            || name.ends_with(".dll")
-            || name.ends_with(".so")
-            || name.ends_with(".dylib")
-        {
+        if matches!(ext.as_deref(), Some("clap" | "dll" | "so" | "dylib")) {
             // Heuristic: skip known non-plugin names
             let lower = name.to_ascii_lowercase();
             if lower.contains("cargo_aura") || lower.starts_with("std-") {
@@ -524,6 +569,8 @@ fn find_plugin_artifacts(dir: &Path) -> Result<Vec<PathBuf>, String> {
     Ok(out)
 }
 
+// Windows has no fallible path; macOS/Linux do — hence the Result.
+#[allow(clippy::unnecessary_wraps)]
 fn clap_install_dir() -> Result<PathBuf, String> {
     if let Ok(p) = env::var("CLAPINS").or_else(|_| env::var("CLAP_PATH")) {
         return Ok(PathBuf::from(p));
@@ -557,9 +604,7 @@ fn clap_install_dir() -> Result<PathBuf, String> {
 
 fn project_target_dir() -> PathBuf {
     // Respect CARGO_TARGET_DIR; else ./target
-    env::var_os("CARGO_TARGET_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("target"))
+    env::var_os("CARGO_TARGET_DIR").map_or_else(|| PathBuf::from("target"), PathBuf::from)
 }
 
 fn parse_format_flags(args: &[String]) -> (Vec<String>, bool, Vec<String>) {

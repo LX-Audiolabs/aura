@@ -35,4 +35,8 @@ cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
+UI preview without compiling the plugin: `cargo aura preview` (or
+`cargo run -p aura-preview -- path/to/ui/main.slint`) — hot-reload + Reload
+button, see `tools/aura-preview/README.md`.
+
 Rust **1.92+** (edition 2024).

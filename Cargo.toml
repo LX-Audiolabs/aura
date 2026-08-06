@@ -9,6 +9,7 @@ members = [
     "crates/aura-editor",
     "crates/aura-build",
     "tools/cargo-aura",
+    "tools/aura-preview",
     "examples/smoke-gain",
     # Window-stack demos (aura-baseview)
     "crates/aura-baseview/examples/render_femtovg",
@@ -43,6 +44,13 @@ slint = { version = "=1.17.1", default-features = false, features = [
     "compat-1-2",
 ] }
 slint-build = { version = "=1.17.1" }
+# Interpreter is tooling-only (aura-preview). `internal` unlocks
+# create_with_existing_window for hot-reload; safe because of the exact pin.
+slint-interpreter = { version = "=1.17.1", features = [
+    "display-diagnostics",
+    "image-default-formats",
+    "internal",
+] }
 raw-window-handle = "0.6"
 wgpu = { version = "29", default-features = false, features = ["wgsl"] }
 
@@ -54,3 +62,9 @@ pedantic = { level = "warn", priority = -1 }
 
 [profile.shell]
 inherits = "release"
+
+# ponytail: toolchain workaround — rustc 1.97.1 (stable, x86_64-pc-windows-msvc)
+# miscompiles release build scripts at opt-level 3 (STATUS_ILLEGAL_INSTRUCTION
+# in the slint build script on this machine). Remove once the toolchain is fixed.
+[profile.release.build-override]
+opt-level = 1

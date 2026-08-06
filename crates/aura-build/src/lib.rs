@@ -63,6 +63,46 @@ const WIDGET_SOURCES: &[(&str, &str)] = &[
     ("xy_pad.slint", include_str!("../ui/xy_pad.slint")),
 ];
 
+/// Where the bundled widgets and fonts were written, and how the Slint
+/// compiler must be configured to resolve `@aura` and font imports.
+///
+/// Returned by [`materialize_assets`]; usable outside build scripts (e.g.
+/// the `aura-preview` hot-reload viewer configures `slint_interpreter`
+/// with exactly these paths).
+#[derive(Debug, Clone)]
+pub struct AssetPaths {
+    /// `"aura"` → path of the materialized `widgets.slint`.
+    pub library_paths: std::collections::HashMap<String, PathBuf>,
+    /// Directory containing the bundled `.ttf` files.
+    pub include_paths: Vec<PathBuf>,
+    /// Pinned widget style (`"fluent"`).
+    pub style: String,
+}
+
+/// Write the bundled `@aura` widgets and fonts into `dir/aura-build/{ui,fonts}`
+/// and return the compiler configuration pointing at them.
+///
+/// Unlike [`compile`] this does not need `OUT_DIR` and emits no cargo
+/// directives, so it works in any process.
+///
+/// # Errors
+///
+/// [`CompileError`] if the assets cannot be written.
+pub fn materialize_assets(dir: &Path) -> Result<AssetPaths, CompileError> {
+    let ui_dir = materialize_widgets(dir)?;
+    let font_dir = materialize_font(dir)?;
+
+    let mut library_paths = std::collections::HashMap::new();
+    library_paths.insert(LIBRARY_NAME.to_string(), ui_dir.join("widgets.slint"));
+
+    Ok(AssetPaths {
+        library_paths,
+        include_paths: vec![font_dir],
+        // Pin Fluent so ComboBox / std-widgets look the same on every OS.
+        style: "fluent".to_string(),
+    })
+}
+
 /// Compile `slint_entry` (relative to the caller's `CARGO_MANIFEST_DIR`)
 /// with the AURA widget library and font include path.
 ///
@@ -75,18 +115,16 @@ pub fn compile(slint_entry: impl AsRef<Path>) -> Result<(), CompileError> {
         .map(PathBuf::from)
         .ok_or(CompileError::NoOutDir)?;
 
-    let ui_dir = materialize_widgets(&out_dir)?;
-    let font_dir = materialize_font(&out_dir)?;
+    // Rerun if crate fonts change (when building from git path).
+    println!("cargo:rerun-if-changed=fonts");
+    println!("cargo:rerun-if-changed=ui");
 
-    let widgets_entry = ui_dir.join("widgets.slint");
-    let mut library_paths = std::collections::HashMap::new();
-    library_paths.insert(LIBRARY_NAME.to_string(), widgets_entry);
+    let assets = materialize_assets(&out_dir)?;
 
-    // Pin Fluent so ComboBox / std-widgets look the same on every OS.
     let config = slint_build::CompilerConfiguration::new()
-        .with_library_paths(library_paths)
-        .with_include_paths(vec![font_dir])
-        .with_style("fluent".to_string());
+        .with_library_paths(assets.library_paths)
+        .with_include_paths(assets.include_paths)
+        .with_style(assets.style);
 
     slint_build::compile_with_config(slint_entry, config)
         .map_err(|e| CompileError::Slint(format!("{e}")))?;
@@ -144,9 +182,6 @@ fn materialize_font(out_dir: &Path) -> Result<PathBuf, CompileError> {
     for (name, bytes) in FONT_SOURCES {
         write_if_changed(&font_dir.join(name), bytes)?;
     }
-    // Rerun if crate fonts change (when building from git path).
-    println!("cargo:rerun-if-changed=fonts");
-    println!("cargo:rerun-if-changed=ui");
     Ok(font_dir)
 }
 
