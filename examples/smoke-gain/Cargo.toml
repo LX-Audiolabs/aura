@@ -15,7 +15,6 @@ clap = ["aura/clap"]
 
 [dependencies]
 aura = { workspace = true, features = ["clap"] }
-aura-params = { workspace = true }
 aura-editor = { workspace = true, features = ["backend-femtovg"] }
 slint = { workspace = true }
 

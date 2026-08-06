@@ -10,123 +10,19 @@
 use std::sync::Arc;
 
 use aura::prelude::*;
-use aura_params::{
-    FloatParam, ParamFlags, ParamInfo, ParamRange, ParamUnit, ParamValueKind, Params,
-    SmoothingStyle, __private::Sealed, format_param_value,
-};
 
 slint::include_modules!();
 
 const GAIN_ID: u32 = 1;
 
 // ---------------------------------------------------------------------------
-// Params (hand-written until aura-derive)
+// Params
 // ---------------------------------------------------------------------------
 
+#[derive(Params)]
 pub struct GainParams {
+    #[param(id = 1, name = "Gain", range = "linear(-24, 24)", default = 0.0, unit = "db")]
     pub gain: FloatParam,
-}
-
-impl Default for GainParams {
-    fn default() -> Self {
-        let info = ParamInfo {
-            id: GAIN_ID,
-            name: "Gain",
-            short_name: "Gain",
-            group: "",
-            range: ParamRange::Linear {
-                min: -24.0,
-                max: 24.0,
-            },
-            default_plain: 0.0,
-            flags: ParamFlags::AUTOMATABLE,
-            unit: ParamUnit::Db,
-            kind: ParamValueKind::Float,
-            midi_map: None,
-            midi_channel: None,
-        };
-        Self {
-            gain: FloatParam::new(info, SmoothingStyle::None),
-        }
-    }
-}
-
-impl Sealed for GainParams {}
-
-impl Params for GainParams {
-    fn param_infos(&self) -> Vec<ParamInfo> {
-        vec![self.gain.info]
-    }
-
-    fn count(&self) -> usize {
-        1
-    }
-
-    fn get_normalized(&self, id: u32) -> Option<f64> {
-        if id != GAIN_ID {
-            return None;
-        }
-        Some(self.gain.info.range.normalize(self.gain.raw_target()))
-    }
-
-    fn set_normalized(&self, id: u32, value: f64) {
-        if id != GAIN_ID {
-            return;
-        }
-        let plain = self.gain.info.range.denormalize(value);
-        self.gain.set_value(plain);
-    }
-
-    fn get_plain(&self, id: u32) -> Option<f64> {
-        if id != GAIN_ID {
-            return None;
-        }
-        Some(self.gain.raw_target())
-    }
-
-    fn set_plain(&self, id: u32, value: f64) {
-        if id != GAIN_ID {
-            return;
-        }
-        self.gain.set_value(value);
-    }
-
-    fn format_value(&self, id: u32, value: f64) -> Option<String> {
-        if id != GAIN_ID {
-            return None;
-        }
-        Some(format_param_value(&self.gain.info, value))
-    }
-
-    fn parse_value(&self, id: u32, text: &str) -> Option<f64> {
-        if id != GAIN_ID {
-            return None;
-        }
-        text.trim()
-            .trim_end_matches("dB")
-            .trim_end_matches("db")
-            .trim()
-            .parse()
-            .ok()
-    }
-
-    fn snap_smoothers(&self) {
-        self.gain.smoother.snap(self.gain.raw_target());
-    }
-
-    fn set_sample_rate(&self, sample_rate: f64) {
-        self.gain.smoother.set_sample_rate(sample_rate);
-    }
-
-    fn collect_values(&self) -> (Vec<u32>, Vec<f64>) {
-        (vec![GAIN_ID], vec![self.gain.raw_target()])
-    }
-
-    fn restore_values(&self, values: &[(u32, f64)]) {
-        for &(id, v) in values {
-            self.set_plain(id, v);
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------

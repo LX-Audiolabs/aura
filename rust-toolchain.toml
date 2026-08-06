@@ -1,4 +1,8 @@
 [toolchain]
-channel = "stable"
+# Pinned: stable 1.97.1 miscompiles build scripts on this machine
+# (STATUS_BREAKPOINT in smoke-gain's slint build script at opt-level 0,
+# STATUS_ILLEGAL_INSTRUCTION at opt-level 3). 1.96.0 builds the full
+# workspace clean. Revisit on the next stable (1.98+).
+channel = "1.96.0"
 components = ["rustfmt", "clippy"]
 profile = "minimal"

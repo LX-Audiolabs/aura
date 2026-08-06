@@ -56,12 +56,16 @@ Do **not** dump `agal/skills/` or full `agal.json`.
 
 ## Basis gate (cutover blocked until)
 
-See DoD table in `docs/migration-steps.md`. Rough blockers today:
+See DoD table in `docs/migration-steps.md` and **`docs/gaps-and-optimizations.md`**.
 
-- `aura-derive`  
+Rough blockers today:
+
 - Bitwig (or REAPER) GUI on smoke-gain  
+- ParamId strategy (G2) before pilot editors  
 - VST3 + LV2 if product matrix still needs them  
 - Scaffold / install polish  
+
+**Landed:** `aura-derive` (`id = N` required). Product plugins still need an ID pass + ParamId decision.
 
 Stage 6 (init wizard, aura-gui, agal mesh UX) is **not** a basis gate.
 

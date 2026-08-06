@@ -36,10 +36,15 @@ pub use aura_core::{
 
 // --- params surface ---
 pub use aura_params::{
-    BoolParam, EnumParam, FloatParam, IntParam, ParamFlags, ParamInfo, ParamRange, ParamUnit,
-    ParamValueKind, Params, Smoother, SmoothingStyle, format_param_value,
+    BoolParam, EnumParam, FloatParam, IntParam, MeterSlot, MidiSource, ParamEnum, ParamFlags,
+    ParamInfo, ParamRange, ParamUnit, ParamValueKind, Params, Smoother, SmoothingStyle,
+    format_param_value,
 };
 pub use aura_params::sample::{Float, Sample};
+
+// --- derive macros (macro namespace; `Params` / `ParamEnum` coexist
+// with the same-named traits, serde-style) ---
+pub use aura_derive::{ParamEnum, Params};
 
 /// Re-export CLAP export macro when `clap` feature is on.
 #[cfg(feature = "clap")]
@@ -50,9 +55,10 @@ pub mod prelude {
     pub use std::sync::Arc;
 
     pub use crate::{
-        AudioBuffer, AudioConfig, Editor, FloatParam, IntoEditor, ParamInfo, ParamRange, ParamUnit,
-        ParamValueKind, Params, PluginCategory, PluginContext, PluginInfo, PluginLogic,
-        ProcessContext, ProcessMode, ProcessStatus, RawWindowHandle, SmoothingStyle,
+        AudioBuffer, AudioConfig, BoolParam, Editor, EnumParam, FloatParam, IntParam, IntoEditor,
+        MeterSlot, ParamEnum, ParamInfo, ParamRange, ParamUnit, ParamValueKind, Params,
+        PluginCategory, PluginContext, PluginInfo, PluginLogic, ProcessContext, ProcessMode,
+        ProcessStatus, RawWindowHandle, SmoothingStyle,
     };
     pub use crate::params::sample::Float;
 }

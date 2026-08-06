@@ -3,7 +3,8 @@
 **Single source of truth** for direction, stages, and cutover gates.  
 No separate `roadmap.md` — update **this file** when status or next steps change.
 
-Last status pass: 2026-08-06.
+Last status pass: 2026-08-06.  
+**Gaps & optimizations (derive, cutover, polish):** [gaps-and-optimizations.md](./gaps-and-optimizations.md).
 
 ---
 
@@ -46,8 +47,8 @@ Last status pass: 2026-08-06.
 | Layer | State |
 |-------|--------|
 | Direction / scope | Aligned (Slint-only, CLAP-first, no AU/egui zoo) |
-| Framework basis (own DoD) | ~half — Stages 0–4 mostly; derive + VST3/LV2 + host harden open |
-| Product cutover | Blocked — need derive, multi-format, richer scaffold, Bitwig GUI proof |
+| Framework basis (own DoD) | ~half — Stages 0–4 mostly; VST3/LV2 + host harden open |
+| Product cutover | Blocked — multi-format, ParamId decision, Bitwig GUI, scaffold (derive **landed**) |
 
 ### What works today
 
@@ -58,13 +59,14 @@ Last status pass: 2026-08-06.
 - **`examples/smoke-gain`:** builds, clap-validator green (incl. state/GUI path)
 - **`cargo aura`:** `new` · `build` · `install` · `doctor` · `preview`
 - **agal orientation:** `agal.toml` · `agal/notes/_workspace.md` · synced skills · local `07-aura/aura-scope`
+- **`aura-derive`:** `#[derive(Params)]` / `ParamEnum`; tests + smoke-gain (see [gaps-and-optimizations.md](./gaps-and-optimizations.md))
 
 ### Still open for “Basis fertig”
 
 | Priority | Item | Why |
 |----------|------|-----|
-| **P0** | `aura-derive` (`#[derive(Params)]`, plugin info) | Product plugins all use derive; hand-written Params unusable at scale |
 | **P0** | Bitwig (or REAPER) GUI open on smoke-gain | Validator ≠ real host; prove parented Slint |
+| **P0** | Decide ParamId strategy (derive enum vs raw/const IDs) | Product editors use `*ParamId` today — G2 in gaps doc |
 | **P1** | Richer `cargo aura new` (product-shaped: editor/process split optional) | Author UX parity with how we actually write plugins |
 | **P1** | `install --clap` clean artifact name (`.clap`) | Ship path like truce |
 | **P1** | VST3 wrapper + `cargo aura build/install --vst3` | Product matrix ships VST3 today |
@@ -77,7 +79,8 @@ Last status pass: 2026-08-06.
 
 | Capability | Product (truce) today | AURA now | Cutover blocker? |
 |------------|----------------------|----------|------------------|
-| `#[derive(Params)]` | yes | no | **yes** |
+| `#[derive(Params)]` | yes (often no `id`) | yes (**`id = N` required**) | soft (ID pass) |
+| `*ParamId` enum for editors | yes (truce-derive) | **no** | **yes** until G2 decided |
 | CLAP process / params / GUI | yes | yes (minimal) | soft |
 | VST3 / LV2 | yes | no | **yes** (for full matrix) |
 | MIDI / note events in process | yes | transport only | soft for our FX/analyzers |
@@ -89,14 +92,15 @@ Last status pass: 2026-08-06.
 
 ### Next work order (do in order)
 
-1. `aura-derive` → rewrite smoke-gain (or scaffold) to use it  
-2. Bitwig GUI smoke on `smoke-gain`  
-3. Scaffold + install polish (`cargo aura new/install --clap`)  
-4. Stage 5: VST3, then LV2 (same smoke plugin, feature flags)  
-5. Declare **Basis fertig** when DoD table below is all green  
-6. Stage 7: **one** pilot product plugin, then catalog  
+1. ~~`aura-derive` → rewrite smoke-gain to use it~~ — done (land commit if still local)  
+2. **Decide ParamId (G2)** — document choice in gaps doc  
+3. Bitwig GUI smoke on `smoke-gain`  
+4. Scaffold + install polish (`cargo aura new/install --clap`; scaffold uses derive + ids)  
+5. Stage 5: VST3, then LV2 (same smoke plugin, feature flags)  
+6. Declare **Basis fertig** when DoD table below is all green  
+7. Stage 7: **one** pilot product plugin (see cutover checklist in gaps doc), then catalog  
 
-Do **not** start Stage 7 or bulk-rename product crates before step 5.
+Do **not** start Stage 7 or bulk-rename product crates before step 6 (Basis fertig).
 
 ---
 
@@ -109,7 +113,7 @@ AURA is ready for product cutover only when **all** of these work **without** th
 | 1 | Install toolchain | `cargo install cargo-truce` | **`cargo install cargo-aura`** (or path install) | done (path) |
 | 2 | New plugin | `cargo truce new` | **`cargo aura new <name>`** → layout like our plugins | partial (basic scaffold) |
 | 3 | Metadata | `truce.toml` | **`aura.toml`** (+ **`agal.toml`** in skeleton) | done in scaffold |
-| 4 | Params + DSP API | `PluginLogic` / params derive | **`aura-core` + `aura-params` (+ derive)** | derive **open** |
+| 4 | Params + DSP API | `PluginLogic` / params derive | **`aura-core` + `aura-params` (+ derive)** | derive done |
 | 5 | UI | (various) | **`aura-editor` + `aura-build`** (`@aura`, FemtoVG default) | done; Bitwig open **pending** |
 | 6 | Build format | `--clap` etc. | **`cargo aura build --clap`** (then vst3/lv2) | clap yes; vst3/lv2 **open** |
 | 7 | Install into host path | `install --clap` | **`cargo aura install --clap`** (e.g. `%CLAPINS%`) | wire exists; polish open |
@@ -271,7 +275,8 @@ Product helpers (`lx-dsp`, `lx-analysis`, …) keep `lx-*` in the plugins repo u
 - [x] Grow core as formats need: ~~events~~ (param gesture queue → CLAP out_events), ~~transport~~ (CLAP → `ProcessContext.transport`)
 - [ ] buses only if a format smoke needs non-stereo (not basis-critical for current catalog)
 - [ ] note-ports / MIDI in `ProcessContext` when an example needs them (not basis-critical for stereo FX)
-- [ ] `aura-derive` (`Params`, plugin info) for author UX — **P0**
+- [x] `aura-derive` (`#[derive(Params)]` + `#[derive(ParamEnum)]`; smoke-gain ported; explicit `id = N`)
+- [ ] ParamId for editors (G2): optional `*ParamId` enum from derive **or** raw/const style — see gaps doc
 
 ### Stage 2 — CLAP path (first shippable format)
 

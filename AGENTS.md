@@ -8,7 +8,8 @@ Runtime + formats + build + CLI here. **Orientation** owned by **agal**.
 Read **`agal/AGAL.md`** first for map, health, skills index, and hot path.  
 Structural map: `agal/agal.agent.md`.  
 Durable memory: **`agal/notes/_workspace.md`** (never overwritten by `agal .`).  
-Roadmap / DoD: **`docs/migration-steps.md`** (single source of truth).
+Roadmap / DoD: **`docs/migration-steps.md`**.  
+Gaps & optimizations (derive, cutover): **`docs/gaps-and-optimizations.md`**.
 
 ```bash
 agal .                                          # regenerate map + notes headers

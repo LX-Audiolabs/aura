@@ -459,6 +459,7 @@ version = "0.1.0"
 dependencies = [
  "aura-clap",
  "aura-core",
+ "aura-derive",
  "aura-params",
 ]
 
@@ -499,6 +500,16 @@ name = "aura-core"
 version = "0.1.0"
 dependencies = [
  "aura-params",
+]
+
+[[package]]
+name = "aura-derive"
+version = "0.1.0"
+dependencies = [
+ "aura-params",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -4902,7 +4913,6 @@ dependencies = [
  "aura",
  "aura-build",
  "aura-editor",
- "aura-params",
  "slint",
 ]
 

@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "crates/aura",
     "crates/aura-params",
+    "crates/aura-derive",
     "crates/aura-core",
     "crates/aura-clap",
     "crates/aura-baseview",
@@ -30,6 +31,7 @@ readme = "README.md"
 # --- AURA crates ---
 aura = { path = "crates/aura" }
 aura-params = { path = "crates/aura-params" }
+aura-derive = { path = "crates/aura-derive" }
 aura-core = { path = "crates/aura-core" }
 aura-clap = { path = "crates/aura-clap" }
 aura-baseview = { path = "crates/aura-baseview", default-features = false }
@@ -62,9 +64,3 @@ pedantic = { level = "warn", priority = -1 }
 
 [profile.shell]
 inherits = "release"
-
-# ponytail: toolchain workaround — rustc 1.97.1 (stable, x86_64-pc-windows-msvc)
-# miscompiles release build scripts at opt-level 3 (STATUS_ILLEGAL_INSTRUCTION
-# in the slint build script on this machine). Remove once the toolchain is fixed.
-[profile.release.build-override]
-opt-level = 1

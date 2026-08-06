@@ -12,6 +12,7 @@ publish = false
 [dependencies]
 aura-core = { workspace = true }
 aura-params = { workspace = true }
+aura-derive = { workspace = true }
 aura-clap = { workspace = true, optional = true }
 
 [features]

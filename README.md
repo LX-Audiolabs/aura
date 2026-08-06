@@ -131,10 +131,11 @@ cargo build -p smoke-gain --release
 # clap-validator validate target/release/smoke_gain.dll  # or rename .clap
 ```
 
-**Still need for basis:** `aura-derive` · Bitwig GUI smoke · VST3/LV2 · richer `cargo aura new` / install polish.
+**Still need for basis:** Bitwig GUI smoke · ParamId decision · VST3/LV2 · richer `cargo aura new` / install polish.  
+**`aura-derive`:** landed (explicit `id = N`); product cutover gaps → [docs/gaps-and-optimizations.md](./docs/gaps-and-optimizations.md).
 
-**Roadmap (single source of truth):** [docs/migration-steps.md](./docs/migration-steps.md)  
-Historical naming notes: `../lx-framework-plan.md`.
+**Roadmap:** [docs/migration-steps.md](./docs/migration-steps.md) · **Gaps / opts:** [docs/gaps-and-optimizations.md](./docs/gaps-and-optimizations.md)  
+Historical naming: `../lx-framework-plan.md`.
 
 ---
 
