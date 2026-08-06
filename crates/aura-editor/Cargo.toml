@@ -1,0 +1,28 @@
+[package]
+name = "aura-editor"
+version.workspace = true
+edition.workspace = true
+license = "MIT"
+description = "AURA host Editor adapter (Slint on aura-baseview) for CLAP/VST3/LV2 GUI"
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+aura-baseview = { workspace = true, default-features = false }
+aura-core = { workspace = true }
+baseview = { workspace = true }
+slint = { workspace = true }
+raw-window-handle = { workspace = true }
+log = "0.4"
+
+[features]
+default = ["backend-femtovg"]
+# Pass renderer choice through to the window stack.
+backend-femtovg = ["aura-baseview/backend-femtovg"]
+backend-skia = ["aura-baseview/backend-skia"]
+backend-wgpu = ["aura-baseview/backend-wgpu"]
+backend-wgpu-vulkan = ["aura-baseview/backend-wgpu-vulkan"]
+
+[lints]
+workspace = true

@@ -1,0 +1,19 @@
+[package]
+name = "cargo-aura"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Build tool for AURA audio plugins — cargo aura new|build|install|doctor"
+publish = false
+
+[[bin]]
+name = "cargo-aura"
+path = "src/main.rs"
+
+[dependencies]
+# intentionally tiny — scaffold + cargo wrappers, no format SDKs yet
+
+[lints]
+workspace = true

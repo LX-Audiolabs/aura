@@ -1,0 +1,56 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/aura",
+    "crates/aura-params",
+    "crates/aura-core",
+    "crates/aura-clap",
+    "crates/aura-baseview",
+    "crates/aura-editor",
+    "crates/aura-build",
+    "tools/cargo-aura",
+    "examples/smoke-gain",
+    # Window-stack demos (aura-baseview)
+    "crates/aura-baseview/examples/render_femtovg",
+    "crates/aura-baseview/examples/open_parented",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+rust-version = "1.92"
+description = "AURA — Audio Unified Rust Architecture (Slint + CLAP/VST3/LV2)"
+repository = "https://github.com/lxndrbe/aura"
+authors = ["LX Audiolabs"]
+readme = "README.md"
+
+[workspace.dependencies]
+# --- AURA crates ---
+aura = { path = "crates/aura" }
+aura-params = { path = "crates/aura-params" }
+aura-core = { path = "crates/aura-core" }
+aura-clap = { path = "crates/aura-clap" }
+aura-baseview = { path = "crates/aura-baseview", default-features = false }
+aura-editor = { path = "crates/aura-editor", default-features = false }
+aura-build = { path = "crates/aura-build" }
+
+# --- Slint + windowing (pinned with aura-baseview) ---
+baseview = "0.3"
+slint = { version = "=1.17.1", default-features = false, features = [
+    "std",
+    "raw-window-handle-06",
+    "compat-1-2",
+] }
+slint-build = { version = "=1.17.1" }
+raw-window-handle = "0.6"
+wgpu = { version = "29", default-features = false, features = ["wgsl"] }
+
+[workspace.lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("cargo-clippy"))'] }
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+
+[profile.shell]
+inherits = "release"

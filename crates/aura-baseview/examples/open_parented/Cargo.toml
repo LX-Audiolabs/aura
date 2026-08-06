@@ -1,0 +1,16 @@
+[package]
+name = "aura-example-open-parented"
+version = "0.1.0"
+edition.workspace = true
+publish = false
+
+[dependencies]
+baseview = { workspace = true }
+slint = { workspace = true }
+aura-baseview = { workspace = true, features = ["backend-femtovg"] }
+
+softbuffer = "0.4.2"
+rtrb = "0.3.4"
+
+[build-dependencies]
+slint-build = { workspace = true }

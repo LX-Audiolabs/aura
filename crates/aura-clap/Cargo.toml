@@ -1,0 +1,20 @@
+[package]
+name = "aura-clap"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "CLAP format wrapper for AURA — free-audio/clap via clap-sys (minimal v1)"
+publish = false
+# Spec: https://github.com/free-audio/clap
+# Bindings: clap-sys (see README for version lag vs free-audio revision)
+
+[dependencies]
+aura-core = { workspace = true }
+aura-params = { workspace = true }
+# Rust FFI for free-audio/clap headers. Bump when clap-sys tracks newer 1.2.x.
+clap-sys = "0.5"
+
+[lints]
+workspace = true

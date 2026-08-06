@@ -1,0 +1,77 @@
+import {
+    Slider,
+    VerticalBox,
+    ProgressIndicator,
+} from "std-widgets.slint";
+
+
+component Meter {
+    //adapted from slider and progess bar
+    in property <Orientation> orientation;
+    in property <length> handle-width;
+    in property <length> handle-height;
+    out property <bool> vertical: root.orientation == Orientation.vertical;
+
+    private property <length> ref-size: !root.vertical ? root.handle-width : root.handle-height;
+
+    in property <float> value;
+
+    min-width: root.vertical ? 20px : 0px;
+    min-height: root.vertical ? 0px : 20px;
+    vertical-stretch: root.vertical ? 1 : 0;
+    horizontal-stretch: root.vertical ? 0 : 1;
+    accessible-role: progress-indicator;
+    accessible-value: root.value;
+    accessible-value-minimum: 0.0;
+    accessible-value-maximum: 1.0;
+
+    rail := Rectangle {
+        x: root.vertical ? (parent.width - self.width) / 2 : 0px;
+        y: root.vertical ? 0px : (parent.height - self.height) / 2;
+        width: root.vertical ? 4px : parent.width;
+        height: root.vertical ? parent.height : 4px;
+        background: green;
+        border-radius: 2px;
+    }
+
+    track := Rectangle {
+        x: root.vertical ? (parent.width - self.width) / 2 : 0px;
+        y: root.vertical ? clamp((parent.height) * (1 - root.value), 0, parent.height) : (parent.height - self.height) / 2;
+        width: root.vertical ? rail.width : clamp(parent.width * root.value, 0, parent.width);
+        height: root.vertical ? parent.height - clamp((parent.height) * (1 - root.value), 0, parent.height) : rail.height;
+        background: yellow;
+        border-radius: rail.border-radius;
+    }
+}
+
+export component AppWindow inherits Window {
+    preferred-width: 300px;
+    preferred-height: 360px;
+
+    min-width: 240px;
+    min-height: 290px;
+
+    in-out property <float> value: 0.75;
+
+    callback changed(float);
+    callback begin-drag();
+    callback end-drag();
+    property <float> scale: min(root.width / 300px, root.height / 360px);
+
+    background: #141414;
+    VerticalBox {
+        slider := Slider {
+            width: 100%;
+            maximum: 1.0;
+            value: root.value;
+            changed(value) => {
+                root.value = value;
+            }
+        }
+
+        pb := Meter {
+            width: 100%;
+            value: root.value;
+        }
+    }
+}

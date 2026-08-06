@@ -1,0 +1,22 @@
+[package]
+name = "aura"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "AURA — Audio Unified Rust Architecture (umbrella crate)"
+readme.workspace = true
+publish = false
+
+[dependencies]
+aura-core = { workspace = true }
+aura-params = { workspace = true }
+aura-clap = { workspace = true, optional = true }
+
+[features]
+default = []
+clap = ["dep:aura-clap"]
+
+[lints]
+workspace = true

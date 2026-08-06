@@ -1,0 +1,58 @@
+//! **AURA** — Audio Unified Rust Architecture.
+//!
+//! Umbrella crate for plugin authors. Prefer this over depending on
+//! every `aura-*` piece individually:
+//!
+//! ```toml
+//! aura = { path = ".../AURA/crates/aura" }
+//! aura-baseview = { path = ".../AURA/crates/aura-baseview", features = ["backend-femtovg"] }
+//! aura-editor = { path = ".../AURA/crates/aura-editor", features = ["backend-femtovg"] }
+//! ```
+//!
+//! ```rust,ignore
+//! use aura::prelude::*;
+//! ```
+//!
+//! Enable formats with features, same idea as the `truce` umbrella:
+//!
+//! ```toml
+//! aura = { path = "...", features = ["clap"] }
+//! ```
+
+#![forbid(unsafe_code)]
+
+pub use aura_core as core;
+pub use aura_params as params;
+
+#[cfg(feature = "clap")]
+pub use aura_clap as clap;
+
+// --- core surface ---
+pub use aura_core::{
+    AudioBuffer, AudioConfig, Editor, EditorBridge, IntoEditor, MidiDialect, PluginCategory,
+    PluginContext, PluginInfo, PluginLogic, ProcessContext, ProcessMode, ProcessStatus,
+    RawWindowHandle,
+};
+
+// --- params surface ---
+pub use aura_params::{
+    BoolParam, EnumParam, FloatParam, IntParam, ParamFlags, ParamInfo, ParamRange, ParamUnit,
+    ParamValueKind, Params, Smoother, SmoothingStyle, format_param_value,
+};
+pub use aura_params::sample::{Float, Sample};
+
+/// Re-export CLAP export macro when `clap` feature is on.
+#[cfg(feature = "clap")]
+pub use aura_clap::export;
+
+/// Common imports for plugin crates (grows with the framework).
+pub mod prelude {
+    pub use std::sync::Arc;
+
+    pub use crate::{
+        AudioBuffer, AudioConfig, Editor, FloatParam, IntoEditor, ParamInfo, ParamRange, ParamUnit,
+        ParamValueKind, Params, PluginCategory, PluginContext, PluginInfo, PluginLogic,
+        ProcessContext, ProcessMode, ProcessStatus, RawWindowHandle, SmoothingStyle,
+    };
+    pub use crate::params::sample::Float;
+}

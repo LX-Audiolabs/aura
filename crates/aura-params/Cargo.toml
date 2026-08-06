@@ -1,0 +1,15 @@
+[package]
+name = "aura-params"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "AURA parameter system (ranges, smoothers, atomic params)"
+publish = false
+
+[dependencies]
+bitflags = "2"
+
+[lints]
+workspace = true

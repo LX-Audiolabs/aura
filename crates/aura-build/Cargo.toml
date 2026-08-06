@@ -1,0 +1,23 @@
+[package]
+name = "aura-build"
+version.workspace = true
+edition.workspace = true
+# Build helper is tooling; keep aligned with AURA. Fonts themselves are OFL
+# (see fonts/OFL.txt) and are not re-licensed by this crate's SPDX.
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "AURA build helper: @aura Slint widgets + bundled fonts for slint-build 1.17.1"
+publish = false
+include = [
+    "src/**",
+    "ui/**",
+    "fonts/**",
+    "README.md",
+]
+
+[dependencies]
+slint-build = { workspace = true }
+
+[lints]
+workspace = true

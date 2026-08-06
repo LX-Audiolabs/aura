@@ -1,0 +1,26 @@
+[package]
+name = "smoke-gain"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "AURA in-tree CLAP smoke — stereo gain"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[features]
+default = ["clap"]
+clap = ["aura/clap"]
+
+[dependencies]
+aura = { workspace = true, features = ["clap"] }
+aura-params = { workspace = true }
+aura-editor = { workspace = true, features = ["backend-femtovg"] }
+slint = { workspace = true }
+
+[build-dependencies]
+aura-build = { workspace = true }
+
+[lints]
+workspace = true

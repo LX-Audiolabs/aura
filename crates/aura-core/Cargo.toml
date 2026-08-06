@@ -1,0 +1,15 @@
+[package]
+name = "aura-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "AURA core: process, editor, plugin info (minimal surface)"
+publish = false
+
+[dependencies]
+aura-params = { workspace = true }
+
+[lints]
+workspace = true

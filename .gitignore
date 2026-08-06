@@ -1,0 +1,13 @@
+/target
+crates/*/target
+examples/*/target
+tools/*/target
+crates/*/.cargo
+examples/*/.cargo
+.DS_Store
+.cargo/config.toml
+**/*.pyc
+**/*.swp
+*.clap
+*.vst3
+*.lv2
