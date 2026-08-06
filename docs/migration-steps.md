@@ -115,9 +115,105 @@ AURA is ready for product cutover only when **all** of these work **without** th
 | 8 | Sanity | validators / DAW load | **clap-validator** + Bitwig smoke on in-tree **example** | validator green; Bitwig **open** |
 | 9 | Docs | README | this file + root README scope | living |
 
-Optional for v1 basis (nice, **not** gate): hot-reload shell, full MIDI 2.0, screenshots via slint-viewer, `aura-gui` CLI shell.
+Optional for v1 basis (nice, **not** gate): hot-reload shell, full MIDI 2.0, screenshots via slint-viewer.  
+**Visual installer / init wizard / agal interop** = Stage 6 vision (below) — **not** a basis gate.
 
 **Out of scope until after cutover decision:** changing aether/meridian/… Cargo.toml to AURA.
+
+---
+
+## Tooling vision — AURA + agal (separate, optional mesh)
+
+Two **independent** tools. Same shop, optional handshake. Neither requires the other.
+
+```text
+                    ┌─────────────┐
+  empty folder ───► │  AURA tool  │──► aura.toml · plugins/ · cargo aura …
+                    │ CLI + GUI   │
+                    └──────┬──────┘
+                           │ optional: detect `agal` on PATH
+                           ▼
+                    ┌─────────────┐
+                    │    agal     │──► agal.toml · orientation maps · agent rules
+                    │  (if yes)   │
+                    └─────────────┘
+```
+
+| Tool | Owns | Does not own |
+|------|------|--------------|
+| **AURA** (`cargo aura` / later **aura-gui**) | Framework path, scaffold, formats, build/install, preview, plugin skeleton modules | Agent maps, graph health, product orientation mesh |
+| **agal** | Agent orientation, project graph, rules/suppress, notes | Compiling CLAP/VST3/LV2, DSP, Slint host embed |
+
+**Rule:** AURA writes a **thin** `agal.toml` stub only when the user opts in (or scaffold default “yes if agal present”). Agal never becomes a hard dependency of `cargo aura build`.
+
+### Target workflow (visual = CLI parity)
+
+All wizard choices must map 1:1 to flags. GUI is sugar; CLI remains source of truth for CI/agents.
+
+1. **Open tool** in empty (or product) folder  
+   - Visual: Slint **aura-gui** (installer / project console)  
+   - CLI: `cargo aura init` · `cargo aura new` · `cargo aura add-plugin` (names TBD)
+
+2. **INIT workspace** (empty dir → product tree)  
+   User picks:
+   - **Formats:** CLAP only · +VST3 · +LV2 (any subset; CLAP recommended default)
+   - **Platforms:** Windows · Linux · macOS (any subset)
+   - **Kind intent** (skeleton modules, not full DSP):
+     - effect · analyzer · instrument/synth · sequencer/note FX
+   - **agal:** if `agal` on PATH → ask “also wire agal?”  
+     - yes → write richer `agal.toml`, point at `output_dir`, optional first `agal …` hint  
+     - no / missing → skip; AURA still works
+
+3. **Write skeleton** into that folder  
+   e.g. workspace `Cargo.toml`, `aura.toml`, optional `agal.toml`, `plugins/` or single-crate layout, feature flags matching format picks, stub `PluginLogic` + `ui/main.slint` matching kind (stereo FX vs analyzer meters stub vs note ports when we have them).
+
+4. **Re-open same folder**  
+   Tool **reads** `aura.toml` (and Cargo features): formats already chosen, plugins listed.  
+   UI: “Add plugin” → name + kind + same frame conditions → append `[[plugin]]`, crate under `plugins/<name>/`.  
+   CLI: same via `cargo aura new` / `add` with flags.
+
+5. **Day-to-day**  
+   `build` / `install` / `preview` / `doctor` — CLI always; GUI buttons call same code paths.
+
+### CLI surface (target; not all exist yet)
+
+| Command (intent) | Role |
+|------------------|------|
+| `cargo aura init [flags]` | Empty/workspace bootstrap (formats, platforms, kind, `--with-agal` / `--no-agal`) |
+| `cargo aura new <name>` | Plugin crate skeleton (today: minimal single-crate) |
+| `cargo aura add-plugin …` | Extra plugin into existing multi-plugin workspace (later) |
+| `cargo aura preview` | Slint UI hot-reload (exists) |
+| `cargo aura build\|install` | formats (exists; VST3/LV2 later) |
+| `cargo aura doctor` | toolchain + AURA_PATH + optional “agal found?” |
+| **aura-gui** | Slint shell over the same commands |
+
+Flags sketch (bind GUI controls to these):
+
+```text
+--clap --vst3 --lv2
+--os win,linux,macos
+--kind effect|analyzer|instrument|sequencer
+--with-agal | --no-agal
+```
+
+### Layering (implementation order — do not invert)
+
+| Layer | When | Notes |
+|-------|------|--------|
+| **A** Shared scaffold engine in `cargo-aura` (flags → files) | After richer scaffold (P1) / derive | GUI must not reimplement templates |
+| **B** `init` + multi-plugin `aura.toml` model | After A | Empty-folder story |
+| **C** `doctor` optional agal probe | Cheap anytime | Detect only; never fail basis if missing |
+| **D** aura-gui (Slint) calling A–C | Stage 6 | Installer + project console |
+| **E** Deeper agal mesh (migrations, rules from kind) | With agal maintainers | AURA stays dumb writer of agreed keys |
+
+**Today:** stub `agal.toml` on `new` only; no `init`, no detect, no GUI, no kind modules.
+
+### Non-goals for this mesh
+
+- Bundling agal inside AURA releases as required runtime  
+- AURA parsing full agal orientation graphs  
+- Forcing agal on every scaffold  
+- GUI-only workflows without CLI flags  
 
 ---
 
@@ -127,12 +223,14 @@ If a PR or idea hits one of these, **stop** or park under Stage 6 / post-cutover
 
 | Drift | Response |
 |-------|----------|
-| Second UI toolkit (egui/iced/Vizia) | **Reject** — use nih-plug/truce elsewhere |
+| Second UI toolkit (egui/iced/Vizia) | **Reject** — use nice-plug/truce elsewhere |
 | AU / AAX / VST2 | **Reject** for AURA v1 |
 | “Port all of truce-core/cargo-truce” | **Reject** — selective port only |
 | Migrate product plugins before Basis fertig | **Reject** — strategy step 3 only after DoD |
 | Put `lx-dsp` / analysis / vault into AURA | **Reject** — product crates stay product |
-| Stage 6 polish before P0/P1 | **Defer** — polish is not the basis gate |
+| Stage 6 polish / aura-gui / init wizard before P0/P1 | **Defer** — polish is not the basis gate |
+| GUI without CLI flags for same action | **Reject** — visual = sugar over `cargo aura …` |
+| Hard-depend on agal for build/install | **Reject** — optional mesh only |
 | Docs claim “CLAP not shipped” while smoke works | **Fix docs** — status lives here |
 
 Stale help text in `cargo-aura` / crate READMEs must match this file after each stage close.
@@ -214,12 +312,19 @@ Start only after CLAP smoke + Bitwig GUI are real.
 - [ ] `cargo aura build|install --vst3` and `--lv2`
 - [ ] Validators / host smoke as available (no kitchen-sink host matrix)
 
-### Stage 6 — polish (still inside AURA; **not** basis gate)
+### Stage 6 — polish & authoring shell (still inside AURA; **not** basis gate)
 
-- [ ] Hot reload only if ROI clear
+See **Tooling vision — AURA + agal** above. Build on shared CLI scaffold engine first.
+
+- [ ] Scaffold engine: flags → files (`--clap/--vst3/--lv2`, `--kind`, `--with-agal`)
+- [ ] `cargo aura init` (empty folder → workspace + first plugin options)
+- [ ] Re-open: read `aura.toml`, add another plugin skeleton
+- [ ] `doctor`: optional “agal on PATH?” (info, not hard fail)
+- [ ] **aura-gui** (Slint): installer + project console = same flags as CLI
+- [ ] Agal mesh: richer stub / agreed keys when user opts in (with agal repo)
+- [ ] Hot reload only if ROI clear (beyond `aura-preview`)
 - [ ] MIDI 2.0 arch stubs
 - [ ] Extra demos under `examples/` only if useful for cargo-aura docs
-- [ ] **`aura-gui`** — Slint GUI for `cargo aura` commands (optional launcher)
 
 ### Stage 7 — **product cutover** (only after Basis fertig)
 

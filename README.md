@@ -49,7 +49,7 @@ AURA is **not** the right framework. Please use projects that already optimize f
 
 | Need | Go here |
 |------|---------|
-| Flexible Rust plugins, egui / iced / multiple UI styles, broad format matrix | **[nih-plug](https://github.com/robbert-vdh/nih-plug)** |
+| Flexible Rust plugins, egui / iced / multiple UI styles, broad format matrix | **[nice-plug](https://codeberg.org/RustAudio/nice-plug)** (NIH-plug successor — NIH being retired; RustAudio Discord) |
 | CLAP-centric Rust ecosystem / lower-level CLAP work | **[clack](https://github.com/prokopyl/clack)** (and related CLAP crates) |
 | Full multi-format framework including AU/AAX paths, egui/iced/Vizia options | **[truce](https://github.com/truce-audio/truce)** · [truce.audio](https://truce.audio) |
 
