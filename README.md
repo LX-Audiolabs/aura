@@ -131,11 +131,10 @@ cargo build -p smoke-gain --release
 # clap-validator validate target/release/smoke_gain.dll  # or rename .clap
 ```
 
-**Still need for basis:** editor host adapter · state/GUI CLAP ext · derive · VST3/LV2 · richer `cargo aura new`.
+**Still need for basis:** `aura-derive` · Bitwig GUI smoke · VST3/LV2 · richer `cargo aura new` / install polish.
 
-See [docs/migration-steps.md](./docs/migration-steps.md).
-
-Planning doc: `../lx-framework-plan.md`.
+**Roadmap (single source of truth):** [docs/migration-steps.md](./docs/migration-steps.md)  
+Historical naming notes: `../lx-framework-plan.md`.
 
 ---
 
