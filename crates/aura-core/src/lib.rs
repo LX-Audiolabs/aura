@@ -9,14 +9,18 @@
 pub mod buffer;
 pub mod config;
 pub mod editor;
+pub mod events;
 pub mod info;
 pub mod plugin;
 pub mod process;
+pub mod transport;
 
 pub use buffer::AudioBuffer;
 pub use config::{AudioConfig, ProcessMode};
 pub use editor::{Editor, EditorBridge, IntoEditor, PluginContext, RawWindowHandle};
+pub use events::{ParamEvent, ParamEventQueue};
 pub use info::{MidiDialect, PluginCategory, PluginInfo};
 pub use plugin::PluginLogic;
 pub use process::{ProcessContext, ProcessStatus};
+pub use transport::Transport;
 pub use aura_params::sample::{Float, Sample};

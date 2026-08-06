@@ -82,7 +82,8 @@ Optional for v1 basis (nice, not gate): hot-reload shell, full MIDI 2.0, screens
 - [x] `aura-params`
 - [x] `aura-core` (minimal `PluginLogic` / `Editor` / process)
 - [x] Umbrella **`aura`** (`use aura::prelude::*`)
-- [ ] Grow core as formats need: events, transport, state, buses
+- [x] Grow core as formats need: ~~events~~ (param gesture queue → CLAP out_events), ~~transport~~ (CLAP → `ProcessContext.transport`), state, buses
+  - buses/note-ports noch offen (note-ports = eigenes Todo, nicht Basis-kritisch)
 - [ ] `aura-derive` (`Params`, plugin info) for author UX
 
 ### Stage 2 — CLAP path (first shippable format)

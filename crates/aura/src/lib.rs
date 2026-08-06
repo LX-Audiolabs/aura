@@ -29,9 +29,9 @@ pub use aura_clap as clap;
 
 // --- core surface ---
 pub use aura_core::{
-    AudioBuffer, AudioConfig, Editor, EditorBridge, IntoEditor, MidiDialect, PluginCategory,
-    PluginContext, PluginInfo, PluginLogic, ProcessContext, ProcessMode, ProcessStatus,
-    RawWindowHandle,
+    AudioBuffer, AudioConfig, Editor, EditorBridge, IntoEditor, MidiDialect, ParamEvent,
+    ParamEventQueue, PluginCategory, PluginContext, PluginInfo, PluginLogic, ProcessContext,
+    ProcessMode, ProcessStatus, RawWindowHandle, Transport,
 };
 
 // --- params surface ---

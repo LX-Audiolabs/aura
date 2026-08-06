@@ -19,12 +19,20 @@ use std::sync::{Arc, OnceLock};
 
 use aura_core::info::PluginCategory;
 use aura_core::editor::{Editor, EditorBridge, PluginContext, RawWindowHandle};
+use aura_core::events::{ParamEvent, ParamEventQueue};
+use aura_core::transport::Transport;
 use aura_core::{
     AudioBuffer, AudioConfig, PluginLogic, ProcessContext, ProcessMode, ProcessStatus,
 };
 use aura_params::{ParamFlags, ParamRange, Params};
 use clap_sys::events::{
-    CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_VALUE, clap_event_param_value, clap_input_events,
+    CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_IS_LIVE, CLAP_EVENT_PARAM_GESTURE_BEGIN,
+    CLAP_EVENT_PARAM_GESTURE_END, CLAP_EVENT_PARAM_VALUE, CLAP_TRANSPORT_HAS_BEATS_TIMELINE,
+    CLAP_TRANSPORT_HAS_SECONDS_TIMELINE, CLAP_TRANSPORT_HAS_TEMPO,
+    CLAP_TRANSPORT_HAS_TIME_SIGNATURE, CLAP_TRANSPORT_IS_LOOP_ACTIVE, CLAP_TRANSPORT_IS_PLAYING,
+    CLAP_TRANSPORT_IS_RECORDING, clap_event_header, clap_event_param_gesture,
+    clap_event_param_value, clap_event_transport, clap_event_type, clap_input_events,
+    clap_output_events,
 };
 use clap_sys::ext::audio_ports::{
     CLAP_AUDIO_PORT_IS_MAIN, CLAP_EXT_AUDIO_PORTS, CLAP_PORT_STEREO, clap_audio_port_info,
@@ -149,6 +157,7 @@ unsafe extern "C" fn factory_create_plugin<L: PluginLogic>(
         host,
         params,
         editor: None,
+        param_events: Arc::new(ParamEventQueue::default()),
         state: None,
         sample_rate: 44_100.0,
         max_frames: 0,
@@ -244,6 +253,8 @@ struct Instance<L: PluginLogic> {
     params: Arc<L::Params>,
     /// Created on the main thread in `plugin_init`; `None` = no GUI.
     editor: Option<Box<dyn Editor>>,
+    /// GUI → host param events, drained in process/flush.
+    param_events: Arc<ParamEventQueue>,
     state: Option<L::DspState>,
     sample_rate: f64,
     max_frames: u32,
@@ -348,6 +359,13 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
     if !process.in_events.is_null() {
         unsafe { apply_input_events(&*inst.params, process.in_events) };
     }
+    unsafe { emit_param_events(&inst.param_events, process.out_events) };
+
+    let transport = if process.transport.is_null() {
+        None
+    } else {
+        Some(map_transport(unsafe { &*process.transport }))
+    };
 
     let Some(state) = inst.state.as_mut() else {
         return CLAP_PROCESS_ERROR;
@@ -411,6 +429,7 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
         let mut buffer = AudioBuffer::from_slices_checked(&in_refs, &mut out_refs, frames);
         let mut ctx =
             ProcessContext::new(inst.sample_rate, frames).with_process_mode(ProcessMode::Realtime);
+        ctx.transport = transport;
         L::process(state, &inst.params, &mut buffer, &mut ctx)
     };
 
@@ -448,6 +467,82 @@ unsafe fn apply_input_events(params: &dyn Params, in_events: *const clap_input_e
             let pev = unsafe { &*(hdr as *const clap_event_param_value) };
             params.set_plain(pev.param_id, pev.value);
         }
+    }
+}
+
+fn event_header(type_: clap_event_type, size: u32) -> clap_event_header {
+    clap_event_header {
+        size,
+        time: 0,
+        space_id: CLAP_CORE_EVENT_SPACE_ID,
+        type_,
+        flags: CLAP_EVENT_IS_LIVE,
+    }
+}
+
+/// Push queued GUI param events to the host's `out_events` (process/flush).
+unsafe fn emit_param_events(queue: &ParamEventQueue, out: *const clap_output_events) {
+    if out.is_null() {
+        return;
+    }
+    let Some(try_push) = (unsafe { &*out }).try_push else {
+        return;
+    };
+    for ev in queue.drain() {
+        match ev {
+            ParamEvent::GestureBegin(param_id) | ParamEvent::GestureEnd(param_id) => {
+                let type_ = if matches!(ev, ParamEvent::GestureBegin(_)) {
+                    CLAP_EVENT_PARAM_GESTURE_BEGIN
+                } else {
+                    CLAP_EVENT_PARAM_GESTURE_END
+                };
+                let e = clap_event_param_gesture {
+                    header: event_header(type_, size_of::<clap_event_param_gesture>() as u32),
+                    param_id,
+                };
+                unsafe { try_push(out, &e as *const _ as *const clap_event_header) };
+            }
+            ParamEvent::Value { id, plain } => {
+                let e = clap_event_param_value {
+                    header: event_header(
+                        CLAP_EVENT_PARAM_VALUE,
+                        size_of::<clap_event_param_value>() as u32,
+                    ),
+                    param_id: id,
+                    cookie: ptr::null_mut(),
+                    note_id: -1,
+                    port_index: -1,
+                    channel: -1,
+                    key: -1,
+                    value: plain,
+                };
+                unsafe { try_push(out, &e as *const _ as *const clap_event_header) };
+            }
+        }
+    }
+}
+
+fn map_transport(t: &clap_event_transport) -> Transport {
+    use clap_sys::fixedpoint::{CLAP_BEATTIME_FACTOR, CLAP_SECTIME_FACTOR};
+    // CLAP beat/sec times are i64 fixed point (factor 2^31).
+    #[allow(clippy::cast_precision_loss)]
+    let beat = |v: i64| v as f64 / CLAP_BEATTIME_FACTOR as f64;
+    #[allow(clippy::cast_precision_loss)]
+    let sec = |v: i64| v as f64 / CLAP_SECTIME_FACTOR as f64;
+    let f = t.flags;
+    let beats = f & CLAP_TRANSPORT_HAS_BEATS_TIMELINE != 0;
+    Transport {
+        playing: f & CLAP_TRANSPORT_IS_PLAYING != 0,
+        recording: f & CLAP_TRANSPORT_IS_RECORDING != 0,
+        loop_active: f & CLAP_TRANSPORT_IS_LOOP_ACTIVE != 0,
+        tempo: (f & CLAP_TRANSPORT_HAS_TEMPO != 0).then_some(t.tempo),
+        position_beats: beats.then_some(beat(t.song_pos_beats)),
+        position_seconds: (f & CLAP_TRANSPORT_HAS_SECONDS_TIMELINE != 0)
+            .then_some(sec(t.song_pos_seconds)),
+        loop_beats: beats.then_some((beat(t.loop_start_beats), beat(t.loop_end_beats))),
+        time_signature: (f & CLAP_TRANSPORT_HAS_TIME_SIGNATURE != 0)
+            .then_some((t.tsig_num, t.tsig_denom)),
+        bar_number: beats.then_some(t.bar_number),
     }
 }
 
@@ -632,7 +727,7 @@ unsafe extern "C" fn params_text_to_value<L: PluginLogic>(
 unsafe extern "C" fn params_flush<L: PluginLogic>(
     plugin: *const clap_plugin,
     in_: *const clap_input_events,
-    _out: *const clap_sys::events::clap_output_events,
+    out: *const clap_output_events,
 ) {
     let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
         return;
@@ -640,6 +735,7 @@ unsafe extern "C" fn params_flush<L: PluginLogic>(
     if !in_.is_null() {
         unsafe { apply_input_events(&*inst.params, in_) };
     }
+    unsafe { emit_param_events(&inst.param_events, out) };
 }
 
 // ---------------------------------------------------------------------------
@@ -648,10 +744,11 @@ unsafe extern "C" fn params_flush<L: PluginLogic>(
 
 /// Host bridge for the editor: param store + `clap_host_gui.request_resize`.
 ///
-/// v1: GUI writes go straight into the param store; gesture/param events to
-/// the host (out_events queue) land with the events work in aura-core.
+/// Param edits land in the store immediately (audio reads them next block)
+/// and are queued as CLAP gesture/value events for the host's automation.
 struct ClapBridge {
     params: Arc<dyn Params>,
+    events: Arc<ParamEventQueue>,
     host: *const clap_host,
 }
 
@@ -676,13 +773,20 @@ impl ClapBridge {
 }
 
 impl EditorBridge for ClapBridge {
-    fn begin_edit(&self, _id: u32) {}
+    fn begin_edit(&self, id: u32) {
+        self.events.push(ParamEvent::GestureBegin(id));
+    }
 
     fn set_param(&self, id: u32, normalized: f64) {
         self.params.set_normalized(id, normalized);
+        if let Some(plain) = self.params.get_plain(id) {
+            self.events.push(ParamEvent::Value { id, plain });
+        }
     }
 
-    fn end_edit(&self, _id: u32) {}
+    fn end_edit(&self, id: u32) {
+        self.events.push(ParamEvent::GestureEnd(id));
+    }
 
     fn get_param(&self, id: u32) -> f64 {
         self.params.get_normalized(id).unwrap_or(0.0)
@@ -895,6 +999,7 @@ unsafe extern "C" fn gui_set_parent<L: PluginLogic>(
     let ctx = PluginContext::new(params.clone())
         .with_bridge(Arc::new(ClapBridge {
             params,
+            events: Arc::clone(&inst.param_events),
             host: inst.host,
         }))
         .with_sample_rate(inst.sample_rate);
