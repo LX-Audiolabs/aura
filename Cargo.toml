@@ -52,7 +52,7 @@ slint-interpreter = { version = "=1.17.1", features = [
     "internal",
 ] }
 raw-window-handle = "0.6"
-wgpu = { version = "29", default-features = false, features = ["wgsl"] }
+wgpu = { version = "30", default-features = false, features = ["wgsl"] }
 
 [workspace.lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("cargo-clippy"))'] }
