@@ -12,6 +12,17 @@
 //! GUI / state / MIDI ports come later (free-audio ext list).
 
 #![allow(clippy::missing_safety_doc)]
+// ponytail: CLAP FFI glue — raw-pointer casts and C-int size conversions are
+// spec-shaped; the "safer" spellings add noise without changing semantics.
+#![allow(
+    clippy::ptr_as_ptr,
+    clippy::ref_as_ptr,
+    clippy::borrow_as_ptr,
+    clippy::cast_ptr_alignment,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap
+)]
 
 use std::ffi::{CStr, CString, c_char, c_void};
 use std::ptr;
@@ -91,12 +102,14 @@ macro_rules! export {
 // Entry
 // ---------------------------------------------------------------------------
 
+#[must_use]
 pub unsafe extern "C" fn entry_init(_plugin_path: *const c_char) -> bool {
     true
 }
 
 pub unsafe extern "C" fn entry_deinit() {}
 
+#[must_use]
 pub unsafe extern "C" fn get_factory<L: PluginLogic>(factory_id: *const c_char) -> *const c_void {
     if factory_id.is_null() {
         return ptr::null();
@@ -187,12 +200,12 @@ unsafe extern "C" fn factory_create_plugin<L: PluginLogic>(
 // ---------------------------------------------------------------------------
 
 struct DescStorage {
-    _id: CString,
-    _name: CString,
-    _vendor: CString,
-    _url: CString,
-    _version: CString,
-    _description: CString,
+    id: CString,
+    name: CString,
+    vendor: CString,
+    url: CString,
+    version: CString,
+    description: CString,
     feature_ptrs: Vec<*const c_char>,
     desc: clap_plugin_descriptor,
 }
@@ -200,7 +213,7 @@ struct DescStorage {
 fn descriptor<L: PluginLogic>() -> &'static clap_plugin_descriptor {
     // Unique static per monomorphization of L.
     static CELL: OnceLock<&'static clap_plugin_descriptor> = OnceLock::new();
-    *CELL.get_or_init(|| {
+    CELL.get_or_init(|| {
         let info = L::info();
         let id = CString::new(info.clap_id).unwrap_or_default();
         let name = CString::new(info.name).unwrap_or_default();
@@ -217,12 +230,12 @@ fn descriptor<L: PluginLogic>() -> &'static clap_plugin_descriptor {
         };
 
         let storage = Box::leak(Box::new(DescStorage {
-            _id: id,
-            _name: name,
-            _vendor: vendor,
-            _url: url,
-            _version: version,
-            _description: description,
+            id,
+            name,
+            vendor,
+            url,
+            version,
+            description,
             feature_ptrs: Vec::new(),
             desc: unsafe { std::mem::zeroed() },
         }));
@@ -230,14 +243,14 @@ fn descriptor<L: PluginLogic>() -> &'static clap_plugin_descriptor {
         storage.feature_ptrs = vec![feature.as_ptr(), ptr::null()];
         storage.desc = clap_plugin_descriptor {
             clap_version: CLAP_VERSION,
-            id: storage._id.as_ptr(),
-            name: storage._name.as_ptr(),
-            vendor: storage._vendor.as_ptr(),
-            url: storage._url.as_ptr(),
-            manual_url: storage._url.as_ptr(),
-            support_url: storage._url.as_ptr(),
-            version: storage._version.as_ptr(),
-            description: storage._description.as_ptr(),
+            id: storage.id.as_ptr(),
+            name: storage.name.as_ptr(),
+            vendor: storage.vendor.as_ptr(),
+            url: storage.url.as_ptr(),
+            manual_url: storage.url.as_ptr(),
+            support_url: storage.url.as_ptr(),
+            version: storage.version.as_ptr(),
+            description: storage.description.as_ptr(),
             features: storage.feature_ptrs.as_ptr(),
         };
         &storage.desc
@@ -291,7 +304,7 @@ unsafe extern "C" fn plugin_destroy<L: PluginLogic>(plugin: *const clap_plugin) 
     if plugin.is_null() {
         return;
     }
-    let plugin = unsafe { Box::from_raw(plugin as *mut clap_plugin) };
+    let plugin = unsafe { Box::from_raw(plugin.cast_mut()) };
     if !plugin.plugin_data.is_null() {
         drop(unsafe { Box::from_raw(plugin.plugin_data as *mut Instance<L>) });
     }
@@ -410,20 +423,17 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
                 }
             });
 
-        match in_data {
-            Some(s) => {
-                owned_in.push(s.to_vec());
-                owned_out.push(s.to_vec());
-            }
-            None => {
-                owned_in.push(vec![0.0; frames]);
-                owned_out.push(vec![0.0; frames]);
-            }
+        if let Some(s) = in_data {
+            owned_in.push(s.to_vec());
+            owned_out.push(s.to_vec());
+        } else {
+            owned_in.push(vec![0.0; frames]);
+            owned_out.push(vec![0.0; frames]);
         }
     }
 
-    let in_refs: Vec<&[f32]> = owned_in.iter().map(|v| v.as_slice()).collect();
-    let mut out_refs: Vec<&mut [f32]> = owned_out.iter_mut().map(|v| v.as_mut_slice()).collect();
+    let in_refs: Vec<&[f32]> = owned_in.iter().map(Vec::as_slice).collect();
+    let mut out_refs: Vec<&mut [f32]> = owned_out.iter_mut().map(Vec::as_mut_slice).collect();
 
     let status = {
         let mut buffer = AudioBuffer::from_slices_checked(&in_refs, &mut out_refs, frames);
@@ -829,11 +839,11 @@ fn gui_ext<L: PluginLogic>() -> &'static clap_plugin_gui {
         set_scale: Some(gui_set_scale::<L>),
         get_size: Some(gui_get_size::<L>),
         can_resize: Some(gui_can_resize::<L>),
-        get_resize_hints: Some(gui_get_resize_hints::<L>),
+        get_resize_hints: Some(gui_get_resize_hints),
         adjust_size: Some(gui_adjust_size::<L>),
         set_size: Some(gui_set_size::<L>),
         set_parent: Some(gui_set_parent::<L>),
-        set_transient: Some(gui_set_transient::<L>),
+        set_transient: Some(gui_set_transient),
         suggest_title: Some(gui_suggest_title::<L>),
         show: Some(gui_show::<L>),
         hide: Some(gui_hide::<L>),
@@ -925,7 +935,7 @@ unsafe extern "C" fn gui_can_resize<L: PluginLogic>(plugin: *const clap_plugin) 
         .is_some_and(|editor| editor.can_resize())
 }
 
-unsafe extern "C" fn gui_get_resize_hints<L: PluginLogic>(
+unsafe extern "C" fn gui_get_resize_hints(
     _plugin: *const clap_plugin,
     _hints: *mut clap_sys::ext::gui::clap_gui_resize_hints,
 ) -> bool {
@@ -989,8 +999,7 @@ unsafe extern "C" fn gui_set_parent<L: PluginLogic>(
     } else if api == CLAP_WINDOW_API_COCOA {
         RawWindowHandle::AppKit(unsafe { window.specific.cocoa })
     } else if api == CLAP_WINDOW_API_X11 {
-        #[allow(clippy::cast_possible_truncation)]
-        RawWindowHandle::X11(unsafe { window.specific.x11 } as u64)
+        RawWindowHandle::X11(u64::from(unsafe { window.specific.x11 }))
     } else {
         return false;
     };
@@ -1007,7 +1016,7 @@ unsafe extern "C" fn gui_set_parent<L: PluginLogic>(
     true
 }
 
-unsafe extern "C" fn gui_set_transient<L: PluginLogic>(
+unsafe extern "C" fn gui_set_transient(
     _plugin: *const clap_plugin,
     _window: *const clap_window,
 ) -> bool {

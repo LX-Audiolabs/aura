@@ -71,7 +71,7 @@ where
         not(feature = "backend-skia")
     ))]
     pub(crate) wgpu: WgpuState,
-    /// Kept for OS keyboard focus on click (Windows WS_CHILD).
+    /// Kept for OS keyboard focus on click (Windows `WS_CHILD`).
     window_ctx: WindowContext,
     pub key_capture: KeyCapture,
     pub last_cursor_pos: RefCell<LogicalPosition>,
@@ -100,6 +100,18 @@ where
     frames: Cell<u32>,
 }
 
+/// Field bundle built by `SlintWindow::init_policy_fields`.
+type PolicyFields = (
+    EditorScale,
+    Cell<f32>,
+    bool,
+    Cell<(u32, u32)>,
+    Arc<AtomicU64>,
+    Cell<Option<(u32, u32)>>,
+    Option<RequestResizeFn>,
+    Cell<u32>,
+);
+
 impl<C, S, U> SlintWindow<C, S, U>
 where
     C: ComponentHandle,
@@ -120,8 +132,8 @@ where
     }
 
     /// Desired child HWND size in **physical pixels** = logical × content scale.
-    /// Must match what CLAP/VST3 report via `get_size` (logical × host_scale).
-    fn desired_physical(&self, lw: u32, lh: u32, scale: f64) -> (u32, u32) {
+    /// Must match what CLAP/VST3 report via `get_size` (logical × `host_scale`).
+    fn desired_physical(lw: u32, lh: u32, scale: f64) -> (u32, u32) {
         (to_physical_px(lw, scale), to_physical_px(lh, scale))
     }
 
@@ -139,7 +151,7 @@ where
     /// Physical adapter size is always `logical × content_scale` and the
     /// child HWND is forced to the same physical extent.
     fn apply_geometry(&self, lw: u32, lh: u32, scale: f64) {
-        let (phys_w, phys_h) = self.desired_physical(lw, lh, scale);
+        let (phys_w, phys_h) = Self::desired_physical(lw, lh, scale);
         #[allow(clippy::cast_possible_truncation)]
         let scale_f32 = scale as f32;
 
@@ -159,6 +171,7 @@ where
                     scale_factor: scale_f32,
                 },
             );
+            #[allow(clippy::cast_precision_loss)]
             self.adapter
                 .slint_window
                 .dispatch_event(slint::platform::WindowEvent::Resized {
@@ -178,6 +191,7 @@ where
                     scale_factor: scale_f32,
                 },
             );
+            #[allow(clippy::cast_precision_loss)]
             self.adapter
                 .slint_window
                 .dispatch_event(slint::platform::WindowEvent::Resized {
@@ -225,7 +239,7 @@ where
     /// Linux DAWs (esp. Bitwig) often ignore CLAP resize and *grow* the frame
     /// when we push back — a resize fight that clips the footer and makes
     /// knobs/sliders feel stuttery. truce-slint only host-corrects on macOS;
-    /// we still correct once at open (LxSlintEditor) and re-assert the child.
+    /// we still correct once at open (`LxSlintEditor`) and re-assert the child.
     #[inline]
     fn host_resize_pushback_allowed() -> bool {
         // Windows: host push-back fixed multi-monitor DPI clips (Bitwig/Reaper).
@@ -237,7 +251,7 @@ where
     /// Keep child window + Slint geometry on the content scale.
     ///
     /// Critical: do **not** call `apply_geometry` every frame on a physical
-    /// mismatch. That re-dispatches ScaleFactorChanged + Resized + GL surface
+    /// mismatch. That re-dispatches `ScaleFactorChanged` + Resized + GL surface
     /// resize every tick → knob/slider jank under Linux embeds where the host
     /// and child disagree for a while (or forever).
     fn reconcile_pending(&self) {
@@ -256,7 +270,7 @@ where
         let scale_changed = self.scale.take_change(&mut last).is_some();
         let scale = self.scale.get();
         let (lw, lh) = self.logical_size.get();
-        let (want_w, want_h) = self.desired_physical(lw, lh, scale);
+        let (want_w, want_h) = Self::desired_physical(lw, lh, scale);
 
         let actual = self.window_ctx.size();
         let got_w = actual.physical.width;
@@ -267,14 +281,14 @@ where
         // Physical mismatch alone → cheap child re-assert (throttled).
         if scale_changed || logical_changed {
             self.apply_geometry(lw, lh, scale);
-        } else if phys_mismatch && n % 15 == 0 {
+        } else if phys_mismatch && n.is_multiple_of(15) {
             // ~4 Hz: enough to win after host layout, not every paint.
             self.resize_child_physical(want_w, want_h);
         }
 
         // Host frame push-back (non-Linux only — see host_resize_pushback_allowed).
         let host_correct = self.pending_host_correct.take();
-        let retry = phys_mismatch && n % 30 == 0; // ~0.5s at 60fps
+        let retry = phys_mismatch && n.is_multiple_of(30); // ~0.5s at 60fps
         if Self::host_resize_pushback_allowed() && (host_correct.is_some() || retry) {
             if let Some(ref req) = self.request_resize {
                 let _ = req(lw, lh);
@@ -287,16 +301,7 @@ where
         policy: SizePolicy,
         request_resize: Option<RequestResizeFn>,
         open_scale: f64,
-    ) -> (
-        EditorScale,
-        Cell<f32>,
-        bool,
-        Cell<(u32, u32)>,
-        Arc<AtomicU64>,
-        Cell<Option<(u32, u32)>>,
-        Option<RequestResizeFn>,
-        Cell<u32>,
-    ) {
+    ) -> PolicyFields {
         #[allow(clippy::cast_possible_truncation)]
         let scale_f32 = open_scale as f32;
         // Content scale is host/policy — never seed from OS DPI here when
@@ -375,7 +380,7 @@ where
         let component = build(&mut state);
 
         // Announce open-time scale + logical size (truce-slint parity).
-        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
         {
             adapter.slint_window.dispatch_event(
                 slint::platform::WindowEvent::ScaleFactorChanged {
@@ -458,7 +463,7 @@ where
 
         let component = build(&mut state);
 
-        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
         {
             adapter.slint_window.dispatch_event(
                 slint::platform::WindowEvent::ScaleFactorChanged {
@@ -607,6 +612,10 @@ where
         })
     }
 
+    /// Open a parented window with the default [`SizePolicy`].
+    ///
+    /// # Errors
+    /// Returns `Err` when the OS window cannot be created or shown.
     pub fn open_parented<P, B>(
         parent: &P,
         options: WindowSettings,
@@ -630,7 +639,10 @@ where
         )
     }
 
-    /// Open a parented window with HiDPI / size policy (truce-slint parity).
+    /// Open a parented window with `HiDPI` / size policy (truce-slint parity).
+    ///
+    /// # Errors
+    /// Returns `Err` when the OS window cannot be created or shown.
     pub fn open_parented_with_policy<P, B>(
         parent: &P,
         options: WindowSettings,
@@ -654,6 +666,10 @@ where
         Ok(window)
     }
 
+    /// Open a standalone window and run the event loop until it closes.
+    ///
+    /// # Errors
+    /// Returns `Err` when the OS window cannot be created.
     pub fn open_blocking<B>(
         options: WindowSettings,
         state: S,
@@ -682,10 +698,10 @@ where
         feature = "backend-wgpu"
     ))]
     fn flush_pending_clipboard_paste(&self) {
-        if self.pending_clipboard_paste.replace(false) {
-            if let Some(clip) = crate::platform::clipboard_get_retry() {
-                inject_clipboard_text(self.slint_window_ref(), &clip);
-            }
+        if self.pending_clipboard_paste.replace(false)
+            && let Some(clip) = crate::platform::clipboard_get_retry()
+        {
+            inject_clipboard_text(self.slint_window_ref(), &clip);
         }
     }
 
@@ -701,7 +717,7 @@ where
 
         let (lw, lh) = self.logical_size.get();
         let scale = self.scale.get();
-        let (want_w, want_h) = self.desired_physical(lw, lh, scale);
+        let (want_w, want_h) = Self::desired_physical(lw, lh, scale);
         let got_w = new_size.physical.width;
         let got_h = new_size.physical.height;
 
@@ -805,6 +821,8 @@ where
         Ok(())
     }
 
+    // ponytail: one big event-dispatch match; splitting it hurts readability.
+    #[allow(clippy::too_many_lines)]
     fn on_event(&self, event: Event) -> EventStatus {
         match event {
             Event::Mouse(mouse_event) => {
@@ -816,6 +834,7 @@ where
                         // Must use content scale, NOT baseview OS Xft.dpi — those
                         // diverge on Linux HiDPI and make knobs "fight" the cursor.
                         let s = self.last_applied_scale.get().max(0.001);
+                        #[allow(clippy::cast_possible_truncation)]
                         let pos = LogicalPosition::new(
                             position.x as f32 / s,
                             position.y as f32 / s,
@@ -983,7 +1002,7 @@ where
     }
 }
 
-/// Paste into the focused TextInput without Platform::clipboard_text:
+/// Paste into the focused `TextInput` without `Platform::clipboard_text`:
 /// clear Control, Select-All, then type each character.
 fn inject_clipboard_text(win: &slint::Window, text: &str) {
     use slint::platform::Key as SK;

@@ -11,7 +11,7 @@ use std::{
     rc::Rc,
 };
 
-/// Soft-fail error when OpenGL / FemtoVG cannot start (no host panic).
+/// Soft-fail error when OpenGL / `FemtoVG` cannot start (no host panic).
 #[derive(Debug)]
 pub struct GlInitError {
     pub message: String,
@@ -40,8 +40,12 @@ pub struct BaseviewSlintWindowAdapter {
 }
 
 impl BaseviewSlintWindowAdapter {
-    /// Create FemtoVG adapter. Returns [`Err`] instead of panicking when GL
+    /// Create `FemtoVG` adapter. Returns [`Err`] instead of panicking when GL
     /// shaders / context are unavailable (old Linux/macOS hosts).
+    ///
+    /// # Errors
+    /// Returns [`GlInitError`] when the OpenGL context or `FemtoVG` renderer
+    /// init fails or panics.
     pub fn try_new(
         physical_size: PhysicalSize,
         gl_context: GlContext,

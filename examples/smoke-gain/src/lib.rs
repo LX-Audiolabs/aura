@@ -166,6 +166,7 @@ impl PluginLogic for SmokeGain {
         _context: &mut ProcessContext,
     ) -> ProcessStatus {
         let n = buffer.num_samples();
+        #[allow(clippy::cast_possible_truncation)]
         let gain_db = params.gain.raw_target() as f32;
         let lin = 10.0f32.powf(gain_db / 20.0);
 

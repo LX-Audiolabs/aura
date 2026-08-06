@@ -9,7 +9,6 @@ pub(crate) fn translate_mouse_button(
         baseview::MouseButton::Middle => slint::platform::PointerEventButton::Middle,
         baseview::MouseButton::Back => slint::platform::PointerEventButton::Back,
         baseview::MouseButton::Forward => slint::platform::PointerEventButton::Forward,
-        baseview::MouseButton::Other(_) => slint::platform::PointerEventButton::Other,
         _ => slint::platform::PointerEventButton::Other,
     }
 }

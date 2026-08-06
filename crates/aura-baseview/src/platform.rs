@@ -5,7 +5,7 @@
 //! a dead GL/Skia surface (blank UI after hide/show). Match truce-slint:
 //! register a thin platform once, hand off a fresh adapter per open via TLS.
 //!
-//! Also wires OS clipboard (Ctrl+C/V/X / TextInput paste). Default Platform
+//! Also wires OS clipboard (Ctrl+C/V/X / `TextInput` paste). Default Platform
 //! impls are no-ops → paste always looks "empty" even when the system clipboard
 //! has text (vault path setup, line edits, etc.).
 
@@ -25,6 +25,7 @@ thread_local! {
 
 /// Read OS clipboard text (UTF-8). Shared by Platform hooks and plugin UI
 /// (e.g. Vault Setup PASTE button) so both paths use the same code.
+#[must_use]
 pub fn clipboard_get() -> Option<String> {
     use copypasta::{ClipboardContext, ClipboardProvider};
     ClipboardContext::new()
@@ -37,6 +38,7 @@ pub fn clipboard_get() -> Option<String> {
 /// Retry clipboard read — `OpenClipboard` often fails re-entrantly during
 /// Windows `WM_KEYDOWN` (Ctrl+V). PASTE-button clicks are fine; key handlers
 /// need a few attempts with a short yield.
+#[must_use]
 pub fn clipboard_get_retry() -> Option<String> {
     for attempt in 0..12 {
         if let Some(s) = clipboard_get() {
@@ -50,6 +52,7 @@ pub fn clipboard_get_retry() -> Option<String> {
 }
 
 /// Write OS clipboard text.
+#[must_use]
 pub fn clipboard_set(text: &str) -> bool {
     use copypasta::{ClipboardContext, ClipboardProvider};
     ClipboardContext::new()
@@ -109,6 +112,10 @@ pub fn ensure_platform() {
 /// Stage `adapter` so the next `Component::new()` attaches to it.
 ///
 /// Must run after `ensure_platform()` and before building the Slint component.
+///
+/// # Panics
+/// Panics when `ensure_platform()` was not called first, or when the one-shot
+/// `set_platform` lost the race to another platform on this thread.
 pub fn set_next_adapter(adapter: Rc<dyn WindowAdapter>) {
     PLATFORM_STATE.with(|state| match state.get() {
         Some(Ok(())) => {}

@@ -1,4 +1,4 @@
-//! Shared content-scale + size handoff for HiDPI / multi-monitor.
+//! Shared content-scale + size handoff for `HiDPI` / multi-monitor.
 //!
 //! Mirrors the truce-slint / truce-gui `EditorScale` + pending-size pattern:
 //! host `set_scale_factor` and baseview `Resized` write a shared cell; the
