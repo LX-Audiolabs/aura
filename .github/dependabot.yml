@@ -1,0 +1,34 @@
+# Dependabot — AURA framework core only (agal can follow later).
+# Weekly cargo PRs for crates.io deps (slint pin, baseview, clap-sys, …).
+# Review + build smoke-gain before merge; do not auto-merge UI/CLAP bumps.
+
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 8
+    labels:
+      - dependencies
+      - rust
+    # Group the intentional Slint pin family so one PR bumps all three.
+    groups:
+      slint:
+        patterns:
+          - "slint"
+          - "slint-build"
+          - "slint-interpreter"
+      clap:
+        patterns:
+          - "clap-sys"
+          - "clap"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies
+      - ci
