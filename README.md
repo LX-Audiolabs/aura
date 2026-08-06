@@ -34,8 +34,6 @@ AURA is **intentionally narrow**. If that is not your stack, use something else 
 
 ### Slint + baseview (always)
 
-We built our own Slint↔baseview integration because truce’s Slint path did not match what we need for DAW plugins.
-
 - **Always:** Slint UI + **baseview** host window (embed, scale, keys, clipboard, …).
 - **Choose renderer** (features / project config), not toolkit:
   - **FemtoVG** (OpenGL) — default  
