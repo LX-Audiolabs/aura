@@ -12,3 +12,10 @@ examples/*/.cargo
 *.clap
 *.vst3
 *.lv2
+
+# agal generate (regenerate: `agal .`). Keep notes + skills tracked.
+/agal/*
+!/agal/skills/
+!/agal/skills/**
+!/agal/notes/
+!/agal/notes/**

@@ -57,6 +57,7 @@ Last status pass: 2026-08-06.
 - **UI:** `aura-baseview` + `AuraSlintEditor` + `aura-build` (`@aura`)
 - **`examples/smoke-gain`:** builds, clap-validator green (incl. state/GUI path)
 - **`cargo aura`:** `new` · `build` · `install` · `doctor` · `preview`
+- **agal orientation:** `agal.toml` · `agal/notes/_workspace.md` · synced skills · local `07-aura/aura-scope`
 
 ### Still open for “Basis fertig”
 
@@ -259,8 +260,8 @@ Product helpers (`lx-dsp`, `lx-analysis`, …) keep `lx-*` in the plugins repo u
 - [x] LICENSE, compliance, README scope, workspace dirs
 - [x] Naming: `aura-*`, `cargo aura`
 - [x] Layout: `crates/` · `examples/` · `tools/`
+- [x] Root `agal.toml` + `agal/` orientation (`notes/_workspace.md`, skills, `aura-scope`)
 - [ ] GitHub publish when useful
-- [ ] Root `agal.toml` when workspace is agent-usable
 
 ### Stage 1 — core API
 

@@ -1,0 +1,23 @@
+# AURA — agal config (agent orientation for the framework workspace).
+# Partner product catalog: lx-audiolabs-plugins (separate repo, own agal.toml).
+
+# Default output is `agal/` (omit this key). Kept explicit for clarity.
+output_dir = "agal"
+
+# Framework UI stack (not product lx-ui-slint).
+ui_crates = ["aura-build", "aura-editor", "aura-baseview"]
+
+[rules]
+scope = "AURA is Slint + baseview only; formats CLAP / VST3 / LV2 — no egui/iced/Vizia, no AU/AAX/VST2."
+basis_first = "Finish framework basis (migration-steps DoD) before migrating product plugins."
+thin_formats = "One PluginLogic API; format wrappers stay thin — no format-shaped core."
+product_dsp_out = "lx-dsp / lx-analysis / lx-vault stay in product repo; AURA does not absorb them."
+roadmap = "Single roadmap source: docs/migration-steps.md — update status there, not in chat."
+nice_plug = "External multi-UI frameworks: recommend nice-plug (or truce/clack), not NIH-plug."
+agal_optional = "agal is optional mesh for authors; never hard-depend for cargo aura build."
+
+# Framework smoke is intentionally small — not a product plugin surface.
+[[suppress]]
+code = "large_param_surface"
+node = "smoke-gain"
+reason = "In-tree CLAP smoke example; not a product plugin."
