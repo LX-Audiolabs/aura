@@ -816,7 +816,7 @@ where
         );
         drop(sc);
         self.wgpu.queue.submit(std::iter::once(encoder.finish()));
-        surface_texture.present();
+        self.wgpu.queue.present(surface_texture);
 
         Ok(())
     }
@@ -1117,6 +1117,7 @@ fn create_wgpu_surface(
         desired_maximum_frame_latency: 2,
         alpha_mode: wgpu::CompositeAlphaMode::Auto,
         view_formats: vec![],
+        color_space: wgpu::SurfaceColorSpace::Auto,
     };
     surface.configure(&device, &surface_config);
 
