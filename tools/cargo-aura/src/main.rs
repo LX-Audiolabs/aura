@@ -11,6 +11,7 @@
 //!   cargo aura doctor
 
 use std::env;
+use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
@@ -50,7 +51,9 @@ Usage:
   cargo aura <command> [options]
 
 Commands:
-  new <name>              Scaffold a plugin project (Slint + derive + aura.toml + agal)
+  new <name> [--vst3] [--lv2]
+                          Scaffold a plugin project (Slint + derive + aura.toml + agal)
+                          CLAP is always on; flags add VST3 / LV2 feature + export
   build [--clap|--vst3|--lv2] [--release]
                           cargo build with format feature(s)
   install [--clap|--vst3|--lv2] [--release]
@@ -151,13 +154,25 @@ fn check_cmd(bin: &str, args: &[&str]) -> bool {
 // ---------------------------------------------------------------------------
 
 fn cmd_new(args: &[String]) -> ExitCode {
-    let name = match args.first() {
-        Some(n) if !n.starts_with('-') => n.as_str(),
-        _ => {
-            eprintln!("usage: cargo aura new <name>");
-            return ExitCode::FAILURE;
-        }
+    let Some(name) = args.iter().find(|a| !a.starts_with('-')) else {
+        eprintln!("usage: cargo aura new <name> [--vst3] [--lv2]");
+        return ExitCode::FAILURE;
     };
+    let name = name.as_str();
+
+    // Extra formats beyond the always-on CLAP default.
+    let mut formats: Vec<&str> = Vec::new();
+    for a in args.iter().filter(|a| a.starts_with('-')) {
+        match a.as_str() {
+            "--vst3" => formats.push("vst3"),
+            "--lv2" => formats.push("lv2"),
+            "--clap" => {} // default anyway
+            other => {
+                eprintln!("error: unknown flag '{other}' (want --vst3 / --lv2)");
+                return ExitCode::FAILURE;
+            }
+        }
+    }
 
     if !is_valid_crate_name(name) {
         eprintln!("error: '{name}' is not a valid Cargo package name (use snake_case / kebab-case letters)");
@@ -186,19 +201,27 @@ fn cmd_new(args: &[String]) -> ExitCode {
     let crate_name = name.replace('-', "_");
     let display = title_case(name);
 
-    if let Err(e) = write_scaffold(&dest, name, &crate_name, &display, &root_s) {
+    if let Err(e) = write_scaffold(&dest, name, &crate_name, &display, &root_s, &formats) {
         eprintln!("error: scaffold failed: {e}");
         let _ = fs::remove_dir_all(&dest);
         return ExitCode::FAILURE;
     }
+
+    let mut all: Vec<&str> = vec!["clap"];
+    all.extend_from_slice(&formats);
+    let flags = all
+        .iter()
+        .map(|f| format!("--{f}"))
+        .collect::<Vec<_>>()
+        .join(" ");
 
     println!("created {}", dest.display());
     println!("  aura.toml  agal.toml  ui/main.slint  src/lib.rs");
     println!();
     println!("next:");
     println!("  cd {name}");
-    println!("  cargo aura build --clap");
-    println!("  cargo aura install --clap --release   # into host CLAP path");
+    println!("  cargo aura build {flags}");
+    println!("  cargo aura install {flags} --release   # into host plugin paths");
     ExitCode::SUCCESS
 }
 
@@ -210,9 +233,25 @@ fn write_scaffold(
     crate_name: &str,
     display: &str,
     aura_root: &str,
+    extra_formats: &[&str],
 ) -> std::io::Result<()> {
     fs::create_dir_all(dest.join("src"))?;
     fs::create_dir_all(dest.join("ui"))?;
+
+    // Format features beyond the always-on CLAP.
+    let mut feature_lines = String::from("default = [\"clap\"]\nclap = [\"aura/clap\"]\n");
+    let mut human: Vec<&str> = vec!["CLAP"];
+    let mut flags = String::from("--clap");
+    for f in extra_formats {
+        let _ = writeln!(feature_lines, "{f} = [\"aura/{f}\"]");
+        human.push(match *f {
+            "vst3" => "VST3",
+            "lv2" => "LV2",
+            other => other,
+        });
+        let _ = write!(flags, " --{f}");
+    }
+    let formats_doc = human.join(" + ");
 
     fs::write(
         dest.join("Cargo.toml"),
@@ -232,13 +271,14 @@ publish = false
 crate-type = ["cdylib", "lib"]
 
 [features]
-default = ["clap"]
-clap = ["aura/clap"]
-
+{feature_lines}
 [dependencies]
 aura = {{ path = "{aura_root}/crates/aura" }}
 aura-editor = {{ path = "{aura_root}/crates/aura-editor", features = ["backend-femtovg"] }}
 slint = {{ version = "=1.17.1", default-features = false, features = ["std", "compat-1-2"] }}
+# Workaround: zune-core 0.5.2 ships empty log macros that break zune-jpeg 0.5.15
+# (pulled via slint-build). Pin until fixed upstream, then delete this line.
+zune-core = "=0.5.1"
 
 [build-dependencies]
 aura-build = {{ path = "{aura_root}/crates/aura-build" }}
@@ -359,14 +399,23 @@ export component AppWindow inherits Window {{
         ),
     )?;
 
+    let struct_name = to_struct_name(crate_name);
+    let mut exports = format!("#[cfg(feature = \"clap\")]\naura::export!({struct_name});");
+    for f in extra_formats {
+        let _ = write!(
+            exports,
+            "\n\n#[cfg(feature = \"{f}\")]\naura::export_{f}!({struct_name});"
+        );
+    }
+
     fs::write(
         dest.join("src/lib.rs"),
         format!(
-            r#"//! {display} — AURA plugin (CLAP via `aura-clap`).
+            r#"//! {display} — AURA plugin ({formats_doc} via `aura-*` wrappers).
 //!
 //! ```bash
-//! cargo aura build --clap --release
-//! cargo aura install --clap --release
+//! cargo aura build {flags} --release
+//! cargo aura install {flags} --release
 //! ```
 
 use std::sync::Arc;
@@ -470,11 +519,9 @@ impl PluginLogic for {struct_name} {{
     }}
 }}
 
-#[cfg(feature = "clap")]
-aura::export!({struct_name});
+{exports}
 "#,
-            params_name = format!("{struct_name}Params", struct_name = to_struct_name(crate_name)),
-            struct_name = to_struct_name(crate_name),
+            params_name = format!("{struct_name}Params"),
         ),
     )?;
 
@@ -1202,8 +1249,30 @@ fn default_clap_install_dir() -> Result<PathBuf, String> {
 }
 
 fn project_target_dir() -> PathBuf {
-    // Respect CARGO_TARGET_DIR; else ./target
-    env::var_os("CARGO_TARGET_DIR").map_or_else(|| PathBuf::from("target"), PathBuf::from)
+    // Respect CARGO_TARGET_DIR; else ask cargo — a plugin that is a workspace
+    // member builds into the *workspace root's* target/, not ./target.
+    if let Some(dir) = env::var_os("CARGO_TARGET_DIR") {
+        return PathBuf::from(dir);
+    }
+    metadata_target_dir().unwrap_or_else(|| PathBuf::from("target"))
+}
+
+/// `target_directory` from `cargo metadata` (string scan — no json dep needed).
+fn metadata_target_dir() -> Option<PathBuf> {
+    let out = Command::new("cargo")
+        .args(["metadata", "--no-deps", "--format-version", "1"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let text = String::from_utf8(out.stdout).ok()?;
+    let key = "\"target_directory\":\"";
+    let start = text.find(key)? + key.len();
+    let rest = &text[start..];
+    let end = rest.find('"')?;
+    // JSON escapes backslashes on Windows ("C:\\foo") — collapse \\\\ pairs.
+    Some(PathBuf::from(rest[..end].replace("\\\\", "\\")))
 }
 
 fn parse_format_flags(args: &[String]) -> (Vec<String>, bool, Vec<String>) {

@@ -9,11 +9,19 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ### Added
 
+- `cargo aura new <name> --vst3 --lv2`: scaffold emits format feature lines + `export_vst3!` / `export_lv2!` (CLAP stays default)
+- VST3 Bitwig host smoke green (smoke-gain) — recorded in roadmap status
+
 ### Changed
 
 ### Fixed
 
+- `cargo aura install`: resolve target dir via `cargo metadata` — workspace-member plugins (e.g. `examples/smoke-gain`) previously failed with "no build dir target\debug"
+- Scaffold builds broke on fresh lockfiles: zune-core 0.5.2 ships empty log macros incompatible with zune-jpeg 0.5.15 (via slint-build) — scaffold now pins `zune-core = "=0.5.1"` until fixed upstream
+
 ### Docs
+
+- `licensing-compliance.md` §3.3: VST3 checklist resolved — SDK is MIT since VST 3.8.0 (2025-10); path via `vst3-rs` (MIT/Apache); only Steinberg trademark rules remain
 
 ## [0.1.0] - 2026-08-07
 

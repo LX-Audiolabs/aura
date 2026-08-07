@@ -71,11 +71,19 @@ Docs/Examples von Softint sind MIT — Zitate/Snippets ok mit Attribution.
 
 **Desktop vs Embedded (Slint-Definitionen):** DAW-Plugins auf PC/Mac/Linux = **Desktop Application**, nicht „Embedded System“ im Slint-Sinn. Embedded-Klauseln der Royalty-free-Lizenz betreffen uns im Normal-Plugin-Ship nicht; unter **Slint GPLv3** ist das sowieso abgedeckt.
 
-### 3.3 VST3 SDK (Steinberg) — separat prüfen
+### 3.3 VST3 (Steinberg) — geprüft 2026-08-07
 
-`lx-vst3` / Shim: Steinberg-Lizenz **zusätzlich** zu GPL.  
-Ship-Checkliste Phase VST3: SDK-Bedingungen (Header-only vs. redistributed bits, branding, proprietary SDK terms) gegen GPL-Distribution legen.  
-**Nicht** durch unsere GPL „ersetzt“. Bei Konflikt: Ship-Variante anpassen oder Steinberg-konformen Pfad dokumentieren.
+**Lizenzlage:** VST3 SDK ist seit **VST 3.8.0 (2025-10)** unter **MIT** — das frühere Dual-Modell (proprietär / GPLv3) ist abgelöst. Kein GPL-Konflikt mehr, keine Steinberg-Vereinbarung für den Ship nötig.
+
+**Unser Pfad:** `aura-vst3` linkt **kein** Steinberg-SDK, sondern [`vst3-rs` (coupler-rs)](https://github.com/coupler-rs/vst3-rs) — MIT OR Apache-2.0, aus den C++-Headern generierte Bindings. Behandlung wie §3.1 (permissive Inputs): Notices behalten, fertig.
+
+**Ship-Checkliste VST3:**
+
+- [x] SDK-Lizenz: MIT seit 3.8.0 — keine Steinberg-EULA, keine GPL-Spannung
+- [x] Bindings-Lizenz: `vst3` crate MIT OR Apache-2.0 (Notices in Dritt-Attribution)
+- [ ] **Marke:** „VST“ / VST-Logo bleiben Steinberg-Marken (lizenzunabhängig). Nominative Nennung „VST3-kompatibel“ ok; **kein** VST-Logo / Steinberg-Branding ohne separate Vereinbarung
+- [ ] Bundle-Layout pro Spez: `<name>.vst3/Contents/<arch>/<name>.vst3` (Win: `x86_64-win`; Linux: `x86_64-linux`; macOS: `Contents/MacOS`) — von `cargo aura install --vst3` erzeugt
+- [ ] Validator-Smoke im Host (Bitwig: grün 2026-08-07; REAPER optional)
 
 ### 3.4 LV2
 
@@ -155,6 +163,7 @@ DE-Gag AURA: *AUdio RAhmenwerk* — nur Name, keine Lizenzwirkung.
 | Datum | Änderung |
 |-------|----------|
 | 2026-08-06 | Einheitslizenz GPL-3.0-or-later; Matrix AGAL+AURA+Plugins; Slint-Triple-License; Verkauf-mit-Source klar; Closed-Plugins abgelehnt |
+| 2026-08-07 | §3.3 VST3 geprüft: SDK seit 3.8.0 MIT; Pfad über `vst3-rs` (MIT/Apache); nur Marken-/Branding-Regeln bleiben |
 
 ---
 
