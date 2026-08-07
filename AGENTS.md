@@ -57,6 +57,12 @@ Synced packs: `agal skills sync --only …`. Local **aura-*** files under `07-au
 Commits: `user.name=lxndrbe` · `user.email=ardvinnamoon@gmail.com`  
 GitHub auth: `github.user=lxndrbe`
 
+## Versioning (SemVer)
+
+Single workspace version: root `Cargo.toml` → `[workspace.package] version`.  
+Policy: **`docs/versioning.md`**. Changelog: **`CHANGELOG.md`**. Tags: `vX.Y.Z`.  
+Release = bump version + CHANGELOG + annotated tag + push (incl. `--tags`).
+
 ## Build
 
 ```bash

@@ -133,7 +133,9 @@ cargo build -p smoke-gain --release
 ```
 
 **Still need for basis:** VST3/LV2 host smoke.  
-(Bitwig CLAP green; VST3+LV2 wrappers + install in-tree — confirm in a DAW.)  
+(Bitwig CLAP green; VST3+LV2 wrappers + install in-tree — confirm in a DAW.)
+
+**Versioning:** workspace SemVer — [CHANGELOG.md](./CHANGELOG.md) · [docs/versioning.md](./docs/versioning.md) · tags `vX.Y.Z`.  
 **`aura-derive`:** landed (explicit `id = N`, `<Struct>ParamId` enum — G2 option A); `cargo aura new` scaffolds a validator-green CLAP plugin; product cutover gaps → [docs/gaps-and-optimizations.md](./docs/gaps-and-optimizations.md).
 
 **Roadmap:** [docs/migration-steps.md](./docs/migration-steps.md) · **Gaps / opts:** [docs/gaps-and-optimizations.md](./docs/gaps-and-optimizations.md)  

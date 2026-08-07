@@ -3,7 +3,8 @@
 **Single source of truth** for direction, stages, and cutover gates.  
 No separate `roadmap.md` — update **this file** when status or next steps change.
 
-Last status pass: 2026-08-07 (Bitwig CLAP GUI smoke green; VST3 thin wrapper WIP).  
+Last status pass: 2026-08-07 (multi-format + SemVer baseline `v0.1.0`).  
+**Versioning:** [versioning.md](./versioning.md) · [CHANGELOG.md](../CHANGELOG.md).  
 **Gaps & optimizations (derive, cutover, polish):** [gaps-and-optimizations.md](./gaps-and-optimizations.md).
 
 ---
