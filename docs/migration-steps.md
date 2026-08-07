@@ -113,7 +113,7 @@ AURA is ready for product cutover only when **all** of these work **without** th
 | 4 | Params + DSP API | `PluginLogic` / params derive | **`aura-core` + `aura-params` (+ derive)** | derive + `*ParamId` done |
 | 5 | UI | (various) | **`aura-editor` + `aura-build`** (`@aura`, FemtoVG default) | done; Bitwig CLAP host smoke **green** |
 | 6 | Build format | `--clap` etc. | **`cargo aura build --clap`** (then vst3/lv2) | clap yes; vst3 build/install/GUI yes; host smoke open; lv2 **open** |
-| 7 | Install into host path | `install --clap` | **`cargo aura install --clap`** (e.g. `%CLAPINS%`) | done (`<package>.clap`) |
+| 7 | Install into host path | `install --clap` | **`cargo aura install --clap`** via `aura.toml` `[install]` / env | done (`dir` + CLAP/VST3; env override) |
 | 8 | Sanity | validators / DAW load | **clap-validator** + Bitwig smoke on in-tree **example** | validator + Bitwig CLAP **green** (smoke-gain) |
 | 9 | Docs | README | this file + root README scope | living |
 

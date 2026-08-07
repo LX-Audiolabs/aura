@@ -60,10 +60,19 @@ Commands:
   doctor                  Check toolchain / AURA path / clap-validator
   help                    This message
 
+Install path (first match wins):
+  1) env CLAPINS/CLAP_PATH or VST3INS/VST3_PATH
+  2) aura.toml [install] clap= / vst3= / lv2=  (full path)
+  3) aura.toml [install] dir=  + subdir CLAP|VST3|LV2
+  4) OS host defaults (Program Files Common / ~/Library / ~/.clap)
+
+  Paths expand %VAR% (Windows), $VAR / ${{VAR}}, and ~.
+  Example: dir = \"%LOCALAPPDATA%\\Programs\\Common\"
+
 Environment:
   AURA_PATH               Path to the AURA framework root (crates/, tools/)
-  CLAPINS / CLAP_PATH     CLAP install directory (install --clap)
-  VST3INS / VST3_PATH     VST3 install directory (install --vst3)
+  CLAPINS / CLAP_PATH     Override CLAP install directory
+  VST3INS / VST3_PATH     Override VST3 install directory
 
 Status: CLAP + VST3 path ship (scaffold/build/install + parented GUI); LV2 pending.
 "
@@ -258,6 +267,14 @@ name = "{display}"
 bundle_id = "{name}"
 crate = "{name}"
 category = "effect"
+
+# Where `cargo aura install --clap|--vst3|--lv2` copies artifacts.
+# `dir` is the base; format subdirs CLAP / VST3 / LV2 are appended.
+# Env vars expand: %LOCALAPPDATA%, %COMMONPROGRAMFILES%, $HOME, …
+# Per-format full path: clap = "C:\\Program Files\\Common Files\\CLAP"
+# Env CLAPINS / VST3INS still override when set.
+[install]
+dir = "%LOCALAPPDATA%\\Programs\\Common"
 "#
         ),
     )?;
@@ -602,7 +619,7 @@ fn install_clap(target_dir: &Path, profile: &str) -> Result<(), String> {
             )
         })?;
 
-    let dest_root = clap_install_dir()?;
+    let dest_root = resolve_install_dir(InstallFormat::Clap)?;
     fs::create_dir_all(&dest_root).map_err(|e| e.to_string())?;
 
     let dest = dest_root.join(format!("{pkg}.clap"));
@@ -635,7 +652,7 @@ fn install_vst3(target_dir: &Path, profile: &str) -> Result<(), String> {
             )
         })?;
 
-    let dest_root = vst3_install_dir()?;
+    let dest_root = resolve_install_dir(InstallFormat::Vst3)?;
     let bundle = dest_root.join(format!("{pkg}.vst3"));
     let arch_dir = bundle.join("Contents").join(vst3_arch_folder());
     fs::create_dir_all(&arch_dir).map_err(|e| e.to_string())?;
@@ -686,11 +703,180 @@ fn vst3_arch_folder() -> &'static str {
     }
 }
 
-#[allow(clippy::unnecessary_wraps)]
-fn vst3_install_dir() -> Result<PathBuf, String> {
-    if let Ok(p) = env::var("VST3INS").or_else(|_| env::var("VST3_PATH")) {
-        return Ok(PathBuf::from(p));
+/// Format-specific install destination.
+#[derive(Clone, Copy)]
+enum InstallFormat {
+    Clap,
+    Vst3,
+    #[allow(dead_code)] // used when LV2 install lands
+    Lv2,
+}
+
+impl InstallFormat {
+    fn env_keys(self) -> &'static [&'static str] {
+        match self {
+            Self::Clap => &["CLAPINS", "CLAP_PATH"],
+            Self::Vst3 => &["VST3INS", "VST3_PATH"],
+            Self::Lv2 => &["LV2INS", "LV2_PATH"],
+        }
     }
+
+    fn toml_key(self) -> &'static str {
+        match self {
+            Self::Clap => "clap",
+            Self::Vst3 => "vst3",
+            Self::Lv2 => "lv2",
+        }
+    }
+
+    fn subdir(self) -> &'static str {
+        match self {
+            Self::Clap => "CLAP",
+            Self::Vst3 => "VST3",
+            Self::Lv2 => "LV2",
+        }
+    }
+}
+
+/// Resolve install root for a format.
+///
+/// Order: env override → `aura.toml` per-format path → `aura.toml` `[install].dir`
+/// + format subdir → OS host default.
+fn resolve_install_dir(fmt: InstallFormat) -> Result<PathBuf, String> {
+    for key in fmt.env_keys() {
+        if let Ok(p) = env::var(key)
+            && !p.trim().is_empty()
+        {
+            return Ok(expand_path(p.trim()));
+        }
+    }
+
+    let cfg = read_aura_install_config();
+    if let Some(p) = cfg.get(fmt.toml_key()) {
+        return Ok(expand_path(p));
+    }
+    if let Some(base) = cfg.get("dir").or_else(|| cfg.get("installdir")) {
+        return Ok(expand_path(base).join(fmt.subdir()));
+    }
+
+    default_install_dir(fmt)
+}
+
+/// Line-scan `./aura.toml` `[install]` table — no toml crate needed.
+/// Keys: `dir`, `installdir`, `clap`, `vst3`, `lv2`.
+fn read_aura_install_config() -> std::collections::HashMap<String, String> {
+    let mut out = std::collections::HashMap::new();
+    let Ok(text) = fs::read_to_string("aura.toml") else {
+        return out;
+    };
+    let mut in_install = false;
+    for line in text.lines() {
+        let line = line.split('#').next().unwrap_or("").trim();
+        if line.is_empty() {
+            continue;
+        }
+        if line.starts_with('[') {
+            in_install = line == "[install]";
+            continue;
+        }
+        if !in_install {
+            continue;
+        }
+        let Some((key, val)) = line.split_once('=') else {
+            continue;
+        };
+        let key = key.trim().to_ascii_lowercase();
+        let val = val.trim().trim_matches('"').trim_matches('\'').to_string();
+        if matches!(
+            key.as_str(),
+            "dir" | "installdir" | "clap" | "vst3" | "lv2"
+        ) && !val.is_empty()
+        {
+            out.insert(key, val);
+        }
+    }
+    out
+}
+
+/// Expand `%VAR%`, `$VAR` / `${VAR}`, and leading `~` in install paths.
+fn expand_path(raw: &str) -> PathBuf {
+    let mut s = raw.to_string();
+
+    // Windows-style %VAR%
+    let mut search_from = 0usize;
+    while let Some(rel) = s[search_from..].find('%') {
+        let start = search_from + rel;
+        let rest = &s[start + 1..];
+        let Some(end_rel) = rest.find('%') else {
+            break;
+        };
+        if end_rel == 0 {
+            search_from = start + 1;
+            continue;
+        }
+        let name = &rest[..end_rel];
+        if !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+            search_from = start + 1;
+            continue;
+        }
+        let repl = env::var(name).unwrap_or_default();
+        let end = start + 1 + end_rel + 1;
+        s.replace_range(start..end, &repl);
+        search_from = start + repl.len();
+    }
+
+    // $VAR or ${VAR}
+    let mut out = String::with_capacity(s.len());
+    let chars: Vec<char> = s.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] == '$' && i + 1 < chars.len() {
+            if chars[i + 1] == '{' {
+                if let Some(close) = chars[i + 2..].iter().position(|&c| c == '}') {
+                    let name: String = chars[i + 2..i + 2 + close].iter().collect();
+                    out.push_str(&env::var(&name).unwrap_or_default());
+                    i += 3 + close;
+                    continue;
+                }
+            } else if chars[i + 1].is_ascii_alphabetic() || chars[i + 1] == '_' {
+                let mut j = i + 1;
+                while j < chars.len() && (chars[j].is_ascii_alphanumeric() || chars[j] == '_') {
+                    j += 1;
+                }
+                let name: String = chars[i + 1..j].iter().collect();
+                out.push_str(&env::var(&name).unwrap_or_default());
+                i = j;
+                continue;
+            }
+        }
+        out.push(chars[i]);
+        i += 1;
+    }
+    s = out;
+
+    if s.starts_with("~/") || s.starts_with("~\\") {
+        if let Ok(home) = env::var("HOME").or_else(|_| env::var("USERPROFILE")) {
+            s = format!("{home}{}", &s[1..]);
+        }
+    } else if s == "~"
+        && let Ok(home) = env::var("HOME").or_else(|_| env::var("USERPROFILE"))
+    {
+        s = home;
+    }
+
+    PathBuf::from(s)
+}
+
+fn default_install_dir(fmt: InstallFormat) -> Result<PathBuf, String> {
+    match fmt {
+        InstallFormat::Clap => default_clap_install_dir(),
+        InstallFormat::Vst3 => default_vst3_install_dir(),
+        InstallFormat::Lv2 => default_lv2_install_dir(),
+    }
+}
+
+#[allow(clippy::unnecessary_wraps)]
+fn default_vst3_install_dir() -> Result<PathBuf, String> {
     #[cfg(target_os = "windows")]
     {
         if let Ok(cf) = env::var("COMMONPROGRAMFILES") {
@@ -714,7 +900,36 @@ fn vst3_install_dir() -> Result<PathBuf, String> {
     }
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
     {
-        Err("unsupported OS for default VST3 path; set VST3INS".into())
+        Err("unsupported OS for default VST3 path; set VST3INS or [install] in aura.toml".into())
+    }
+}
+
+#[allow(clippy::unnecessary_wraps)]
+fn default_lv2_install_dir() -> Result<PathBuf, String> {
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(local) = env::var("LOCALAPPDATA") {
+            return Ok(PathBuf::from(local).join("LV2"));
+        }
+        Ok(PathBuf::from(r"C:\Program Files\Common Files\LV2"))
+    }
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(home) = env::var("HOME") {
+            return Ok(PathBuf::from(home).join("Library/Audio/Plug-Ins/LV2"));
+        }
+        Err("HOME not set".into())
+    }
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(home) = env::var("HOME") {
+            return Ok(PathBuf::from(home).join(".lv2"));
+        }
+        Err("HOME not set".into())
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    {
+        Err("unsupported OS for default LV2 path; set LV2INS or [install] in aura.toml".into())
     }
 }
 
@@ -775,10 +990,7 @@ fn find_plugin_artifacts(dir: &Path) -> Result<Vec<PathBuf>, String> {
 
 // Windows has no fallible path; macOS/Linux do — hence the Result.
 #[allow(clippy::unnecessary_wraps)]
-fn clap_install_dir() -> Result<PathBuf, String> {
-    if let Ok(p) = env::var("CLAPINS").or_else(|_| env::var("CLAP_PATH")) {
-        return Ok(PathBuf::from(p));
-    }
+fn default_clap_install_dir() -> Result<PathBuf, String> {
     #[cfg(target_os = "windows")]
     {
         if let Ok(cf) = env::var("COMMONPROGRAMFILES") {
@@ -802,7 +1014,7 @@ fn clap_install_dir() -> Result<PathBuf, String> {
     }
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
     {
-        Err("unsupported OS for default CLAP path; set CLAPINS".into())
+        Err("unsupported OS for default CLAP path; set CLAPINS or [install] in aura.toml".into())
     }
 }
 
@@ -928,5 +1140,32 @@ fn strip_verbatim_prefix(path: &Path) -> PathBuf {
         PathBuf::from(rest)
     } else {
         path.to_path_buf()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn expand_path_percent_vars() {
+        // SAFETY: test-only env; single-threaded unit test.
+        unsafe { env::set_var("AURA_TEST_INSTALL", r"C:\Users\test\AppData\Local") };
+        let p = expand_path(r"%AURA_TEST_INSTALL%\Programs\Common");
+        assert_eq!(
+            p,
+            PathBuf::from(r"C:\Users\test\AppData\Local\Programs\Common")
+        );
+        unsafe { env::remove_var("AURA_TEST_INSTALL") };
+    }
+
+    #[test]
+    fn expand_path_dollar_and_tilde() {
+        unsafe { env::set_var("AURA_TEST_HOME", "/home/dev") };
+        let p = expand_path("$AURA_TEST_HOME/.clap");
+        assert_eq!(p, PathBuf::from("/home/dev/.clap"));
+        let p2 = expand_path("${AURA_TEST_HOME}/.vst3");
+        assert_eq!(p2, PathBuf::from("/home/dev/.vst3"));
+        unsafe { env::remove_var("AURA_TEST_HOME") };
     }
 }
