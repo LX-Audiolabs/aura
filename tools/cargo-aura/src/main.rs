@@ -65,8 +65,7 @@ Environment:
   CLAPINS / CLAP_PATH     CLAP install directory (install --clap)
   VST3INS / VST3_PATH     VST3 install directory (install --vst3)
 
-Status: CLAP + VST3 path ship (scaffold/build/install); LV2 wrapper pending.
-  VST3 is process/params/state only (no GUI yet).
+Status: CLAP + VST3 path ship (scaffold/build/install + parented GUI); LV2 pending.
 "
     );
 }

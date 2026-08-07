@@ -61,8 +61,8 @@ Last pass: 2026-08-06 (post `aura-derive` review).
 | | |
 |--|--|
 | **Product** | `clap` + `vst3` + `lv2` features, dist zips |
-| **AURA** | CLAP + VST3 process/params/state (`aura-vst3`); LV2 still open; VST3 **no GUI** yet |
-| **Work** | VST3 GUI + host smoke; then LV2 + `cargo aura build/install --lv2` |
+| **AURA** | CLAP + VST3 process/params/state/GUI (`aura-vst3` `IPlugView`); LV2 still open |
+| **Work** | VST3 **host smoke** (Bitwig/REAPER); then LV2 + `cargo aura build/install --lv2` |
 | **Severity** | **Hard** for full catalog ship matrix |
 
 ### G4 — Host GUI proof — **closed (Bitwig CLAP)**

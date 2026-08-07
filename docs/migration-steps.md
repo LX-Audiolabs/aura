@@ -66,7 +66,7 @@ Last status pass: 2026-08-07 (Bitwig CLAP GUI smoke green; VST3 thin wrapper WIP
 | Priority | Item | Why |
 |----------|------|-----|
 | ~~**P0**~~ | ~~Bitwig GUI open on smoke-gain~~ | **done 2026-08-07** — loads, parented editor, Gain works |
-| **P1** | VST3 host smoke + GUI (wrapper builds; no `IPlugView` yet) | Product matrix ships VST3 today |
+| **P1** | VST3 host smoke (GUI wired via `IPlugView`; needs DAW proof) | Product matrix ships VST3 today |
 | **P1** | LV2 wrapper + `cargo aura build/install --lv2` | Product matrix ships LV2 today |
 | **P2** | Plugin-level state hooks beyond flat param blob | Presets/vault stay product-side; host save must not lie |
 | **P2** | Buses / note-ports only if a smoke or pilot needs them | Stereo FX first; not every truce feature |
@@ -112,7 +112,7 @@ AURA is ready for product cutover only when **all** of these work **without** th
 | 3 | Metadata | `truce.toml` | **`aura.toml`** (+ **`agal.toml`** in skeleton) | done in scaffold |
 | 4 | Params + DSP API | `PluginLogic` / params derive | **`aura-core` + `aura-params` (+ derive)** | derive + `*ParamId` done |
 | 5 | UI | (various) | **`aura-editor` + `aura-build`** (`@aura`, FemtoVG default) | done; Bitwig CLAP host smoke **green** |
-| 6 | Build format | `--clap` etc. | **`cargo aura build --clap`** (then vst3/lv2) | clap yes; vst3 build/install yes (no GUI); lv2 **open** |
+| 6 | Build format | `--clap` etc. | **`cargo aura build --clap`** (then vst3/lv2) | clap yes; vst3 build/install/GUI yes; host smoke open; lv2 **open** |
 | 7 | Install into host path | `install --clap` | **`cargo aura install --clap`** (e.g. `%CLAPINS%`) | done (`<package>.clap`) |
 | 8 | Sanity | validators / DAW load | **clap-validator** + Bitwig smoke on in-tree **example** | validator + Bitwig CLAP **green** (smoke-gain) |
 | 9 | Docs | README | this file + root README scope | living |
@@ -311,12 +311,12 @@ Product helpers (`lx-dsp`, `lx-analysis`, …) keep `lx-*` in the plugins repo u
 
 CLAP host smoke (Bitwig) green. VST3 process path started (shared state codec).
 
-- [x] `aura-vst3` — thin wrapper over same `PluginLogic` (factory, stereo, params, process, state; **no GUI**)
+- [x] `aura-vst3` — thin wrapper over same `PluginLogic` (factory, stereo, params, process, state, **IPlugView GUI**)
 - [x] Shared state blob in `aura_core::state` (CLAP + VST3 same layout)
 - [x] smoke-gain feature `vst3` + `aura::export_vst3!`
 - [x] `cargo aura build|install --vst3` → `<name>.vst3/Contents/<arch>/…` bundle (`VST3INS` / `VST3_PATH`)
+- [x] VST3 GUI (`IPlugView` + same `Editor` / baseview/Slint path as CLAP)
 - [ ] Steinberg SDK / licensing checklist for VST3 packaging (see `docs/licensing-compliance.md`)
-- [ ] VST3 GUI (`IPlugView` + baseview/Slint)
 - [ ] Host smoke (REAPER/Bitwig) on smoke-gain VST3
 - [ ] `aura-lv2` — thin wrapper + TTL/manifest story (learn from product `lv2-meta` / truce-lv2 selectively)
 - [ ] smoke-gain (or scaffold) feature `lv2`

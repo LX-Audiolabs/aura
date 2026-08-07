@@ -11,7 +11,8 @@
 //! Covers: `GetPluginFactory` entry, single-component model (`IComponent` +
 //! `IAudioProcessor` + `IEditController` on one object), stereo FX bus, f32
 //! samples, params (1:1 `ParamID` map, no hash), flat state blob via
-//! [`aura_core::encode_state`] / [`aura_core::decode_state`]. No GUI, no MIDI.
+//! [`aura_core::encode_state`] / [`aura_core::decode_state`], parented GUI
+//! via `IPlugView` + the same [`Editor`] trait as CLAP. No MIDI.
 
 #![allow(clippy::missing_safety_doc)]
 // ponytail: VST3 FFI glue — raw-pointer casts and C-int size conversions are
@@ -32,7 +33,9 @@
     clippy::unnecessary_cast
 )]
 
-use std::ffi::{c_char, c_void};
+mod gui;
+
+use std::ffi::{CStr, c_char, c_void};
 use std::marker::PhantomData;
 use std::ptr;
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
@@ -43,6 +46,7 @@ use aura_core::{
     AudioBuffer, AudioConfig, PluginLogic, ProcessContext, ProcessMode, decode_state, encode_state,
 };
 use aura_params::{ParamFlags, ParamInfo, ParamValueKind, Params};
+use gui::GuiState;
 use vst3::Steinberg::Vst::BusDirections_::{kInput, kOutput};
 use vst3::Steinberg::Vst::BusInfo_::BusFlags_::kDefaultActive;
 use vst3::Steinberg::Vst::BusTypes_::kMain;
@@ -366,6 +370,8 @@ impl<L: PluginLogic> IPluginFactory2Trait for Factory<L> {
 /// serializes audio-thread vs main-thread calls per spec).
 struct Component<L: PluginLogic> {
     params: Arc<L::Params>,
+    /// Shared with `IPlugView` (editor open/close, bridge, sample rate).
+    gui: Arc<GuiState>,
     inner: Mutex<Inner<L>>,
 }
 
@@ -380,8 +386,11 @@ struct Inner<L: PluginLogic> {
 
 impl<L: PluginLogic> Component<L> {
     fn new() -> Self {
+        let params = Arc::new(L::Params::default());
+        let gui = GuiState::new(Arc::clone(&params) as Arc<dyn Params>);
         Self {
-            params: Arc::new(L::Params::default()),
+            params,
+            gui,
             inner: Mutex::new(Inner {
                 state: None,
                 sample_rate: 44_100.0,
@@ -549,10 +558,29 @@ impl<L: PluginLogic> Class for Component<L> {
 
 impl<L: PluginLogic> IPluginBaseTrait for Component<L> {
     unsafe fn initialize(&self, _context: *mut FUnknown) -> tresult {
+        // Main-thread GUI factory — same timing as CLAP `plugin_init`.
+        let editor = L::editor(Arc::clone(&self.params));
+        *self.gui.editor.lock().unwrap_or_else(PoisonError::into_inner) = editor;
         kResultOk
     }
 
     unsafe fn terminate(&self) -> tresult {
+        if let Some(editor) = self
+            .gui
+            .editor
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .as_mut()
+        {
+            editor.close();
+        }
+        *self.gui.editor.lock().unwrap_or_else(PoisonError::into_inner) = None;
+        *self
+            .gui
+            .handler
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = None;
+        *self.gui.frame.lock().unwrap_or_else(PoisonError::into_inner) = None;
         kResultOk
     }
 }
@@ -724,6 +752,7 @@ impl<L: PluginLogic> IAudioProcessorTrait for Component<L> {
             inner.process_mode = map_process_mode(setup.processMode);
         }
         self.params.set_sample_rate(setup.sampleRate);
+        self.gui.set_sample_rate(setup.sampleRate);
         kResultOk
     }
 
@@ -837,14 +866,38 @@ impl<L: PluginLogic> IEditControllerTrait for Component<L> {
         kResultOk
     }
 
-    unsafe fn setComponentHandler(&self, _handler: *mut IComponentHandler) -> tresult {
-        // No editor and no plugin-initiated param output yet — nothing to report.
+    unsafe fn setComponentHandler(&self, handler: *mut IComponentHandler) -> tresult {
+        *self
+            .gui
+            .handler
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = if handler.is_null() {
+            None
+        } else {
+            Some(handler)
+        };
         kResultOk
     }
 
-    unsafe fn createView(&self, _name: FIDString) -> *mut IPlugView {
-        // No GUI in this wrapper.
-        ptr::null_mut()
+    unsafe fn createView(&self, name: FIDString) -> *mut IPlugView {
+        // Spec: primary view is named "editor". Empty/null accepted as same.
+        if !name.is_null() {
+            // SAFETY: host C string for the view name.
+            let name = unsafe { CStr::from_ptr(name) };
+            if !name.to_bytes().is_empty() && name.to_bytes() != b"editor" {
+                return ptr::null_mut();
+            }
+        }
+        let has_editor = self
+            .gui
+            .editor
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .is_some();
+        if !has_editor {
+            return ptr::null_mut();
+        }
+        gui::PlugView::create(Arc::clone(&self.gui))
     }
 }
 

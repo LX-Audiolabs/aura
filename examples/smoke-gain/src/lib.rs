@@ -6,7 +6,7 @@
 //! # or copy target/release/smoke_gain.dll → …/CLAP/smoke-gain.clap
 //! clap-validator validate path/to/smoke-gain.clap
 //!
-//! # VST3 (no GUI yet — process/params/state only):
+//! # VST3 (same PluginLogic editor via IPlugView):
 //! cargo build -p smoke-gain --release --features vst3
 //! cargo run -p cargo-aura -- install --vst3 --release
 //! ```
@@ -92,7 +92,7 @@ impl PluginLogic for SmokeGain {
     fn editor(_params: Arc<Self::Params>) -> Option<Box<dyn Editor>> {
         Some(
             aura_editor::AuraSlintEditor::new(
-                (320, 200),
+                (320, 220),
                 |ctx| {
                     let ui = AppWindow::new().expect("slint component");
                     let params = ctx.params.clone();
