@@ -3,7 +3,7 @@
 Living note: upstream Slint resources we can learn from, and **how AURA should look**
 (plugin editors + future `aura-gui`). Not an implementation plan — decisions + constraints.
 
-Last pass: 2026-08-07.
+Last pass: 2026-08-07 (U1/U2: `@aura` + smoke-gain restyled to M3 dark tokens).
 
 Related: [migration-steps.md](./migration-steps.md) (Stage 6 aura-gui),  
 [licensing-compliance.md](./licensing-compliance.md) (Slint triple-license),  
@@ -149,11 +149,12 @@ Priority is **after** Stage 5 format work unless we want a quick visual win on s
 
 | ID | Item | Notes |
 |----|------|--------|
-| **U1** | Restyle `@aura` tokens (colors, radii, type) away from truce blue/dark-knob cliché | Optional M3 palette mapping |
-| **U2** | Reskin smoke-gain + scaffold `ui/main.slint` to the new tokens | Proves author path without Material dep |
+| **U1** | ~~Restyle `@aura` tokens~~ | **done** — `AuraTheme` (M3 dark) + restyled Knob/Meter/… |
+| **U2** | ~~Reskin smoke-gain + scaffold~~ | **done** — surface card + `AuraTheme` |
 | **U3** | Spike: path-dep or vendored `@material` for a **future** `tools/aura-gui` | Study cargo-ui worker pattern |
-| **U4** | Document `@aura` vs `@material` in scaffold README / `cargo aura new` comments | One paragraph for authors |
-| **U5** | Optional: hybrid smoke — Material Switch + `@aura` Knob side by side | Only if U1/U2 done |
+| **U4** | Document `@aura` vs `@material` in scaffold README / `cargo aura new` comments | Partial via scaffold header comment |
+| **U5** | Optional: hybrid smoke — Material Switch + `@aura` Knob side by side | later / aura-gui |
+| **U6** | Re-smoke Bitwig after restyle | Confirm parented editor still opens cleanly |
 
 ---
 

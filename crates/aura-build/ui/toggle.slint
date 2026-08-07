@@ -1,18 +1,18 @@
 // On/off toggle switch with label.
 
 import { Switch } from "std-widgets.slint";
+import { AuraTheme } from "theme.slint";
 
 export component Toggle inherits Rectangle {
     in-out property <bool> checked: false;
     in property <string> label: "";
-    in property <color> label-color: #8c8c99;
+    in property <color> label-color: AuraTheme.on-surface-variant;
 
     callback toggled(bool);
 
-    // Fixed 50px height so a row mixing toggles with other widgets
-    // bottom-anchors its labels on the same baseline.
-    width: 60px;
-    height: 50px;
+    width: 64px;
+    height: 52px;
+    background: transparent;
 
     VerticalLayout {
         alignment: center;
@@ -25,7 +25,7 @@ export component Toggle inherits Rectangle {
 
         Text {
             text: root.label;
-            font-size: 10px;
+            font-size: AuraTheme.font-label;
             color: root.label-color;
             horizontal-alignment: center;
         }

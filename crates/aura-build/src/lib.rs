@@ -13,8 +13,9 @@
 //!
 //! In `.slint`:
 //! ```text
-//! import { Knob, Meter } from "@aura";
+//! import { Knob, Meter, AuraTheme } from "@aura";
 //! import "JetBrainsMono-Regular.ttf";
+//! // colors: AuraTheme.surface / .primary (Material 3 dark tokens)
 //! ```
 
 use std::error::Error;
@@ -55,6 +56,7 @@ const LIBRARY_NAME: &str = "aura";
 
 const WIDGET_SOURCES: &[(&str, &str)] = &[
     ("widgets.slint", include_str!("../ui/widgets.slint")),
+    ("theme.slint", include_str!("../ui/theme.slint")),
     ("knob.slint", include_str!("../ui/knob.slint")),
     ("meter.slint", include_str!("../ui/meter.slint")),
     ("dropdown.slint", include_str!("../ui/dropdown.slint")),

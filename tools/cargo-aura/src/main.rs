@@ -283,8 +283,8 @@ name = "{name}"
     fs::write(
         dest.join("ui/main.slint"),
         format!(
-            r#"// {display} — AURA + Slint
-import {{ Knob }} from "@aura";
+            r#"// {display} — AURA + Slint (Material 3–aligned @aura tokens)
+import {{ Knob, AuraTheme }} from "@aura";
 
 // AURA standard fonts (bundled via aura-build): import registers them
 // compile-time, default-font-family makes text identical across OSes.
@@ -293,8 +293,8 @@ import "NotoSans-Bold.ttf";
 
 export component AppWindow inherits Window {{
     preferred-width: 320px;
-    preferred-height: 200px;
-    background: #1a1a1e;
+    preferred-height: 220px;
+    background: AuraTheme.surface;
     default-font-family: "Noto Sans";
 
     in-out property <float> gain: 0.0;
@@ -302,23 +302,40 @@ export component AppWindow inherits Window {{
 
     VerticalLayout {{
         padding: 16px;
-        spacing: 8px;
+        spacing: 12px;
 
-        Text {{
-            text: "{display}";
-            color: #e8e8ec;
-            font-size: 16px;
-            font-weight: 700;
-            horizontal-alignment: center;
-        }}
+        Rectangle {{
+            background: AuraTheme.surface-container;
+            border-radius: AuraTheme.radius-md;
+            border-width: 1px;
+            border-color: AuraTheme.outline-variant;
+            vertical-stretch: 1;
 
-        Knob {{
-            label: "Gain";
-            minimum: -24.0;
-            maximum: 24.0;
-            value <=> root.gain;
-            value-text: round(root.gain * 10) / 10 + " dB";
-            changed(v) => {{ root.gain-changed(v); }}
+            VerticalLayout {{
+                padding: 16px;
+                spacing: 12px;
+                alignment: center;
+
+                Text {{
+                    text: "{display}";
+                    color: AuraTheme.on-surface;
+                    font-size: AuraTheme.font-title;
+                    font-weight: 600;
+                    horizontal-alignment: center;
+                }}
+
+                HorizontalLayout {{
+                    alignment: center;
+                    Knob {{
+                        label: "Gain";
+                        minimum: -24.0;
+                        maximum: 24.0;
+                        value <=> root.gain;
+                        value-text: round(root.gain * 10) / 10 + " dB";
+                        changed(v) => {{ root.gain-changed(v); }}
+                    }}
+                }}
+            }}
         }}
     }}
 }}

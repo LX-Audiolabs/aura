@@ -1,0 +1,47 @@
+// Material Design 3–aligned tokens for @aura audio widgets.
+//
+// Palette numbers match Slint's official Material 3 **dark** scheme
+// (ui-libraries/material, MIT). We do **not** ship the full @material
+// component set into every plugin — only tokens + audio controls.
+// Full Material chrome is for aura-gui (see docs/slint-ui-direction.md).
+//
+// Usage in a plugin:
+//   import { Knob, AuraTheme } from "@aura";
+//   background: AuraTheme.surface;
+
+export global AuraTheme {
+    // --- surfaces (M3 dark) ---
+    out property <color> surface: #111318;
+    out property <color> surface-container-lowest: #0c0e13;
+    out property <color> surface-container-low: #1a1b20;
+    out property <color> surface-container: #1e1f25;
+    out property <color> surface-container-high: #282a2f;
+    out property <color> surface-container-highest: #33353a;
+    out property <color> on-surface: #e2e2e9;
+    out property <color> on-surface-variant: #c4c6d0;
+    out property <color> outline: #8e9099;
+    out property <color> outline-variant: #44474f;
+
+    // --- brand (M3 dark primary — soft blue, not truce neon) ---
+    out property <color> primary: #adc6ff;
+    out property <color> on-primary: #112f60;
+    out property <color> primary-container: #2b4678;
+    out property <color> on-primary-container: #d8e2ff;
+
+    // --- secondary / error ---
+    out property <color> secondary: #bfc6dc;
+    out property <color> error: #ffb4ab;
+    out property <color> on-error: #690005;
+
+    // --- shape (M3-ish radii) ---
+    out property <length> radius-xs: 4px;
+    out property <length> radius-sm: 8px;
+    out property <length> radius-md: 12px;
+    out property <length> radius-lg: 16px;
+    out property <length> radius-full: 999px;
+
+    // --- type scale (compact for plugin panels) ---
+    out property <length> font-label: 11px;
+    out property <length> font-value: 12px;
+    out property <length> font-title: 16px;
+}

@@ -12,6 +12,7 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 ## Closed recently
 
 - [x] **P0** Bitwig host smoke on `smoke-gain` CLAP (2026-08-07): loads, parented GUI, Gain works
+- [x] **U1/U2** `@aura` + smoke/scaffold restyled to Material 3 dark tokens (`AuraTheme`)
 
 ## Decisions
 

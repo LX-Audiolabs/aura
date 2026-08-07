@@ -1,5 +1,7 @@
-// Rotary knob with 270-degree arc, pointer line, and hover highlight.
-// Drag vertically to change value.
+// Rotary knob with 270-degree arc, pointer, and hover ring.
+// Colors default to Material 3 dark tokens via AuraTheme.
+
+import { AuraTheme } from "theme.slint";
 
 export component Knob inherits Rectangle {
     in-out property <float> value: 0.5;
@@ -8,128 +10,144 @@ export component Knob inherits Rectangle {
     in property <float> minimum: 0.0;
     in property <float> maximum: 1.0;
 
-    in property <color> track-color: #3a3a44;
-    in property <color> fill-color: #4d99f2;
-    in property <color> pointer-color: #f2f2f7;
-    in property <color> hover-color: #737373;
-    in property <color> label-color: #8c8c99;
-    in property <color> value-color: #e6e6eb;
+    in property <color> track-color: AuraTheme.outline-variant;
+    in property <color> fill-color: AuraTheme.primary;
+    in property <color> pointer-color: AuraTheme.on-surface;
+    in property <color> hover-color: AuraTheme.primary;
+    in property <color> label-color: AuraTheme.on-surface-variant;
+    in property <color> value-color: AuraTheme.on-surface;
 
     callback changed(float);
 
-    width: 60px;
-    height: 82px;
+    width: 64px;
+    height: 88px;
+    background: transparent;
 
     property <float> norm: (value - minimum) / (maximum - minimum);
     property <float> val-angle: 135 + norm * 270;
 
-    // Arc geometry: center (30,30), radius 25, in a 60x60 coordinate space.
-    pure function ax(a: float) -> float { 30 + 25 * cos(a * 1deg) }
-    pure function ay(a: float) -> float { 30 + 25 * sin(a * 1deg) }
+    pure function ax(a: float) -> float { 32 + 26 * cos(a * 1deg) }
+    pure function ay(a: float) -> float { 32 + 26 * sin(a * 1deg) }
+    pure function ptr-len() -> float { 26 * 0.55 }
 
-    // Pointer line endpoints (center to 60% of radius toward arc)
-    pure function ptr-len() -> float { 25 * 0.6 }
+    // Soft surface under the arc (M3 container)
+    Rectangle {
+        x: (parent.width - 64px) / 2;
+        y: 2px;
+        width: 64px;
+        height: 64px;
+        border-radius: AuraTheme.radius-full;
+        background: AuraTheme.surface-container-high;
+    }
 
-    // Hover highlight ring (slightly outside the track arc)
+    // Hover ring
     Path {
-        x: (parent.width - 60px) / 2;
-        y: 5px;
-        width: 60px;
-        height: 60px;
+        x: (parent.width - 64px) / 2;
+        y: 2px;
+        width: 64px;
+        height: 64px;
         viewbox-x: 0; viewbox-y: 0;
-        viewbox-width: 60; viewbox-height: 60;
+        viewbox-width: 64; viewbox-height: 64;
         stroke: touch.has-hover ? root.hover-color : transparent;
         stroke-width: 1.5px;
 
-        MoveTo { x: 30 + 28 * cos(135deg); y: 30 + 28 * sin(135deg); }
+        MoveTo { x: 32 + 30 * cos(135deg); y: 32 + 30 * sin(135deg); }
         ArcTo {
-            x: 30 + 28 * cos(405deg); y: 30 + 28 * sin(405deg);
-            radius-x: 28; radius-y: 28;
+            x: 32 + 30 * cos(405deg); y: 32 + 30 * sin(405deg);
+            radius-x: 30; radius-y: 30;
             sweep: true; large-arc: true;
         }
     }
 
-    // Track arc (full 270 degrees)
+    // Track
     Path {
-        x: (parent.width - 60px) / 2;
-        y: 5px;
-        width: 60px;
-        height: 60px;
+        x: (parent.width - 64px) / 2;
+        y: 2px;
+        width: 64px;
+        height: 64px;
         viewbox-x: 0; viewbox-y: 0;
-        viewbox-width: 60; viewbox-height: 60;
+        viewbox-width: 64; viewbox-height: 64;
         stroke: root.track-color;
-        stroke-width: 3px;
+        stroke-width: 3.5px;
 
         MoveTo { x: ax(135); y: ay(135); }
         ArcTo {
             x: ax(405); y: ay(405);
-            radius-x: 25; radius-y: 25;
+            radius-x: 26; radius-y: 26;
             sweep: true; large-arc: true;
         }
     }
 
     // Value arc
     Path {
-        x: (parent.width - 60px) / 2;
-        y: 5px;
-        width: 60px;
-        height: 60px;
+        x: (parent.width - 64px) / 2;
+        y: 2px;
+        width: 64px;
+        height: 64px;
         viewbox-x: 0; viewbox-y: 0;
-        viewbox-width: 60; viewbox-height: 60;
+        viewbox-width: 64; viewbox-height: 64;
         stroke: root.fill-color;
-        stroke-width: 3px;
+        stroke-width: 3.5px;
 
         MoveTo { x: ax(135); y: ay(135); }
         ArcTo {
             x: ax(root.val-angle); y: ay(root.val-angle);
-            radius-x: 25; radius-y: 25;
+            radius-x: 26; radius-y: 26;
             sweep: true;
             large-arc: root.norm > 0.667;
         }
     }
 
-    // Pointer line (center to value position)
+    // Pointer
     Path {
-        x: (parent.width - 60px) / 2;
-        y: 5px;
-        width: 60px;
-        height: 60px;
+        x: (parent.width - 64px) / 2;
+        y: 2px;
+        width: 64px;
+        height: 64px;
         viewbox-x: 0; viewbox-y: 0;
-        viewbox-width: 60; viewbox-height: 60;
+        viewbox-width: 64; viewbox-height: 64;
         stroke: root.pointer-color;
         stroke-width: 2px;
 
-        MoveTo { x: 30; y: 30; }
+        MoveTo { x: 32; y: 32; }
         LineTo {
-            x: 30 + ptr-len() * cos(root.val-angle * 1deg);
-            y: 30 + ptr-len() * sin(root.val-angle * 1deg);
+            x: 32 + ptr-len() * cos(root.val-angle * 1deg);
+            y: 32 + ptr-len() * sin(root.val-angle * 1deg);
         }
     }
 
-    // Value text (below knob arc)
+    // Center cap
+    Rectangle {
+        x: (parent.width - 10px) / 2;
+        y: 2px + 27px;
+        width: 10px;
+        height: 10px;
+        border-radius: AuraTheme.radius-full;
+        background: AuraTheme.primary-container;
+    }
+
     Text {
-        y: 57px;
+        y: 62px;
         width: parent.width;
         text: root.value-text != "" ? root.value-text : round(root.value * 100) / 100;
-        font-size: 10px;
+        font-size: AuraTheme.font-value;
+        font-weight: 500;
         color: root.value-color;
         horizontal-alignment: center;
     }
 
-    // Label
     Text {
-        y: 69px;
+        y: 76px;
         width: parent.width;
         text: root.label;
-        font-size: 10px;
+        font-size: AuraTheme.font-label;
         color: root.label-color;
         horizontal-alignment: center;
     }
 
-    // Drag interaction
     touch := TouchArea {
         width: parent.width;
-        height: 70px;
+        height: 68px;
         property <float> start-value;
 
         pointer-event(ev) => {
