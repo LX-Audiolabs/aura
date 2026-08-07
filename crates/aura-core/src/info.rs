@@ -34,6 +34,8 @@ pub struct PluginInfo {
     pub bundle_id: &'static str,
     pub clap_id: &'static str,
     pub vst3_id: &'static str,
+    /// LV2 plugin URI (RFC 3986). Empty → `https://lx-audiolabs.com/lv2/<bundle_id>`.
+    pub lv2_uri: &'static str,
     pub accepts_midi_in: bool,
     pub emits_midi: bool,
     pub midi_input_dialect: MidiDialect,
@@ -58,6 +60,7 @@ impl PluginInfo {
             bundle_id,
             clap_id: bundle_id,
             vst3_id: "",
+            lv2_uri: "",
             accepts_midi_in: false,
             emits_midi: false,
             midi_input_dialect: MidiDialect::Midi1,

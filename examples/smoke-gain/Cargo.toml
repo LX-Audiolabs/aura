@@ -13,6 +13,7 @@ crate-type = ["cdylib", "lib"]
 default = ["clap"]
 clap = ["aura/clap"]
 vst3 = ["aura/vst3"]
+lv2 = ["aura/lv2"]
 
 [dependencies]
 aura = { workspace = true }

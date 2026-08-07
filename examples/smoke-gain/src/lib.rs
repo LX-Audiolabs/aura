@@ -52,6 +52,7 @@ impl PluginLogic for SmokeGain {
         info.clap_id = "com.lx-audiolabs.aura.smoke-gain";
         // Stable once shipped — host sessions key off this string → TUID.
         info.vst3_id = "com.lx-audiolabs.aura.smoke-gain";
+        info.lv2_uri = "https://lx-audiolabs.com/lv2/aura-smoke-gain";
         info.category = PluginCategory::Effect;
         info
     }
@@ -118,3 +119,6 @@ aura::export!(SmokeGain);
 
 #[cfg(feature = "vst3")]
 aura::export_vst3!(SmokeGain);
+
+#[cfg(feature = "lv2")]
+aura::export_lv2!(SmokeGain);

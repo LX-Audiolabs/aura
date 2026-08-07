@@ -460,6 +460,7 @@ dependencies = [
  "aura-clap",
  "aura-core",
  "aura-derive",
+ "aura-lv2",
  "aura-params",
  "aura-vst3",
 ]
@@ -545,6 +546,15 @@ dependencies = [
  "baseview",
  "slint",
  "slint-build",
+]
+
+[[package]]
+name = "aura-lv2"
+version = "0.1.0"
+dependencies = [
+ "aura-core",
+ "aura-params",
+ "lv2-sys",
 ]
 
 [[package]]
@@ -2993,6 +3003,12 @@ checksum = "0fae87c125b03c1d2c0150c90365d7d6bcc53fb73a9acaef207d2d065860f062"
 dependencies = [
  "imgref",
 ]
+
+[[package]]
+name = "lv2-sys"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9dd0f9e7de3649dcec348de51cbf611ab88688b97c0ce038f8c07b996b2a8e30"
 
 [[package]]
 name = "lyon_algorithms"

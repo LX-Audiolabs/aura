@@ -318,10 +318,12 @@ CLAP host smoke (Bitwig) green. VST3 process path started (shared state codec).
 - [x] VST3 GUI (`IPlugView` + same `Editor` / baseview/Slint path as CLAP)
 - [ ] Steinberg SDK / licensing checklist for VST3 packaging (see `docs/licensing-compliance.md`)
 - [ ] Host smoke (REAPER/Bitwig) on smoke-gain VST3
-- [ ] `aura-lv2` — thin wrapper + TTL/manifest story (learn from product `lv2-meta` / truce-lv2 selectively)
-- [ ] smoke-gain (or scaffold) feature `lv2`
-- [ ] `cargo aura build|install --lv2`
-- [ ] Scaffold `cargo aura new` optional `--vst3` feature line
+- [x] `aura-lv2` — thin wrapper (stereo + control ports + state blob, no GUI)
+- [x] smoke-gain feature `lv2` + `aura::export_lv2!`
+- [x] `cargo aura build|install --lv2` → `<name>.lv2/` (manifest.ttl + plugin.ttl + binary)
+- [ ] Host smoke (REAPER/Carla) on smoke-gain LV2
+- [ ] LV2 UI extension (optional; not a basis gate for headless FX)
+- [ ] Scaffold `cargo aura new` optional `--vst3` / `--lv2` feature lines
 
 ### Stage 6 — polish & authoring shell (still inside AURA; **not** basis gate)
 

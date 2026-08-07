@@ -6,8 +6,9 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 
 ## Open
 
-- [ ] **P1** VST3 host smoke (GUI wired); then LV2 (Stage 5)
+- [ ] **P1** VST3/LV2 host smoke (Stage 5 wrappers landed)
 - [x] VST3 `IPlugView` parented editor (same `Editor` as CLAP)
+- [x] LV2 thin wrapper + `install --lv2` bundle (no UI yet)
 - [ ] Product cutover pilot only after basis + G1 ID pass — see `docs/gaps-and-optimizations.md`
 
 ## Closed recently

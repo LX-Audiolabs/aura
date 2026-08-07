@@ -7,6 +7,7 @@ members = [
     "crates/aura-core",
     "crates/aura-clap",
     "crates/aura-vst3",
+    "crates/aura-lv2",
     "crates/aura-baseview",
     "crates/aura-editor",
     "crates/aura-build",
@@ -36,6 +37,7 @@ aura-derive = { path = "crates/aura-derive" }
 aura-core = { path = "crates/aura-core" }
 aura-clap = { path = "crates/aura-clap" }
 aura-vst3 = { path = "crates/aura-vst3" }
+aura-lv2 = { path = "crates/aura-lv2" }
 aura-baseview = { path = "crates/aura-baseview", default-features = false }
 aura-editor = { path = "crates/aura-editor", default-features = false }
 aura-build = { path = "crates/aura-build" }

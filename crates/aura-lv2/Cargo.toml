@@ -1,0 +1,17 @@
+[package]
+name = "aura-lv2"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "AURA LV2 format wrapper (thin, over PluginLogic)"
+publish = false
+
+[dependencies]
+aura-core = { workspace = true }
+aura-params = { workspace = true }
+lv2-sys = "2.0"
+
+[lints]
+workspace = true

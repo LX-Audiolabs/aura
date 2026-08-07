@@ -30,6 +30,9 @@ pub use aura_clap as clap;
 #[cfg(feature = "vst3")]
 pub use aura_vst3 as vst3;
 
+#[cfg(feature = "lv2")]
+pub use aura_lv2 as lv2;
+
 // --- core surface ---
 pub use aura_core::{
     AudioBuffer, AudioConfig, Editor, EditorBridge, IntoEditor, MidiDialect, ParamEvent,
@@ -56,6 +59,10 @@ pub use aura_clap::export;
 /// Re-export VST3 export macro when `vst3` feature is on.
 #[cfg(feature = "vst3")]
 pub use aura_vst3::export_vst3;
+
+/// Re-export LV2 export macro when `lv2` feature is on.
+#[cfg(feature = "lv2")]
+pub use aura_lv2::export_lv2;
 
 /// Common imports for plugin crates (grows with the framework).
 pub mod prelude {
