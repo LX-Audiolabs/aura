@@ -19,3 +19,6 @@ examples/*/.cargo
 !/agal/skills/**
 !/agal/notes/
 !/agal/notes/**
+
+# Personal agent config — contains email, never commit.
+AGENTS.md
