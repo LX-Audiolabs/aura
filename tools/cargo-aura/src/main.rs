@@ -620,7 +620,12 @@ fn install_clap(target_dir: &Path, profile: &str) -> Result<(), String> {
         })?;
 
     let dest_root = resolve_install_dir(InstallFormat::Clap)?;
-    fs::create_dir_all(&dest_root).map_err(|e| e.to_string())?;
+    fs::create_dir_all(&dest_root).map_err(|e| {
+        format!(
+            "create_dir_all {}: {e} (resolved install dir — check aura.toml [install])",
+            dest_root.display()
+        )
+    })?;
 
     let dest = dest_root.join(format!("{pkg}.clap"));
     fs::copy(src, &dest).map_err(|e| format!("copy {} → {}: {e}", src.display(), dest.display()))?;
@@ -655,7 +660,12 @@ fn install_vst3(target_dir: &Path, profile: &str) -> Result<(), String> {
     let dest_root = resolve_install_dir(InstallFormat::Vst3)?;
     let bundle = dest_root.join(format!("{pkg}.vst3"));
     let arch_dir = bundle.join("Contents").join(vst3_arch_folder());
-    fs::create_dir_all(&arch_dir).map_err(|e| e.to_string())?;
+    fs::create_dir_all(&arch_dir).map_err(|e| {
+        format!(
+            "create_dir_all {}: {e} (resolved install dir — check aura.toml [install])",
+            arch_dir.display()
+        )
+    })?;
 
     // Binary inside the bundle uses the `.vst3` extension (still a PE/ELF/Mach-O).
     let dest = arch_dir.join(format!("{pkg}.vst3"));
@@ -747,16 +757,16 @@ fn resolve_install_dir(fmt: InstallFormat) -> Result<PathBuf, String> {
         if let Ok(p) = env::var(key)
             && !p.trim().is_empty()
         {
-            return Ok(expand_path(p.trim()));
+            return expand_path(p.trim());
         }
     }
 
     let cfg = read_aura_install_config();
     if let Some(p) = cfg.get(fmt.toml_key()) {
-        return Ok(expand_path(p));
+        return expand_path(p);
     }
     if let Some(base) = cfg.get("dir").or_else(|| cfg.get("installdir")) {
-        return Ok(expand_path(base).join(fmt.subdir()));
+        return Ok(expand_path(base)?.join(fmt.subdir()));
     }
 
     default_install_dir(fmt)
@@ -798,31 +808,56 @@ fn read_aura_install_config() -> std::collections::HashMap<String, String> {
     out
 }
 
+/// Look up an environment variable; on Windows, match case-insensitively.
+fn env_lookup(name: &str) -> Option<String> {
+    if let Ok(v) = env::var(name) {
+        return Some(v);
+    }
+    // Windows env block is case-insensitive; some hosts only expose mixed case.
+    let want = name.to_ascii_uppercase();
+    env::vars()
+        .find(|(k, _)| k.to_ascii_uppercase() == want)
+        .map(|(_, v)| v)
+}
+
 /// Expand `%VAR%`, `$VAR` / `${VAR}`, and leading `~` in install paths.
-fn expand_path(raw: &str) -> PathBuf {
+///
+/// Unresolved `%VAR%` segments are **not** left in place (that created
+/// relative folders literally named `%LOCALAPPDATA%` under the project).
+fn expand_path(raw: &str) -> Result<PathBuf, String> {
     let mut s = raw.to_string();
 
-    // Windows-style %VAR%
-    let mut search_from = 0usize;
-    while let Some(rel) = s[search_from..].find('%') {
-        let start = search_from + rel;
-        let rest = &s[start + 1..];
-        let Some(end_rel) = rest.find('%') else {
+    // Normalize TOML-style doubled backslashes from line-scan reads.
+    s = s.replace("\\\\", "\\");
+
+    // Windows-style %VAR% — replace until stable.
+    loop {
+        let Some(start) = s.find('%') else {
             break;
         };
+        let rest = &s[start + 1..];
+        let Some(end_rel) = rest.find('%') else {
+            return Err(format!(
+                "install path has unclosed %…%: {raw:?} (after partial expand: {s:?})"
+            ));
+        };
         if end_rel == 0 {
-            search_from = start + 1;
-            continue;
+            return Err(format!("install path has empty %…%: {raw:?}"));
         }
         let name = &rest[..end_rel];
         if !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
-            search_from = start + 1;
-            continue;
+            return Err(format!(
+                "install path has invalid env name %{name}% in {raw:?}"
+            ));
         }
-        let repl = env::var(name).unwrap_or_default();
-        let end = start + 1 + end_rel + 1;
+        let Some(repl) = env_lookup(name) else {
+            return Err(format!(
+                "install path env %{name}% is not set (from {raw:?}). \
+                 Set the variable or use a concrete path in aura.toml [install]"
+            ));
+        };
+        let end = start + 1 + end_rel + 1; // inclusive of closing %
         s.replace_range(start..end, &repl);
-        search_from = start + repl.len();
     }
 
     // $VAR or ${VAR}
@@ -834,7 +869,10 @@ fn expand_path(raw: &str) -> PathBuf {
             if chars[i + 1] == '{' {
                 if let Some(close) = chars[i + 2..].iter().position(|&c| c == '}') {
                     let name: String = chars[i + 2..i + 2 + close].iter().collect();
-                    out.push_str(&env::var(&name).unwrap_or_default());
+                    let repl = env_lookup(&name).ok_or_else(|| {
+                        format!("install path env ${{{name}}} is not set (from {raw:?})")
+                    })?;
+                    out.push_str(&repl);
                     i += 3 + close;
                     continue;
                 }
@@ -844,7 +882,10 @@ fn expand_path(raw: &str) -> PathBuf {
                     j += 1;
                 }
                 let name: String = chars[i + 1..j].iter().collect();
-                out.push_str(&env::var(&name).unwrap_or_default());
+                let repl = env_lookup(&name).ok_or_else(|| {
+                    format!("install path env ${name} is not set (from {raw:?})")
+                })?;
+                out.push_str(&repl);
                 i = j;
                 continue;
             }
@@ -855,16 +896,23 @@ fn expand_path(raw: &str) -> PathBuf {
     s = out;
 
     if s.starts_with("~/") || s.starts_with("~\\") {
-        if let Ok(home) = env::var("HOME").or_else(|_| env::var("USERPROFILE")) {
-            s = format!("{home}{}", &s[1..]);
-        }
-    } else if s == "~"
-        && let Ok(home) = env::var("HOME").or_else(|_| env::var("USERPROFILE"))
-    {
-        s = home;
+        let home = env_lookup("HOME")
+            .or_else(|| env_lookup("USERPROFILE"))
+            .ok_or_else(|| "cannot expand ~: HOME/USERPROFILE not set".to_string())?;
+        s = format!("{home}{}", &s[1..]);
+    } else if s == "~" {
+        s = env_lookup("HOME")
+            .or_else(|| env_lookup("USERPROFILE"))
+            .ok_or_else(|| "cannot expand ~: HOME/USERPROFILE not set".to_string())?;
     }
 
-    PathBuf::from(s)
+    if s.contains('%') {
+        return Err(format!(
+            "install path still contains % after expand: {s:?} (from {raw:?})"
+        ));
+    }
+
+    Ok(PathBuf::from(s))
 }
 
 fn default_install_dir(fmt: InstallFormat) -> Result<PathBuf, String> {
@@ -1151,9 +1199,15 @@ mod tests {
     fn expand_path_percent_vars() {
         // SAFETY: test-only env; single-threaded unit test.
         unsafe { env::set_var("AURA_TEST_INSTALL", r"C:\Users\test\AppData\Local") };
-        let p = expand_path(r"%AURA_TEST_INSTALL%\Programs\Common");
+        let p = expand_path(r"%AURA_TEST_INSTALL%\Programs\Common").unwrap();
         assert_eq!(
             p,
+            PathBuf::from(r"C:\Users\test\AppData\Local\Programs\Common")
+        );
+        // Double backslashes as written in aura.toml line-scan values.
+        let p2 = expand_path(r"%AURA_TEST_INSTALL%\\Programs\\Common").unwrap();
+        assert_eq!(
+            p2,
             PathBuf::from(r"C:\Users\test\AppData\Local\Programs\Common")
         );
         unsafe { env::remove_var("AURA_TEST_INSTALL") };
@@ -1162,10 +1216,28 @@ mod tests {
     #[test]
     fn expand_path_dollar_and_tilde() {
         unsafe { env::set_var("AURA_TEST_HOME", "/home/dev") };
-        let p = expand_path("$AURA_TEST_HOME/.clap");
+        let p = expand_path("$AURA_TEST_HOME/.clap").unwrap();
         assert_eq!(p, PathBuf::from("/home/dev/.clap"));
-        let p2 = expand_path("${AURA_TEST_HOME}/.vst3");
+        let p2 = expand_path("${AURA_TEST_HOME}/.vst3").unwrap();
         assert_eq!(p2, PathBuf::from("/home/dev/.vst3"));
         unsafe { env::remove_var("AURA_TEST_HOME") };
+    }
+
+    #[test]
+    fn expand_path_unknown_var_errors() {
+        let err = expand_path(r"%AURA_SURELY_UNSET_XYZ%\foo").unwrap_err();
+        assert!(err.contains("AURA_SURELY_UNSET_XYZ"), "{err}");
+    }
+
+    #[test]
+    fn expand_localappdata_if_present() {
+        if env::var("LOCALAPPDATA").is_err() {
+            return;
+        }
+        // Exact scaffold default shape.
+        let p = expand_path(r"%LOCALAPPDATA%\\Programs\\Common").unwrap();
+        let s = p.to_string_lossy();
+        assert!(!s.contains('%'), "{s}");
+        assert!(s.ends_with(r"Programs\Common") || s.ends_with("Programs/Common"), "{s}");
     }
 }
