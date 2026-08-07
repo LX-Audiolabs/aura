@@ -16,6 +16,7 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 ## Decisions
 
 ```text
+[ATOM] type=decision | detail=UI identity: not truce/egui lookalikes; Material 3 for aura-gui chrome; @aura keeps audio widgets (restyle). See docs/slint-ui-direction.md
 [ATOM] type=decision | detail=AURA = Slint + baseview only; formats CLAP/VST3/LV2; no egui/iced/Vizia, no AU/AAX/VST2
 [ATOM] type=decision | detail=CLAP-first (Bitwig); free-audio/clap is ABI truth; clap-sys may lag revision
 [ATOM] type=decision | detail=Strategy: finish framework basis in-tree (smoke) before product cutover; no early lx-audiolabs-plugins migrate

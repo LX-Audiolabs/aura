@@ -189,6 +189,8 @@ All wizard choices must map 1:1 to flags. GUI is sugar; CLI remains source of tr
 | `cargo aura doctor` | toolchain + AURA_PATH + optional “agal found?” |
 | **aura-gui** | Slint shell over the same commands |
 
+**UI direction (tools + examples):** study [cargo-ui](https://github.com/slint-ui/cargo-ui) for worker/CLI-parity architecture; [Material 3 for Slint](https://github.com/slint-ui/slint/tree/master/ui-libraries/material) for tool chrome and visual language; keep audio widgets in `@aura` but **leave truce/egui-lookalike defaults**. Full write-up: [slint-ui-direction.md](./slint-ui-direction.md).
+
 Flags sketch (bind GUI controls to these):
 
 ```text

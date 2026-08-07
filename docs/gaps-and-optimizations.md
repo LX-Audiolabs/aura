@@ -120,6 +120,8 @@ Last pass: 2026-08-06 (post `aura-derive` review).
 | **F3** | clap-sys may lag free-audio revision | Policy already in `aura-clap` README; Dependabot tracks crates.io |
 | **F4** | femtovg/Skia mostly transitive via Slint | Upgrade via Slint group PRs |
 | **F5** | Docs lag code | Keep this file + migration-steps status in sync after each stage close |
+| **F6** | Example/scaffold UI still truce/egui-adjacent | Visual only; see [slint-ui-direction.md](./slint-ui-direction.md) U1–U2 — not a cutover blocker |
+| **F7** | `aura-gui` not started | Stage 6; cargo-ui-style shell + Material chrome |
 
 ---
 
