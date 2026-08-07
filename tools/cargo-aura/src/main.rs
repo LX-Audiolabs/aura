@@ -830,11 +830,8 @@ fn expand_path(raw: &str) -> Result<PathBuf, String> {
     // Normalize TOML-style doubled backslashes from line-scan reads.
     s = s.replace("\\\\", "\\");
 
-    // Windows-style %VAR% — replace until stable.
-    loop {
-        let Some(start) = s.find('%') else {
-            break;
-        };
+    // Windows-style %VAR% — replace until none left.
+    while let Some(start) = s.find('%') {
         let rest = &s[start + 1..];
         let Some(end_rel) = rest.find('%') else {
             return Err(format!(
