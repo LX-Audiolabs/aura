@@ -22,3 +22,8 @@ examples/*/.cargo
 
 # Personal agent config — contains email, never commit.
 AGENTS.md
+
+# Internal planning docs — not for public consumption.
+docs/migration-steps.md
+docs/gaps-and-optimizations.md
+docs/slint-ui-direction.md
