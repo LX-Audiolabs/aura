@@ -2,6 +2,8 @@
 
 Auto-generated. Per-node notes for focus work.
 
+**Workspace memory** (durable, never overwritten): [`_workspace.md`](./_workspace.md)
+
 ## plugins
 
 
@@ -16,4 +18,6 @@ Auto-generated. Per-node notes for focus work.
 - [aura-editor](aura-editor.md) — `crates/aura-editor`
 - [aura-example-open-parented](aura-example-open-parented.md) — `crates/aura-baseview/examples/open_parented`
 - [aura-example-render-femtovg](aura-example-render-femtovg.md) — `crates/aura-baseview/examples/render_femtovg`
+- [aura-lv2](aura-lv2.md) — `crates/aura-lv2`
 - [aura-params](aura-params.md) — `crates/aura-params`
+- [aura-vst3](aura-vst3.md) — `crates/aura-vst3`

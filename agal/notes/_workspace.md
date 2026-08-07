@@ -1,49 +1,19 @@
 # Workspace memory
 
-**Summary:** Durable AURA framework notes for agents.  
+**Summary:** Durable cross-plugin / cross-crate notes for agents.  
 **Never overwritten** by `agal .` (unlike per-node AUTO blocks).  
 Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 
+## Atoms
+
+```text
+[ATOM] type=decision|lesson|constraint | detail=…
+```
+
 ## Open
 
-- [ ] **P1** VST3/LV2 host smoke (Stage 5 wrappers landed)
-- [x] VST3 `IPlugView` parented editor (same `Editor` as CLAP)
-- [x] LV2 thin wrapper + `install --lv2` bundle (no UI yet)
-- [ ] Product cutover pilot only after basis + G1 ID pass — see `docs/gaps-and-optimizations.md`
-
-## Closed recently
-
-- [x] **P0** Bitwig host smoke on `smoke-gain` CLAP (2026-08-07): loads, parented GUI, Gain works
-- [x] **U1/U2** `@aura` + smoke/scaffold restyled to Material 3 dark tokens (`AuraTheme`)
+- [ ]
 
 ## Decisions
 
-```text
-[ATOM] type=decision | detail=UI identity: not truce/egui lookalikes; Material 3 for aura-gui chrome; @aura keeps audio widgets (restyle). See docs/slint-ui-direction.md
-[ATOM] type=decision | detail=AURA = Slint + baseview only; formats CLAP/VST3/LV2; no egui/iced/Vizia, no AU/AAX/VST2
-[ATOM] type=decision | detail=CLAP-first (Bitwig); free-audio/clap is ABI truth; clap-sys may lag revision
-[ATOM] type=decision | detail=Strategy: finish framework basis in-tree (smoke) before product cutover; no early lx-audiolabs-plugins migrate
-[ATOM] type=decision | detail=Roadmap: docs/migration-steps.md · gaps/opts: docs/gaps-and-optimizations.md
-[ATOM] type=decision | detail=Product DSP/UI catalog stays out: lx-dsp, lx-analysis, lx-shm, lx-vault, lx-ui-slint
-[ATOM] type=decision | detail=Thin formats: one PluginLogic API; wrappers never shape core
-[ATOM] type=decision | detail=External multi-UI stacks: point to nice-plug (NIH retiring), truce, or clack — not AURA
-[ATOM] type=decision | detail=agal optional mesh for authors; never hard-dep for cargo aura build/install
-[ATOM] type=decision | detail=UI assets shared via aura_build::materialize_assets (build.rs + aura-preview)
-[ATOM] type=decision | detail=aura-derive required for author UX; selective truce port — no plugin_info/State/LV2 sidecars in derive
-[ATOM] type=decision | detail=Param IDs explicit id=N only (wire-stable); no silent auto-assign renumber
-[ATOM] type=decision | detail=G2 ParamId = option A: derive emits <Struct>ParamId (id()/from_id()); editors use P::X.id(); nested structs get own enum
-[ATOM] type=decision | detail=install --clap ships exactly <package>.clap matched by artifact stem; no stray target-dir artifacts
-[ATOM] type=constraint | detail=f32 leaf process first; precision-64 / hot-reload only when needed
-[ATOM] type=constraint | detail=Audio thread: no alloc/lock in process; param gestures via queue → CLAP out_events
-[ATOM] type=lesson | detail=clap-validator green ≠ Bitwig GUI; always host-smoke parented editor before calling GUI done
-[ATOM] type=lesson | detail=Product truce plugins often omit param ids and use *ParamId enums — cutover needs ID pass + G2 decision
-[ATOM] type=lesson | detail=Scaffold agal.toml is stub only until author opts into full orientation
-```
-
-## Deferred (explicit)
-
-```text
-[ATOM] type=decision | detail=Stage 6 only after basis: cargo aura init, aura-gui, kind templates, deeper agal mesh
-[ATOM] type=decision | detail=MIDI note-ports / multi-bus only when a smoke or pilot needs them
-[ATOM] type=decision | detail=Split aura-derive lib.rs modules only if maintainability hurts (F1)
-```
+_Workspace-wide architecture choices worth remembering._

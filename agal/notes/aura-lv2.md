@@ -1,14 +1,13 @@
 <!-- AGAL:AUTO-START -->
-# aura-clap
+# aura-lv2
 
 > Auto-generated from workspace scan. Do not edit between AUTO markers.
 
 | | |
 |---|---|
 | kind | `crate` |
-| path | `crates/aura-clap` |
-| description | CLAP format wrapper for AURA — free-audio/clap via clap-sys (minimal v1) |
-| frameworks | clap |
+| path | `crates/aura-lv2` |
+| description | AURA LV2 format wrapper (thin, over PluginLogic) |
 | generated | `2026-08-07T17:17:03Z` |
 
 ## Graph atoms (auto)
@@ -16,9 +15,8 @@
 _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 
 ```text
-[ATOM] type=fact | detail=kind=crate id=crates/aura-clap
-[ATOM] type=fact | detail=frameworks=clap
-[ATOM] type=fact | detail=roles=entry+manifest
+[ATOM] type=fact | detail=kind=crate id=crates/aura-lv2
+[ATOM] type=fact | detail=roles=entry+manifest+source
 [ATOM] type=fact | detail=depends_on=aura-core
 [ATOM] type=fact | detail=depends_on=aura-params
 [ATOM] type=fact | detail=used_by=aura via depends_on
@@ -29,15 +27,15 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 - `aura-params`
 
 ## dependents (inbound)
-- `aura` --depends_on--> `aura-clap`
+- `aura` --depends_on--> `aura-lv2`
 
 ## structure
-- public_api symbols: 3 (see json)
-- roles: entry, manifest
+- public_api symbols: 6 (see json)
+- roles: entry, manifest, source
 
 ## agent focus
 **L1:** scan **Graph atoms** above first, then human body below HUMAN.  
-After `agal.agent.md` (L2). Escalate L0: `crates/aura-clap` in json / `agal --plugin aura-clap .`
+After `agal.agent.md` (L2). Escalate L0: `crates/aura-lv2` in json / `agal --plugin aura-lv2 .`
 
 <!-- AGAL:AUTO-END -->
 
