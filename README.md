@@ -1,7 +1,7 @@
 # AURA
 
 **Audio Unified Rust Architecture**  
-*(DE-Gag: AUdio RAhmenwerk)*
+*(DE-Gag: **AU**dio **RA**hmenwerk)*
 
 CLAP-first plugin framework for **LX Audiolabs**.  
 Partner tooling: **[agal](https://github.com/LX-Audiolabs/agal)** (agent orientation) · this repo (runtime + formats + build + CLI).
