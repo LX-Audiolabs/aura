@@ -1,4 +1,4 @@
-<!-- AGAL:AUTO-START -->
+<!-- AUDIOLABS:AUTO-START -->
 # aura-example-render-femtovg
 
 > Auto-generated from workspace scan. Do not edit between AUTO markers.
@@ -9,18 +9,7 @@
 | path | `crates/aura-baseview/examples/render_femtovg` |
 | version | 0.1.0 |
 | frameworks | baseview, slint |
-| generated | `2026-08-06T19:26:26Z` |
-
-## Graph atoms (auto)
-
-_Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
-
-```text
-[ATOM] type=fact | detail=kind=crate id=crates/aura-baseview/examples/render_femtovg
-[ATOM] type=fact | detail=frameworks=baseview+slint
-[ATOM] type=fact | detail=roles=build+entry+manifest+slint+source
-[ATOM] type=fact | detail=depends_on=aura-baseview
-```
+| generated | `2026-08-07T06:20:50Z` |
 
 ## deps (workspace)
 - `aura-baseview`
@@ -32,12 +21,12 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 - [info] **crate_no_dependents**: aura-example-render-femtovg has no inbound workspace edges — unused or only path-included? · `crates/aura-baseview/examples/render_femtovg` · fix: wire `aura-example-render-femtovg` as a path dep from a plugin/crate, or remove from workspace
 
 ## agent focus
-**L1:** scan **Graph atoms** above first, then human body below HUMAN.  
-After `agal.agent.md` (L2). Escalate L0: `crates/aura-baseview/examples/render_femtovg` in json / `agal --plugin aura-example-render-femtovg .`
+Read this note after `audiolabs.agent.md`.  
+Escalate: `crates/aura-baseview/examples/render_femtovg` in json / `agal --plugin aura-example-render-femtovg .`
 
-<!-- AGAL:AUTO-END -->
+<!-- AUDIOLABS:AUTO-END -->
 
-<!-- AGAL:HUMAN — edit below this line; preserved on regenerate -->
+<!-- AUDIOLABS:HUMAN — edit below this line; preserved on regenerate -->
 
 ## Intent
 
@@ -50,11 +39,3 @@ _Why this crate/plugin exists. Edit freely._
 ## Decisions
 
 _Architecture choices worth remembering._
-
-## Atoms (human)
-
-_Graph atoms live **above** in AUTO. Add durable decisions/lessons here:_
-
-```text
-[ATOM] type=decision|lesson|constraint | detail=…
-```

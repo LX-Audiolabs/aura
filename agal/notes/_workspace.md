@@ -6,11 +6,9 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 
 ## Open
 
-- [ ] **P0** Bitwig GUI open on `examples/smoke-gain` (parented Slint; validator ≠ host)
-- [ ] **P0** ParamId strategy (G2): extend derive with `*ParamId` enum **or** migrate editors to const/u32 — decide before Stage 7
-- [ ] **P1** Richer `cargo aura new` + clean `install --clap` (scaffold: derive + explicit ids)
+- [ ] **P0** Bitwig GUI open on `examples/smoke-gain` (parented Slint; validator ≠ host) — top basis item
 - [ ] **P1** VST3 then LV2 thin wrappers (Stage 5)
-- [ ] Product cutover pilot only after basis + G1 ID pass + G2 decision — see `docs/gaps-and-optimizations.md`
+- [ ] Product cutover pilot only after basis + G1 ID pass — see `docs/gaps-and-optimizations.md`
 
 ## Decisions
 
@@ -26,6 +24,8 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 [ATOM] type=decision | detail=UI assets shared via aura_build::materialize_assets (build.rs + aura-preview)
 [ATOM] type=decision | detail=aura-derive required for author UX; selective truce port — no plugin_info/State/LV2 sidecars in derive
 [ATOM] type=decision | detail=Param IDs explicit id=N only (wire-stable); no silent auto-assign renumber
+[ATOM] type=decision | detail=G2 ParamId = option A: derive emits <Struct>ParamId (id()/from_id()); editors use P::X.id(); nested structs get own enum
+[ATOM] type=decision | detail=install --clap ships exactly <package>.clap matched by artifact stem; no stray target-dir artifacts
 [ATOM] type=constraint | detail=f32 leaf process first; precision-64 / hot-reload only when needed
 [ATOM] type=constraint | detail=Audio thread: no alloc/lock in process; param gestures via queue → CLAP out_events
 [ATOM] type=lesson | detail=clap-validator green ≠ Bitwig GUI; always host-smoke parented editor before calling GUI done

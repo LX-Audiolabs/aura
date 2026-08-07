@@ -116,6 +116,7 @@ Building the **framework basis** (not product migration).
 |-------|------|
 | [`aura`](./crates/aura) | Umbrella — `use aura::prelude::*`, feature `clap` |
 | [`aura-params`](./crates/aura-params) | Params / ranges / smoothers |
+| [`aura-derive`](./crates/aura-derive) | `#[derive(Params)]` / `ParamEnum` + `<Struct>ParamId` |
 | [`aura-core`](./crates/aura-core) | `PluginLogic`, `Editor`, process (thin) |
 | [`aura-clap`](./crates/aura-clap) | CLAP export (`aura::export!`) — **free-audio/clap** via clap-sys |
 | [`aura-baseview`](./crates/aura-baseview) | Slint + baseview window stack (MIT; crates.io **later**) |
@@ -131,8 +132,8 @@ cargo build -p smoke-gain --release
 # clap-validator validate target/release/smoke_gain.dll  # or rename .clap
 ```
 
-**Still need for basis:** Bitwig GUI smoke · ParamId decision · VST3/LV2 · richer `cargo aura new` / install polish.  
-**`aura-derive`:** landed (explicit `id = N`); product cutover gaps → [docs/gaps-and-optimizations.md](./docs/gaps-and-optimizations.md).
+**Still need for basis:** Bitwig GUI smoke · VST3/LV2 wrappers.  
+**`aura-derive`:** landed (explicit `id = N`, `<Struct>ParamId` enum — G2 option A); `cargo aura new` scaffolds a validator-green CLAP plugin; product cutover gaps → [docs/gaps-and-optimizations.md](./docs/gaps-and-optimizations.md).
 
 **Roadmap:** [docs/migration-steps.md](./docs/migration-steps.md) · **Gaps / opts:** [docs/gaps-and-optimizations.md](./docs/gaps-and-optimizations.md)  
 Historical naming: `../lx-framework-plan.md`.

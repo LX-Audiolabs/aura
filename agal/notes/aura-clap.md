@@ -1,4 +1,4 @@
-<!-- AGAL:AUTO-START -->
+<!-- AUDIOLABS:AUTO-START -->
 # aura-clap
 
 > Auto-generated from workspace scan. Do not edit between AUTO markers.
@@ -9,20 +9,7 @@
 | path | `crates/aura-clap` |
 | description | CLAP format wrapper for AURA — free-audio/clap via clap-sys (minimal v1) |
 | frameworks | clap |
-| generated | `2026-08-06T19:26:26Z` |
-
-## Graph atoms (auto)
-
-_Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
-
-```text
-[ATOM] type=fact | detail=kind=crate id=crates/aura-clap
-[ATOM] type=fact | detail=frameworks=clap
-[ATOM] type=fact | detail=roles=entry+manifest
-[ATOM] type=fact | detail=depends_on=aura-core
-[ATOM] type=fact | detail=depends_on=aura-params
-[ATOM] type=fact | detail=used_by=aura via depends_on
-```
+| generated | `2026-08-07T06:20:50Z` |
 
 ## deps (workspace)
 - `aura-core`
@@ -36,12 +23,12 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 - roles: entry, manifest
 
 ## agent focus
-**L1:** scan **Graph atoms** above first, then human body below HUMAN.  
-After `agal.agent.md` (L2). Escalate L0: `crates/aura-clap` in json / `agal --plugin aura-clap .`
+Read this note after `audiolabs.agent.md`.  
+Escalate: `crates/aura-clap` in json / `agal --plugin aura-clap .`
 
-<!-- AGAL:AUTO-END -->
+<!-- AUDIOLABS:AUTO-END -->
 
-<!-- AGAL:HUMAN — edit below this line; preserved on regenerate -->
+<!-- AUDIOLABS:HUMAN — edit below this line; preserved on regenerate -->
 
 ## Intent
 
@@ -54,11 +41,3 @@ _Why this crate/plugin exists. Edit freely._
 ## Decisions
 
 _Architecture choices worth remembering._
-
-## Atoms (human)
-
-_Graph atoms live **above** in AUTO. Add durable decisions/lessons here:_
-
-```text
-[ATOM] type=decision|lesson|constraint | detail=…
-```

@@ -1,27 +1,28 @@
 <!-- AUDIOLABS:AUTO-START -->
-# aura-build
+# aura-derive
 
 > Auto-generated from workspace scan. Do not edit between AUTO markers.
 
 | | |
 |---|---|
 | kind | `crate` |
-| path | `crates/aura-build` |
-| description | AURA build helper: @aura Slint widgets + bundled fonts for slint-build 1.17.1 |
-| frameworks | slint |
+| path | `crates/aura-derive` |
+| description | Proc macros for AURA plugins: #[derive(Params)] and #[derive(ParamEnum)] |
 | generated | `2026-08-07T06:20:50Z` |
 
+## deps (workspace)
+- `aura-params`
+
 ## dependents (inbound)
-- `examples/smoke-gain` --build_depends_on--> `aura-build`
-- `tools/aura-preview` --depends_on--> `aura-build`
+- `aura` --depends_on--> `aura-derive`
 
 ## structure
-- public_api symbols: 4 (see json)
-- roles: entry, manifest, slint
+- public_api symbols: 2 (see json)
+- roles: entry, manifest
 
 ## agent focus
 Read this note after `audiolabs.agent.md`.  
-Escalate: `crates/aura-build` in json / `agal --plugin aura-build .`
+Escalate: `crates/aura-derive` in json / `agal --plugin aura-derive .`
 
 <!-- AUDIOLABS:AUTO-END -->
 

@@ -25,7 +25,9 @@ Last pass: 2026-08-06 (post `aura-derive` review).
 
 | Item | Evidence |
 |------|----------|
-| `aura-derive` (`Params`, `ParamEnum`) | Crate + `crates/aura/tests/derive_params.rs` (12 tests) + smoke-gain |
+| `aura-derive` (`Params`, `ParamEnum`) | Crate + `crates/aura/tests/derive_params.rs` (13 tests) + smoke-gain |
+| **G2 decided — option A:** derive emits `<Struct>ParamId` | `gen_param_id_enum` in `crates/aura-derive/src/lib.rs`; `id()` / `from_id()` / `From<…> for u32`; smoke-gain + scaffold use `P::Gain.id()` |
+| Scaffold emits derive + explicit ids; clean `.clap` name | `cargo aura new` → working CLAP plugin (validator green); `install --clap` copies `<package>.clap` |
 | Selective port (no State / plugin_info / LV2 meta in derive) | Crate docs; intentional |
 | agal orientation in framework workspace | `agal.toml`, `agal/notes/_workspace.md`, `07-aura/aura-scope` |
 | Dependabot (AURA only) | `.github/dependabot.yml` |
@@ -44,15 +46,14 @@ Last pass: 2026-08-06 (post `aura-derive` review).
 | **Cutover work** | Assign stable IDs once per plugin; document mapping if old sessions exist |
 | **Severity** | **Hard** — every product `Params` struct |
 
-### G2 — No generated `*ParamId` enum
+### G2 — No generated `*ParamId` enum — **decided (option A, landed)**
 
 | | |
 |--|--|
 | **Today (truce product)** | Editors use `AetherParamsParamId as P` → `P::Eq1Freq` |
-| **AURA derive** | **No** `*ParamId` enum (intentionally dropped with truce-derive extras) |
-| **Options** | **A)** Extend derive to emit optional `FooParamsParamId` (product ergonomics) · **B)** Migrate editors to `const` / raw `u32` / field accessors |
-| **Decision** | **Open** — pick before Stage 7 pilot |
-| **Severity** | **Hard** for mechanical cutover of existing `editor.rs` |
+| **AURA derive** | Emits `<Struct>ParamId` (one variant per own param field) with `id()` / `from_id()` / `From<…> for u32`; nested structs get their own enum |
+| **Decision** | **Option A** — keeps product editor ergonomics, mechanical cutover of `editor.rs` possible. Landed in derive; smoke-gain + scaffold migrated |
+| **Severity** | ~~Hard~~ closed |
 
 ### G3 — Multi-format (VST3 / LV2)
 
@@ -98,13 +99,13 @@ Last pass: 2026-08-06 (post `aura-derive` review).
 | **Work** | Add only when smoke/pilot needs (analyzers/FX mostly soft) |
 | **Severity** | Low for current catalog |
 
-### G8 — Scaffold / install polish
+### G8 — Scaffold / install polish — **closed (basis)**
 
 | | |
 |--|--|
-| **Today** | `cargo aura new` basic; install path exists |
-| **Missing** | Product-shaped layout; clean `.clap` naming; scaffold uses `#[derive(Params)]` + explicit ids |
-| **Severity** | P1 basis / author UX |
+| **Today** | `cargo aura new` emits a working CLAP plugin: derive + explicit `id`s, `*ParamId` in the editor, `aura::export!`, `@aura` UI — validator green |
+| **Install** | `install --clap` ships exactly `<package>.clap` (package-stem match, no stray artifacts) |
+| **Still open** | Multi-file product layout (editor/process split) — only if the pilot wants it |
 
 ---
 
@@ -124,24 +125,22 @@ Last pass: 2026-08-06 (post `aura-derive` review).
 
 ### Do soon (high ROI)
 
-1. **Land + lock derive API** — commit workspace member, smoke-gain, tests; freeze “explicit `id` required” as public contract.  
-2. **Decide G2 (ParamId)** before writing pilot migration scripts.  
-3. **Bitwig GUI smoke** (G4) — unblocks calling editor path “done”.  
-4. **Scaffold emits derive + `id`s** — new plugins never learn hand-`Params`.  
-5. **`install --clap` artifact name** — fewer manual rename steps.
+1. ~~Land + lock derive API~~ — done; explicit `id` is the public contract.  
+2. ~~Decide G2 (ParamId)~~ — done: **option A**, derive emits `<Struct>ParamId`.  
+3. **Bitwig GUI smoke** (G4) — unblocks calling editor path “done”. **Now the top item.**
 
 ### Do for Stage 5 / cutover
 
-6. Thin **VST3** then **LV2** (G3).  
-7. Pilot plugin: pin param IDs, apply ParamId decision, path-dep AURA.  
-8. State hooks only if pilot presets need more than param + `#[persist]` (G5).
+4. Thin **VST3** then **LV2** (G3).  
+5. Pilot plugin: pin param IDs, apply `*ParamId` enum (G2 option A), path-dep AURA.  
+6. State hooks only if pilot presets need more than param + `#[persist]` (G5).
 
 ### Defer (Stage 6 / polish)
 
-9. Split `aura-derive` modules (F1).  
-10. `cargo aura init` / aura-gui / kind templates.  
-11. Note-ports / multi-bus unless a concrete plugin needs them (G7).  
-12. agal Dependabot (framework first; agal later).
+7. Split `aura-derive` modules (F1).  
+8. `cargo aura init` / aura-gui / kind templates.  
+9. Note-ports / multi-bus unless a concrete plugin needs them (G7).  
+10. agal Dependabot (framework first; agal later).
 
 ### Avoid
 
@@ -158,7 +157,7 @@ When Stage 7 starts on **one** plugin (e.g. aether):
 
 - [ ] AURA path/git dep; `use aura::prelude::*`  
 - [ ] Every `#[param(...)]` has stable **`id = N`** (G1)  
-- [ ] ParamId strategy applied (G2 option A or B)  
+- [ ] ParamId strategy applied (G2 **option A**: `<Struct>ParamId` from derive)  
 - [ ] Formats needed for that release (CLAP minimum; VST3/LV2 if shipping)  
 - [ ] Editor compiles against `AuraSlintEditor` / product UI crates  
 - [ ] State/presets: param blob + product vault still work  

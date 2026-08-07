@@ -244,3 +244,27 @@ struct CollidingParams {
 fn parent_nested_id_collision_panics_at_construction() {
     let _ = CollidingParams::new();
 }
+
+#[test]
+fn param_id_enum_maps_explicit_ids() {
+    use TestParamsParamId as P;
+
+    // One variant per own param field; explicit `id = N` is carried.
+    assert_eq!(P::Gain.id(), 1);
+    assert_eq!(P::Octave.id(), 2);
+    assert_eq!(P::Bypass.id(), 3);
+    assert_eq!(P::Mode.id(), 4);
+    assert_eq!(P::Cutoff.id(), 5);
+    assert_eq!(u32::from(P::Gain), 1);
+
+    // Nested params get their own enum; meters are excluded.
+    assert_eq!(SubParamsParamId::Tone.id(), 10);
+    assert_eq!(P::from_id(10), None, "nested IDs stay with SubParamsParamId");
+
+    // Round-trip every declared ID; unknown IDs fall out.
+    for id in [1, 2, 3, 4, 5] {
+        assert_eq!(P::from_id(id).map(P::id), Some(id));
+    }
+    assert_eq!(P::from_id(0), None);
+    assert_eq!(P::from_id(u32::MAX), None);
+}
