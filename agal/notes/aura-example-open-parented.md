@@ -9,7 +9,7 @@
 | path | `crates/aura-baseview/examples/open_parented` |
 | version | 0.1.0 |
 | frameworks | baseview, slint |
-| generated | `2026-08-07T17:17:03Z` |
+| generated | `2026-08-07T17:52:10Z` |
 
 ## Graph atoms (auto)
 
@@ -27,9 +27,6 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 
 ## structure
 - roles: build, entry, manifest, slint, source
-
-## findings
-- [info] **crate_no_dependents**: aura-example-open-parented has no inbound workspace edges — unused or only path-included? · `crates/aura-baseview/examples/open_parented` · fix: wire `aura-example-open-parented` as a path dep from a plugin/crate, or remove from workspace
 
 ## agent focus
 **L1:** scan **Graph atoms** above first, then human body below HUMAN.  

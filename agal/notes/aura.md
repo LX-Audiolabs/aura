@@ -8,7 +8,7 @@
 | kind | `crate` |
 | path | `crates/aura` |
 | description | AURA — Audio Unified Rust Architecture (umbrella crate) |
-| generated | `2026-08-07T17:17:03Z` |
+| generated | `2026-08-07T17:52:10Z` |
 
 ## Graph atoms (auto)
 

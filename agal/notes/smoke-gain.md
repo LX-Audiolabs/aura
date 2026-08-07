@@ -1,14 +1,14 @@
 <!-- AGAL:AUTO-START -->
-# aura-vst3
+# smoke-gain
 
 > Auto-generated from workspace scan. Do not edit between AUTO markers.
 
 | | |
 |---|---|
-| kind | `crate` |
-| path | `crates/aura-vst3` |
-| description | AURA VST3 format wrapper (thin, over PluginLogic) |
-| frameworks | vst3 |
+| kind | `member` |
+| path | `examples/smoke-gain` |
+| description | AURA in-tree CLAP smoke — stereo gain |
+| frameworks | slint |
 | generated | `2026-08-07T17:52:10Z` |
 
 ## Graph atoms (auto)
@@ -16,30 +16,31 @@
 _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 
 ```text
-[ATOM] type=fact | detail=kind=crate id=crates/aura-vst3
-[ATOM] type=fact | detail=frameworks=vst3
-[ATOM] type=fact | detail=roles=entry+manifest+source
+[ATOM] type=fact | detail=kind=member id=examples/smoke-gain
+[ATOM] type=fact | detail=frameworks=slint
+[ATOM] type=fact | detail=roles=build+entry+manifest+slint
 [ATOM] type=fact | detail=has_process=true
-[ATOM] type=fact | detail=depends_on=aura-core
-[ATOM] type=fact | detail=depends_on=aura-params
-[ATOM] type=fact | detail=used_by=aura via depends_on
+[ATOM] type=fact | detail=has_editor=true
+[ATOM] type=fact | detail=depends_on=aura
+[ATOM] type=fact | detail=depends_on=aura-build
+[ATOM] type=fact | detail=depends_on=aura-editor
 ```
 
 ## deps (workspace)
-- `aura-core`
-- `aura-params`
-
-## dependents (inbound)
-- `aura` --depends_on--> `aura-vst3`
+- `aura`
+- `aura-build`
+- `aura-editor`
 
 ## structure
-- process methods (DSP): 1
-- public_api symbols: 2 (see json)
-- roles: entry, manifest, source
+- logic: SmokeGain
+- params: GainParams (1 fields)
+- process: PluginLogic::process @ src/lib.rs
+- editor: yes
+- roles: build, entry, manifest, slint
 
 ## agent focus
 **L1:** scan **Graph atoms** above first, then human body below HUMAN.  
-After `agal.agent.md` (L2). Escalate L0: `crates/aura-vst3` in json / `agal --plugin aura-vst3 .`
+After `agal.agent.md` (L2). Escalate L0: `examples/smoke-gain` in json / `agal --plugin smoke-gain .`
 
 <!-- AGAL:AUTO-END -->
 

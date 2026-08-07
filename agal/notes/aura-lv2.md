@@ -8,7 +8,8 @@
 | kind | `crate` |
 | path | `crates/aura-lv2` |
 | description | AURA LV2 format wrapper (thin, over PluginLogic) |
-| generated | `2026-08-07T17:17:03Z` |
+| frameworks | lv2 |
+| generated | `2026-08-07T17:52:10Z` |
 
 ## Graph atoms (auto)
 
@@ -16,6 +17,7 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 
 ```text
 [ATOM] type=fact | detail=kind=crate id=crates/aura-lv2
+[ATOM] type=fact | detail=frameworks=lv2
 [ATOM] type=fact | detail=roles=entry+manifest+source
 [ATOM] type=fact | detail=depends_on=aura-core
 [ATOM] type=fact | detail=depends_on=aura-params

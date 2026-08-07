@@ -21,3 +21,9 @@ Auto-generated. Per-node notes for focus work.
 - [aura-lv2](aura-lv2.md) — `crates/aura-lv2`
 - [aura-params](aura-params.md) — `crates/aura-params`
 - [aura-vst3](aura-vst3.md) — `crates/aura-vst3`
+
+## members (examples / tools)
+
+- [aura-preview](aura-preview.md) — `tools/aura-preview`
+- [cargo-aura](cargo-aura.md) — `tools/cargo-aura`
+- [smoke-gain](smoke-gain.md) — `examples/smoke-gain`

@@ -25,7 +25,7 @@ edition = "2024"
 license = "GPL-3.0-or-later"
 rust-version = "1.92"
 description = "AURA — Audio Unified Rust Architecture (Slint + CLAP/VST3/LV2)"
-repository = "https://github.com/lxndrbe/aura"
+repository = "https://github.com/LX-Audiolabs/aura"
 authors = ["LX Audiolabs"]
 readme = "README.md"
 

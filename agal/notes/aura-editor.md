@@ -9,7 +9,7 @@
 | path | `crates/aura-editor` |
 | description | AURA host Editor adapter (Slint on aura-baseview) for CLAP/VST3/LV2 GUI |
 | frameworks | baseview, raw-window-handle, slint |
-| generated | `2026-08-07T17:17:03Z` |
+| generated | `2026-08-07T17:52:10Z` |
 
 ## Graph atoms (auto)
 

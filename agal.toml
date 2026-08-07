@@ -21,3 +21,15 @@ agal_optional = "agal is optional mesh for authors; never hard-depend for cargo 
 code = "large_param_surface"
 node = "smoke-gain"
 reason = "In-tree CLAP smoke example; not a product plugin."
+
+# Nested baseview demos are path-included packages, not dead crates.
+# (agal ≥0.6.2 also skips `/examples/` for crate_no_dependents; keep belt+suspenders.)
+[[suppress]]
+code = "crate_no_dependents"
+node = "aura-example-open-parented"
+reason = "baseview example binary; not a library dep."
+
+[[suppress]]
+code = "crate_no_dependents"
+node = "aura-example-render-femtovg"
+reason = "baseview example binary; not a library dep."
