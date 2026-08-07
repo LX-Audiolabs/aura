@@ -3,7 +3,7 @@
 **Single source of truth** for direction, stages, and cutover gates.  
 No separate `roadmap.md` — update **this file** when status or next steps change.
 
-Last status pass: 2026-08-07.  
+Last status pass: 2026-08-07 (Bitwig CLAP GUI smoke green; VST3 thin wrapper WIP).  
 **Gaps & optimizations (derive, cutover, polish):** [gaps-and-optimizations.md](./gaps-and-optimizations.md).
 
 ---
@@ -47,8 +47,8 @@ Last status pass: 2026-08-07.
 | Layer | State |
 |-------|--------|
 | Direction / scope | Aligned (Slint-only, CLAP-first, no AU/egui zoo) |
-| Framework basis (own DoD) | ~half — Stages 0–4 mostly; VST3/LV2 + host harden open |
-| Product cutover | Blocked — multi-format (VST3/LV2) + Bitwig GUI; ParamId **decided (A)**, derive + scaffold landed |
+| Framework basis (own DoD) | Stages 0–4 + Bitwig CLAP host smoke done; Stage 5 VST3 process path; LV2 + VST3 GUI open |
+| Product cutover | Blocked — multi-format (VST3 GUI + LV2) for full matrix; ParamId **decided (A)** |
 
 ### What works today
 
@@ -65,8 +65,8 @@ Last status pass: 2026-08-07.
 
 | Priority | Item | Why |
 |----------|------|-----|
-| **P0** | Bitwig (or REAPER) GUI open on smoke-gain | Validator ≠ real host; prove parented Slint — **now the top basis item** |
-| **P1** | VST3 wrapper + `cargo aura build/install --vst3` | Product matrix ships VST3 today |
+| ~~**P0**~~ | ~~Bitwig GUI open on smoke-gain~~ | **done 2026-08-07** — loads, parented editor, Gain works |
+| **P1** | VST3 host smoke + GUI (wrapper builds; no `IPlugView` yet) | Product matrix ships VST3 today |
 | **P1** | LV2 wrapper + `cargo aura build/install --lv2` | Product matrix ships LV2 today |
 | **P2** | Plugin-level state hooks beyond flat param blob | Presets/vault stay product-side; host save must not lie |
 | **P2** | Buses / note-ports only if a smoke or pilot needs them | Stereo FX first; not every truce feature |
@@ -79,7 +79,7 @@ Last status pass: 2026-08-07.
 | `#[derive(Params)]` | yes (often no `id`) | yes (**`id = N` required**) | soft (ID pass) |
 | `*ParamId` enum for editors | yes (truce-derive) | **yes** (derive emits `<Struct>ParamId`, G2 option A) | no (closed) |
 | CLAP process / params / GUI | yes | yes (minimal) | soft |
-| VST3 / LV2 | yes | no | **yes** (for full matrix) |
+| VST3 / LV2 | yes | VST3 thin (no GUI); LV2 no | **yes** (for full matrix; VST3 GUI soft if host loads headless) |
 | MIDI / note events in process | yes | transport only | soft for our FX/analyzers |
 | Custom state / presets / vault | product + truce | flat param blob | soft (API must not regress) |
 | Multi-bus I/O | truce | stereo-fixed clap | low for current catalog |
@@ -92,8 +92,8 @@ Last status pass: 2026-08-07.
 1. ~~`aura-derive` → rewrite smoke-gain to use it~~ — done (land commit if still local)  
 2. ~~**Decide ParamId (G2)**~~ — done: **option A**, derive emits `<Struct>ParamId`; documented in gaps doc  
 3. ~~Scaffold + install polish~~ — done: `cargo aura new` emits derive + ids + working CLAP export; `install --clap` ships `<package>.clap`  
-4. **Bitwig GUI smoke on `smoke-gain`** — top remaining basis item (manual, needs DAW)  
-5. Stage 5: VST3, then LV2 (same smoke plugin, feature flags)  
+4. ~~**Bitwig GUI smoke on `smoke-gain`**~~ — done 2026-08-07 (load + parented Gain UI)  
+5. Stage 5: finish VST3 (GUI + host smoke), then LV2  
 6. Declare **Basis fertig** when DoD table below is all green  
 7. Stage 7: **one** pilot product plugin (see cutover checklist in gaps doc), then catalog  
 
@@ -111,10 +111,10 @@ AURA is ready for product cutover only when **all** of these work **without** th
 | 2 | New plugin | `cargo truce new` | **`cargo aura new <name>`** → layout like our plugins | done (single-crate: derive + ParamId + CLAP export + `@aura` UI) |
 | 3 | Metadata | `truce.toml` | **`aura.toml`** (+ **`agal.toml`** in skeleton) | done in scaffold |
 | 4 | Params + DSP API | `PluginLogic` / params derive | **`aura-core` + `aura-params` (+ derive)** | derive + `*ParamId` done |
-| 5 | UI | (various) | **`aura-editor` + `aura-build`** (`@aura`, FemtoVG default) | done; Bitwig open **pending** |
-| 6 | Build format | `--clap` etc. | **`cargo aura build --clap`** (then vst3/lv2) | clap yes; vst3/lv2 **open** |
+| 5 | UI | (various) | **`aura-editor` + `aura-build`** (`@aura`, FemtoVG default) | done; Bitwig CLAP host smoke **green** |
+| 6 | Build format | `--clap` etc. | **`cargo aura build --clap`** (then vst3/lv2) | clap yes; vst3 build/install yes (no GUI); lv2 **open** |
 | 7 | Install into host path | `install --clap` | **`cargo aura install --clap`** (e.g. `%CLAPINS%`) | done (`<package>.clap`) |
-| 8 | Sanity | validators / DAW load | **clap-validator** + Bitwig smoke on in-tree **example** | validator green; Bitwig **open** |
+| 8 | Sanity | validators / DAW load | **clap-validator** + Bitwig smoke on in-tree **example** | validator + Bitwig CLAP **green** (smoke-gain) |
 | 9 | Docs | README | this file + root README scope | living |
 
 Optional for v1 basis (nice, **not** gate): hot-reload shell, full MIDI 2.0, screenshots via slint-viewer.  
@@ -283,7 +283,8 @@ Product helpers (`lx-dsp`, `lx-analysis`, …) keep `lx-*` in the plugins repo u
 - [x] In-tree **`examples/smoke-gain`** — clap-validator green (core + state + GUI path)
 - [x] `clap.state` extension (save/load, flat LE blob)
 - [x] `clap.gui` extension (parented; host bridge: params + request_resize)
-- [ ] Real-host GUI open (Bitwig first, then REAPER) on smoke-gain — **P0**
+- [x] Real-host GUI open (Bitwig) on smoke-gain — **P0 done 2026-08-07** (load + Gain)
+- [ ] Optional: REAPER CLAP smoke (nice, not gate if Bitwig green)
 - [ ] Bump `clap-sys` when it tracks newer free-audio 1.2.x (optional; 1.2 ABI ok)
 
 ### Stage 3 — UI complete for plugin authors
@@ -306,14 +307,19 @@ Product helpers (`lx-dsp`, `lx-analysis`, …) keep `lx-*` in the plugins repo u
 
 ### Stage 5 — VST3 / LV2
 
-Start only after CLAP smoke + Bitwig GUI are real.
+CLAP host smoke (Bitwig) green. VST3 process path started (shared state codec).
 
-- [ ] `aura-vst3` — thin wrapper over same `PluginLogic` (no VST3-shaped core)
-- [ ] Steinberg SDK / licensing checklist for VST3 packaging
+- [x] `aura-vst3` — thin wrapper over same `PluginLogic` (factory, stereo, params, process, state; **no GUI**)
+- [x] Shared state blob in `aura_core::state` (CLAP + VST3 same layout)
+- [x] smoke-gain feature `vst3` + `aura::export_vst3!`
+- [x] `cargo aura build|install --vst3` → `<name>.vst3/Contents/<arch>/…` bundle (`VST3INS` / `VST3_PATH`)
+- [ ] Steinberg SDK / licensing checklist for VST3 packaging (see `docs/licensing-compliance.md`)
+- [ ] VST3 GUI (`IPlugView` + baseview/Slint)
+- [ ] Host smoke (REAPER/Bitwig) on smoke-gain VST3
 - [ ] `aura-lv2` — thin wrapper + TTL/manifest story (learn from product `lv2-meta` / truce-lv2 selectively)
-- [ ] smoke-gain (or scaffold) features: `vst3`, `lv2`
-- [ ] `cargo aura build|install --vst3` and `--lv2`
-- [ ] Validators / host smoke as available (no kitchen-sink host matrix)
+- [ ] smoke-gain (or scaffold) feature `lv2`
+- [ ] `cargo aura build|install --lv2`
+- [ ] Scaffold `cargo aura new` optional `--vst3` feature line
 
 ### Stage 6 — polish & authoring shell (still inside AURA; **not** basis gate)
 

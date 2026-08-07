@@ -13,6 +13,7 @@ pub mod events;
 pub mod info;
 pub mod plugin;
 pub mod process;
+pub mod state;
 pub mod transport;
 
 pub use buffer::AudioBuffer;
@@ -22,5 +23,6 @@ pub use events::{ParamEvent, ParamEventQueue};
 pub use info::{MidiDialect, PluginCategory, PluginInfo};
 pub use plugin::PluginLogic;
 pub use process::{ProcessContext, ProcessStatus};
+pub use state::{decode_state, encode_state};
 pub use transport::Transport;
 pub use aura_params::sample::{Float, Sample};

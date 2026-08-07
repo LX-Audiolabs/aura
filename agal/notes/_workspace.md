@@ -6,9 +6,12 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 
 ## Open
 
-- [ ] **P0** Bitwig GUI open on `examples/smoke-gain` (parented Slint; validator ≠ host) — top basis item
-- [ ] **P1** VST3 then LV2 thin wrappers (Stage 5)
+- [ ] **P1** VST3 GUI + host smoke; then LV2 (Stage 5) — process/params/state wrapper + install landed
 - [ ] Product cutover pilot only after basis + G1 ID pass — see `docs/gaps-and-optimizations.md`
+
+## Closed recently
+
+- [x] **P0** Bitwig host smoke on `smoke-gain` CLAP (2026-08-07): loads, parented GUI, Gain works
 
 ## Decisions
 

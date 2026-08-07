@@ -1,10 +1,14 @@
-//! Minimal stereo gain — proves `aura-clap` + `PluginLogic` end-to-end.
+//! Minimal stereo gain — proves format wrappers + `PluginLogic` end-to-end.
 //!
 //! ```bash
-//! cargo build -p smoke-gain --release
+//! cargo build -p smoke-gain --release --features clap
 //! cargo run -p cargo-aura -- install --clap --release
 //! # or copy target/release/smoke_gain.dll → …/CLAP/smoke-gain.clap
 //! clap-validator validate path/to/smoke-gain.clap
+//!
+//! # VST3 (no GUI yet — process/params/state only):
+//! cargo build -p smoke-gain --release --features vst3
+//! cargo run -p cargo-aura -- install --vst3 --release
 //! ```
 
 use std::sync::Arc;
@@ -46,6 +50,8 @@ impl PluginLogic for SmokeGain {
             "smoke-gain",
         );
         info.clap_id = "com.lx-audiolabs.aura.smoke-gain";
+        // Stable once shipped — host sessions key off this string → TUID.
+        info.vst3_id = "com.lx-audiolabs.aura.smoke-gain";
         info.category = PluginCategory::Effect;
         info
     }
@@ -109,3 +115,6 @@ impl PluginLogic for SmokeGain {
 
 #[cfg(feature = "clap")]
 aura::export!(SmokeGain);
+
+#[cfg(feature = "vst3")]
+aura::export_vst3!(SmokeGain);

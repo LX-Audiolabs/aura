@@ -28,6 +28,7 @@ Last pass: 2026-08-06 (post `aura-derive` review).
 | `aura-derive` (`Params`, `ParamEnum`) | Crate + `crates/aura/tests/derive_params.rs` (13 tests) + smoke-gain |
 | **G2 decided — option A:** derive emits `<Struct>ParamId` | `gen_param_id_enum` in `crates/aura-derive/src/lib.rs`; `id()` / `from_id()` / `From<…> for u32`; smoke-gain + scaffold use `P::Gain.id()` |
 | Scaffold emits derive + explicit ids; clean `.clap` name | `cargo aura new` → working CLAP plugin (validator green); `install --clap` copies `<package>.clap` |
+| **G4 Bitwig host smoke** (smoke-gain CLAP) | 2026-08-07: loads, parented GUI, Gain works |
 | Selective port (no State / plugin_info / LV2 meta in derive) | Crate docs; intentional |
 | agal orientation in framework workspace | `agal.toml`, `agal/notes/_workspace.md`, `07-aura/aura-scope` |
 | Dependabot (AURA only) | `.github/dependabot.yml` |
@@ -60,17 +61,18 @@ Last pass: 2026-08-06 (post `aura-derive` review).
 | | |
 |--|--|
 | **Product** | `clap` + `vst3` + `lv2` features, dist zips |
-| **AURA** | CLAP only (`aura-clap`) |
-| **Work** | Stage 5 thin wrappers + `cargo aura build/install --vst3|--lv2` |
+| **AURA** | CLAP + VST3 process/params/state (`aura-vst3`); LV2 still open; VST3 **no GUI** yet |
+| **Work** | VST3 GUI + host smoke; then LV2 + `cargo aura build/install --lv2` |
 | **Severity** | **Hard** for full catalog ship matrix |
 
-### G4 — Host GUI proof
+### G4 — Host GUI proof — **closed (Bitwig CLAP)**
 
 | | |
 |--|--|
-| **AURA** | `clap.gui` + smoke-gain UI; clap-validator path green |
-| **Missing** | Bitwig (then REAPER) parented open on smoke-gain |
-| **Severity** | **P0 basis** — validator ≠ host |
+| **AURA** | `clap.gui` + smoke-gain UI; clap-validator + **Bitwig host smoke** green (2026-08-07) |
+| **Evidence** | AURA Smoke Gain loads in Bitwig; parented editor; Gain works |
+| **Optional** | REAPER CLAP re-check — not a basis gate if Bitwig is green |
+| **Severity** | ~~P0~~ closed for CLAP basis |
 
 ### G5 — State / presets surface
 
@@ -127,7 +129,7 @@ Last pass: 2026-08-06 (post `aura-derive` review).
 
 1. ~~Land + lock derive API~~ — done; explicit `id` is the public contract.  
 2. ~~Decide G2 (ParamId)~~ — done: **option A**, derive emits `<Struct>ParamId`.  
-3. **Bitwig GUI smoke** (G4) — unblocks calling editor path “done”. **Now the top item.**
+3. ~~**Bitwig GUI smoke** (G4)~~ — done 2026-08-07
 
 ### Do for Stage 5 / cutover
 

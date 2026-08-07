@@ -63,8 +63,10 @@ Commands:
 Environment:
   AURA_PATH               Path to the AURA framework root (crates/, tools/)
   CLAPINS / CLAP_PATH     CLAP install directory (install --clap)
+  VST3INS / VST3_PATH     VST3 install directory (install --vst3)
 
-Status: CLAP path ships (scaffold + build + install); VST3/LV2 wrappers pending.
+Status: CLAP + VST3 path ship (scaffold/build/install); LV2 wrapper pending.
+  VST3 is process/params/state only (no GUI yet).
 "
     );
 }
@@ -495,8 +497,8 @@ fn cmd_build(args: &[String]) -> ExitCode {
         eprintln!("note: no --clap/--vst3/--lv2; building default features");
     } else {
         for f in &features {
-            if matches!(f.as_str(), "vst3" | "lv2") {
-                eprintln!("note: feature `{f}` is declared in scaffolds; format wrapper crate not shipped yet");
+            if f == "lv2" {
+                eprintln!("note: feature `lv2` declared; format wrapper crate not shipped yet");
             }
         }
     }
@@ -548,8 +550,14 @@ fn cmd_install(args: &[String]) -> ExitCode {
                     return ExitCode::FAILURE;
                 }
             }
-            "vst3" | "lv2" => {
-                eprintln!("install --{feat}: not implemented yet (format wrapper pending)");
+            "vst3" => {
+                if let Err(e) = install_vst3(&target_dir, profile) {
+                    eprintln!("install --vst3: {e}");
+                    return ExitCode::FAILURE;
+                }
+            }
+            "lv2" => {
+                eprintln!("install --lv2: not implemented yet (format wrapper pending)");
             }
             _ => {}
         }
@@ -585,6 +593,113 @@ fn install_clap(target_dir: &Path, profile: &str) -> Result<(), String> {
     fs::copy(src, &dest).map_err(|e| format!("copy {} → {}: {e}", src.display(), dest.display()))?;
     println!("installed {}", dest.display());
     Ok(())
+}
+
+/// Install as a VST3 module bundle:
+/// ```text
+/// <name>.vst3/Contents/<arch>/<name>.vst3   # renamed cdylib
+/// ```
+/// Arch folder follows Steinberg: `x86_64-win`, `x86_64-linux`, `MacOS`, …
+fn install_vst3(target_dir: &Path, profile: &str) -> Result<(), String> {
+    let dir = target_dir.join(profile);
+    if !dir.is_dir() {
+        return Err(format!("no build dir {}", dir.display()));
+    }
+
+    let pkg = package_name().ok_or("could not read [package] name from ./Cargo.toml")?;
+    let crate_name = pkg.replace('-', "_");
+    let candidates = find_plugin_artifacts(&dir)?;
+    let src = candidates
+        .iter()
+        .find(|p| artifact_stem(p) == Some(crate_name.as_str()))
+        .ok_or_else(|| {
+            format!(
+                "no built artifact for `{pkg}` in {} — crate-type cdylib + `cargo aura build --vst3` first",
+                dir.display()
+            )
+        })?;
+
+    let dest_root = vst3_install_dir()?;
+    let bundle = dest_root.join(format!("{pkg}.vst3"));
+    let arch_dir = bundle.join("Contents").join(vst3_arch_folder());
+    fs::create_dir_all(&arch_dir).map_err(|e| e.to_string())?;
+
+    // Binary inside the bundle uses the `.vst3` extension (still a PE/ELF/Mach-O).
+    let dest = arch_dir.join(format!("{pkg}.vst3"));
+    fs::copy(src, &dest).map_err(|e| format!("copy {} → {}: {e}", src.display(), dest.display()))?;
+    println!("installed {}", bundle.display());
+    Ok(())
+}
+
+fn vst3_arch_folder() -> &'static str {
+    #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
+    {
+        "x86_64-win"
+    }
+    #[cfg(all(target_os = "windows", target_arch = "aarch64"))]
+    {
+        "arm64-win"
+    }
+    #[cfg(all(target_os = "windows", target_arch = "x86"))]
+    {
+        "x86-win"
+    }
+    #[cfg(target_os = "macos")]
+    {
+        // Universal / host-default layout hosts expect under Contents/MacOS.
+        "MacOS"
+    }
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    {
+        "x86_64-linux"
+    }
+    #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+    {
+        "aarch64-linux"
+    }
+    #[cfg(not(any(
+        all(target_os = "windows", target_arch = "x86_64"),
+        all(target_os = "windows", target_arch = "aarch64"),
+        all(target_os = "windows", target_arch = "x86"),
+        target_os = "macos",
+        all(target_os = "linux", target_arch = "x86_64"),
+        all(target_os = "linux", target_arch = "aarch64"),
+    )))]
+    {
+        "unknown-arch"
+    }
+}
+
+#[allow(clippy::unnecessary_wraps)]
+fn vst3_install_dir() -> Result<PathBuf, String> {
+    if let Ok(p) = env::var("VST3INS").or_else(|_| env::var("VST3_PATH")) {
+        return Ok(PathBuf::from(p));
+    }
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(cf) = env::var("COMMONPROGRAMFILES") {
+            return Ok(PathBuf::from(cf).join("VST3"));
+        }
+        Ok(PathBuf::from(r"C:\Program Files\Common Files\VST3"))
+    }
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(home) = env::var("HOME") {
+            return Ok(PathBuf::from(home).join("Library/Audio/Plug-Ins/VST3"));
+        }
+        Err("HOME not set".into())
+    }
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(home) = env::var("HOME") {
+            return Ok(PathBuf::from(home).join(".vst3"));
+        }
+        Err("HOME not set".into())
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    {
+        Err("unsupported OS for default VST3 path; set VST3INS".into())
+    }
 }
 
 /// `[package] name` from ./Cargo.toml (line scan — no toml dep needed).

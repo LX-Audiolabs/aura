@@ -132,7 +132,8 @@ cargo build -p smoke-gain --release
 # clap-validator validate target/release/smoke_gain.dll  # or rename .clap
 ```
 
-**Still need for basis:** Bitwig GUI smoke · VST3/LV2 wrappers.  
+**Still need for basis:** VST3 GUI/host smoke · LV2 wrapper.  
+(Bitwig CLAP host smoke green on smoke-gain; VST3 process/params/state + install already in-tree.)  
 **`aura-derive`:** landed (explicit `id = N`, `<Struct>ParamId` enum — G2 option A); `cargo aura new` scaffolds a validator-green CLAP plugin; product cutover gaps → [docs/gaps-and-optimizations.md](./docs/gaps-and-optimizations.md).
 
 **Roadmap:** [docs/migration-steps.md](./docs/migration-steps.md) · **Gaps / opts:** [docs/gaps-and-optimizations.md](./docs/gaps-and-optimizations.md)  

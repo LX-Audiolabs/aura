@@ -16,7 +16,7 @@
 //! Enable formats with features, same idea as the `truce` umbrella:
 //!
 //! ```toml
-//! aura = { path = "...", features = ["clap"] }
+//! aura = { path = "...", features = ["clap", "vst3"] }
 //! ```
 
 #![forbid(unsafe_code)]
@@ -26,6 +26,9 @@ pub use aura_params as params;
 
 #[cfg(feature = "clap")]
 pub use aura_clap as clap;
+
+#[cfg(feature = "vst3")]
+pub use aura_vst3 as vst3;
 
 // --- core surface ---
 pub use aura_core::{
@@ -49,6 +52,10 @@ pub use aura_derive::{ParamEnum, Params};
 /// Re-export CLAP export macro when `clap` feature is on.
 #[cfg(feature = "clap")]
 pub use aura_clap::export;
+
+/// Re-export VST3 export macro when `vst3` feature is on.
+#[cfg(feature = "vst3")]
+pub use aura_vst3::export_vst3;
 
 /// Common imports for plugin crates (grows with the framework).
 pub mod prelude {

@@ -1055,8 +1055,8 @@ unsafe extern "C" fn gui_hide<L: PluginLogic>(plugin: *const clap_plugin) -> boo
 // state
 // ---------------------------------------------------------------------------
 
-/// v1 blob: u32 LE param count, then per param u32 LE id + u64 LE f64 bits.
-/// Flat and host-agnostic; versioning lands when the layout ever changes.
+/// v1 blob codec lives in `aura_core::state` (shared with the VST3/LV2
+/// wrappers); here we only pump bytes through the CLAP streams.
 fn state_ext<L: PluginLogic>() -> &'static clap_plugin_state {
     static CELL: OnceLock<clap_plugin_state> = OnceLock::new();
     CELL.get_or_init(|| clap_plugin_state {
@@ -1079,13 +1079,7 @@ unsafe extern "C" fn state_save<L: PluginLogic>(
         return false;
     };
 
-    let (ids, values) = inst.params.collect_values();
-    let mut blob = Vec::with_capacity(4 + ids.len() * 12);
-    blob.extend_from_slice(&(ids.len() as u32).to_le_bytes());
-    for (id, v) in ids.iter().zip(values.iter()) {
-        blob.extend_from_slice(&id.to_le_bytes());
-        blob.extend_from_slice(&v.to_bits().to_le_bytes());
-    }
+    let blob = aura_core::encode_state(&*inst.params);
 
     let mut written = 0usize;
     while written < blob.len() {
@@ -1131,29 +1125,7 @@ unsafe extern "C" fn state_load<L: PluginLogic>(
         blob.extend_from_slice(&chunk[..n as usize]);
     }
 
-    let mut cursor = 0usize;
-    let mut take = |n: usize| -> Option<&[u8]> {
-        let s = blob.get(cursor..cursor + n)?;
-        cursor += n;
-        Some(s)
-    };
-    let Some(count) = take(4).and_then(|b| b.try_into().ok()).map(u32::from_le_bytes) else {
-        return false;
-    };
-    let mut values = Vec::with_capacity(count as usize);
-    for _ in 0..count {
-        let (Some(id), Some(bits)) = (
-            take(4).and_then(|b| b.try_into().ok()).map(u32::from_le_bytes),
-            take(8).and_then(|b| b.try_into().ok()).map(u64::from_le_bytes),
-        ) else {
-            return false;
-        };
-        values.push((id, f64::from_bits(bits)));
-    }
-
-    inst.params.restore_values(&values);
-    inst.params.snap_smoothers();
-    true
+    aura_core::decode_state(&*inst.params, &blob)
 }
 
 // ---------------------------------------------------------------------------

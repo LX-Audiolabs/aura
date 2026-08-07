@@ -12,9 +12,10 @@ crate-type = ["cdylib", "lib"]
 [features]
 default = ["clap"]
 clap = ["aura/clap"]
+vst3 = ["aura/vst3"]
 
 [dependencies]
-aura = { workspace = true, features = ["clap"] }
+aura = { workspace = true }
 aura-editor = { workspace = true, features = ["backend-femtovg"] }
 slint = { workspace = true }
 
