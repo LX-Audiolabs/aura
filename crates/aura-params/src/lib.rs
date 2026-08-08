@@ -115,6 +115,89 @@ pub fn format_param_value(info: &ParamInfo, value: f64) -> String {
     }
 }
 
+/// Inverse of [`format_param_value`] for host `text_to_value` round-trips.
+///
+/// Accepts bare numbers and the unit suffixes `format_param_value` emits
+/// (`kHz`/`Hz`, `ms`/`s`, `dB`, `%`, `st`, `°`, pan `C`/`nL`/`nR`). Case-
+/// insensitive on ASCII unit suffixes; whitespace around the number is
+/// ignored. Returns `None` when the text is not a known form for `info.unit`.
+#[must_use]
+pub fn parse_param_value(info: &ParamInfo, text: &str) -> Option<f64> {
+    let t = text.trim();
+    if t.is_empty() {
+        return None;
+    }
+    match info.unit {
+        ParamUnit::Hz => {
+            let lower = t.to_ascii_lowercase();
+            if let Some(rest) = lower.strip_suffix("khz") {
+                return rest.trim().parse::<f64>().ok().map(|v| v * 1000.0);
+            }
+            if let Some(rest) = lower.strip_suffix("hz") {
+                return rest.trim().parse().ok();
+            }
+            t.parse().ok()
+        }
+        ParamUnit::Seconds => {
+            let lower = t.to_ascii_lowercase();
+            if let Some(rest) = lower.strip_suffix("ms") {
+                return rest.trim().parse::<f64>().ok().map(|v| v / 1000.0);
+            }
+            if let Some(rest) = lower.strip_suffix('s') {
+                return rest.trim().parse().ok();
+            }
+            t.parse().ok()
+        }
+        ParamUnit::Milliseconds => parse_strip_suffixes(t, &["ms"]),
+        ParamUnit::Db => parse_strip_suffixes(t, &["db", "dB"]),
+        ParamUnit::Percent => {
+            let rest = t.strip_suffix('%').unwrap_or(t).trim();
+            rest.parse().ok()
+        }
+        ParamUnit::Semitones => parse_strip_suffixes(t, &["st"]),
+        ParamUnit::Degrees => {
+            let rest = t
+                .strip_suffix('°')
+                .or_else(|| t.strip_suffix("deg"))
+                .or_else(|| t.strip_suffix("DEG"))
+                .unwrap_or(t)
+                .trim();
+            rest.parse().ok()
+        }
+        ParamUnit::Pan => parse_pan_text(t),
+        ParamUnit::None => t.parse().ok(),
+    }
+}
+
+fn parse_strip_suffixes(text: &str, suffixes: &[&str]) -> Option<f64> {
+    let lower = text.to_ascii_lowercase();
+    for suf in suffixes {
+        let suf_l = suf.to_ascii_lowercase();
+        if let Some(rest) = lower.strip_suffix(suf_l.as_str()) {
+            return rest.trim().parse().ok();
+        }
+    }
+    text.trim().parse().ok()
+}
+
+fn parse_pan_text(t: &str) -> Option<f64> {
+    let s = t.trim();
+    if s.eq_ignore_ascii_case("c") || s == "0" {
+        return Some(0.0);
+    }
+    // "50L" / "100R" / "50l"
+    if s.len() >= 2 {
+        let (num, side) = s.split_at(s.len() - 1);
+        let pct: f64 = num.parse().ok()?;
+        match side.as_bytes()[0].to_ascii_lowercase() {
+            b'l' => return Some((-pct / 100.0).clamp(-1.0, 1.0)),
+            b'r' => return Some((pct / 100.0).clamp(-1.0, 1.0)),
+            _ => {}
+        }
+    }
+    s.parse().ok()
+}
+
 /// Trait implemented by #[derive(Params)] on a struct.
 /// Format wrappers use this to enumerate, read, and write parameters.
 ///
@@ -399,5 +482,42 @@ mod tests {
             format_param_value(&int_info(ParamUnit::Milliseconds), 50.0),
             "50 ms"
         );
+    }
+
+    fn hz_info() -> ParamInfo {
+        ParamInfo {
+            id: 0,
+            name: "Freq",
+            short_name: "f",
+            group: "",
+            range: ParamRange::Logarithmic {
+                min: 2.0,
+                max: 20_000.0,
+            },
+            default_plain: 1000.0,
+            flags: ParamFlags::empty(),
+            unit: ParamUnit::Hz,
+            kind: ParamValueKind::Float,
+            midi_map: None,
+            midi_channel: None,
+        }
+    }
+
+    #[test]
+    fn hz_khz_roundtrip_parse() {
+        let info = hz_info();
+        assert_eq!(format_param_value(&info, 1000.0), "1.0 kHz");
+        assert_eq!(parse_param_value(&info, "1.0 kHz"), Some(1000.0));
+        assert_eq!(parse_param_value(&info, "1.2 kHz"), Some(1200.0));
+        assert_eq!(parse_param_value(&info, "440 Hz"), Some(440.0));
+        assert_eq!(parse_param_value(&info, "880"), Some(880.0));
+    }
+
+    #[test]
+    fn pan_text_roundtrip_parse() {
+        let info = pan_info();
+        assert_eq!(parse_param_value(&info, "C"), Some(0.0));
+        assert_eq!(parse_param_value(&info, "50L"), Some(-0.5));
+        assert_eq!(parse_param_value(&info, "100R"), Some(1.0));
     }
 }

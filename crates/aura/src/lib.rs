@@ -47,7 +47,7 @@ pub use aura_core::{
 pub use aura_params::{
     BoolParam, EnumParam, FloatParam, FloatParamReadF32, FloatParamReadF64, IntParam, MeterSlot,
     MidiSource, ParamEnum, ParamFlags, ParamInfo, ParamRange, ParamUnit, ParamValueKind, Params,
-    Smoother, SmoothingStyle, format_param_value,
+    Smoother, SmoothingStyle, format_param_value, parse_param_value,
 };
 pub use aura_params::sample::{Float, Sample};
 

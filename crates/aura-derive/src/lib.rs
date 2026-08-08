@@ -1988,17 +1988,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                 }
                 _ => quote! {
                     x if x == self.#ident.id() => {
-                        let __unit: &str = self.#ident.info.unit.as_str();
-                        let __t = text.trim();
-                        let __t = if __unit.is_empty() {
-                            __t
-                        } else {
-                            let __lower = __unit.to_lowercase();
-                            __t.strip_suffix(__unit)
-                                .or_else(|| __t.strip_suffix(__lower.as_str()))
-                                .unwrap_or(__t)
-                        };
-                        __t.trim().parse::<f64>().ok()
+                        ::aura::params::parse_param_value(&self.#ident.info, text)
                     }
                 },
             }
