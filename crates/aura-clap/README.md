@@ -10,7 +10,7 @@ CLAP format wrapper for AURA.
 |-------|------|
 | **Spec / ABI** | free-audio/clap (`CLAP_VERSION` on their `main` / releases) |
 | **Rust bindings** | [`clap-sys`](https://crates.io/crates/clap-sys) — C layout + constants from those headers |
-| **Our code** | `export!`, factory, process, audio-ports (+ config), params, state, GUI, remote-controls |
+| **Our code** | `export!`, factory, process, audio-ports (+ config), params, state, GUI, remote-controls, latency |
 
 Rules:
 
@@ -41,10 +41,12 @@ aura::export!(MyPlugin);
 
 ## Status
 
-Entry, factory, audio-ports (mono/stereo layouts), audio-ports-config (when multi-layout), params, process, state, GUI, remote-controls.
+Entry, factory, audio-ports (mono/stereo layouts), audio-ports-config (when multi-layout), params, process, state, GUI, remote-controls, **latency**.
 
 **Layouts:** `PluginLogic::bus_layouts()` — default stereo. Override with `BusLayout::mono()` or `BusLayout::stereo_and_mono()`. Host switches via `clap.audio-ports-config` when more than one layout is declared.
 
+**Latency:** override `PluginLogic::latency(&state) -> u32` (samples). Reported via `clap.latency`; cache updates on activate / process; mid-run changes request host restart for PDC.
+
 **Remote-controls:** pages of ≤8 params from `ParamInfo.group`. Empty group = no device page. `"Section/Page"` splits on the first `/`. Hidden/readonly never take a hardware slot.
 
-Later: note-ports, latency, multi-bus / sidechain, … per free-audio + product need.
+Later: note-ports, multi-bus / sidechain, tail, … per free-audio + product need.

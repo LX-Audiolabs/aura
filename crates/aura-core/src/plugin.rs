@@ -52,6 +52,16 @@ pub trait PluginLogic: 'static {
         None
     }
 
+    /// Reporting delay in samples (PDC). Default `0` (zero-latency FX).
+    ///
+    /// Hosts read this via CLAP `clap.latency` / VST3 `getLatencySamples`.
+    /// If the value changes after activation, format wrappers notify the host
+    /// (restart / latency-changed) so delay compensation stays honest.
+    #[must_use]
+    fn latency(_state: &Self::DspState) -> u32 {
+        0
+    }
+
     /// Whether in-place buffer aliasing is supported. Default false.
     #[must_use]
     fn supports_in_place() -> bool {

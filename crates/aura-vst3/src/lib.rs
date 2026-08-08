@@ -795,7 +795,11 @@ impl<L: PluginLogic> IAudioProcessorTrait for Component<L> {
     }
 
     unsafe fn getLatencySamples(&self) -> uint32 {
-        0
+        let inner = self.lock();
+        inner
+            .state
+            .as_ref()
+            .map_or(0, |s| L::latency(s))
     }
 
     unsafe fn setupProcessing(&self, setup: *mut ProcessSetup) -> tresult {

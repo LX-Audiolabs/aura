@@ -9,7 +9,7 @@
 //! ```
 //!
 //! Covers: `clap_entry` factory, audio ports (mono/stereo layouts), params,
-//! process, state, GUI, remote-controls, optional audio-ports-config.
+//! process, state, GUI, remote-controls, latency, optional audio-ports-config.
 
 #![allow(clippy::missing_safety_doc)]
 // ponytail: CLAP FFI glue — raw-pointer casts and C-int size conversions are
@@ -26,6 +26,7 @@
 
 use std::ffi::{CStr, CString, c_char, c_void};
 use std::ptr;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, OnceLock};
 
 use aura_core::info::PluginCategory;
@@ -57,6 +58,7 @@ use clap_sys::ext::gui::{
     CLAP_EXT_GUI, CLAP_WINDOW_API_COCOA, CLAP_WINDOW_API_WIN32, CLAP_WINDOW_API_X11,
     clap_host_gui, clap_plugin_gui, clap_window,
 };
+use clap_sys::ext::latency::{CLAP_EXT_LATENCY, clap_host_latency, clap_plugin_latency};
 use clap_sys::ext::params::{
     CLAP_EXT_PARAMS, CLAP_PARAM_IS_AUTOMATABLE, CLAP_PARAM_IS_BYPASS, CLAP_PARAM_IS_HIDDEN,
     CLAP_PARAM_IS_READONLY, CLAP_PARAM_IS_STEPPED, CLAP_PARAM_RESCAN_VALUES, clap_host_params,
@@ -185,6 +187,8 @@ unsafe extern "C" fn factory_create_plugin<L: PluginLogic>(
         max_frames: 0,
         active: false,
         layout_index: 0,
+        latency_cache: AtomicU32::new(0),
+        latency_dirty: AtomicBool::new(false),
     });
 
     let plugin = Box::new(clap_plugin {
@@ -199,7 +203,7 @@ unsafe extern "C" fn factory_create_plugin<L: PluginLogic>(
         reset: Some(plugin_reset::<L>),
         process: Some(plugin_process::<L>),
         get_extension: Some(plugin_get_extension::<L>),
-        on_main_thread: Some(plugin_on_main_thread),
+        on_main_thread: Some(plugin_on_main_thread::<L>),
     });
 
     Box::into_raw(plugin)
@@ -284,12 +288,26 @@ struct Instance<L: PluginLogic> {
     active: bool,
     /// Index into `L::bus_layouts()` selected via `audio-ports-config`.
     layout_index: usize,
+    /// Last latency reported to the host (audio/main shared).
+    latency_cache: AtomicU32,
+    /// Set on the audio thread when latency changes; drained on main thread.
+    latency_dirty: AtomicBool,
 }
 
 impl<L: PluginLogic> Instance<L> {
     fn selected_layout(&self) -> BusLayout {
         let layouts = L::bus_layouts();
         layout_at(&layouts, self.layout_index)
+    }
+
+    /// Snapshot `PluginLogic::latency` into the cache. Returns `true` if it changed.
+    fn update_latency_cache(&self) -> bool {
+        let Some(state) = self.state.as_ref() else {
+            return false;
+        };
+        let new = L::latency(state);
+        let old = self.latency_cache.swap(new, Ordering::Relaxed);
+        old != new
     }
 
     unsafe fn from_plugin<'a>(plugin: *const clap_plugin) -> Option<&'a mut Self> {
@@ -301,6 +319,44 @@ impl<L: PluginLogic> Instance<L> {
             return None;
         }
         Some(unsafe { &mut *data })
+    }
+}
+
+/// Call `clap_host_latency.changed` if the host exposes it (main thread).
+fn host_latency_changed(host: *const clap_host) {
+    if host.is_null() {
+        return;
+    }
+    let Some(get) = (unsafe { (*host).get_extension }) else {
+        return;
+    };
+    let ext = unsafe { get(host, CLAP_EXT_LATENCY.as_ptr()) };
+    if ext.is_null() {
+        return;
+    }
+    let host_lat = unsafe { &*(ext as *const clap_host_latency) };
+    if let Some(changed) = host_lat.changed {
+        unsafe { changed(host) };
+    }
+}
+
+/// Ask the host to call `on_main_thread` soon (audio-thread safe).
+fn host_request_callback(host: *const clap_host) {
+    if host.is_null() {
+        return;
+    }
+    if let Some(req) = unsafe { (*host).request_callback } {
+        unsafe { req(host) };
+    }
+}
+
+/// Host restart so PDC can re-read latency after a mid-run change.
+fn host_request_restart(host: *const clap_host) {
+    if host.is_null() {
+        return;
+    }
+    if let Some(req) = unsafe { (*host).request_restart } {
+        unsafe { req(host) };
     }
 }
 
@@ -344,8 +400,13 @@ unsafe extern "C" fn plugin_activate<L: PluginLogic>(
     let mut state = L::init(&inst.params, sample_rate);
     L::reset(&mut state, &inst.params, &config);
     inst.params.set_sample_rate(sample_rate);
+    let latency = L::latency(&state);
     inst.state = Some(state);
+    inst.latency_cache.store(latency, Ordering::Relaxed);
+    inst.latency_dirty.store(false, Ordering::Relaxed);
     inst.active = true;
+    // Spec: latency may change during activate — tell the host now (main thread).
+    host_latency_changed(inst.host);
     true
 }
 
@@ -372,6 +433,11 @@ unsafe extern "C" fn plugin_reset<L: PluginLogic>(plugin: *const clap_plugin) {
     if let Some(state) = inst.state.as_mut() {
         L::reset(state, &inst.params, &config);
         inst.params.snap_smoothers();
+    }
+    if inst.update_latency_cache() {
+        // Reset runs while active; free-audio wants restart for mid-run changes.
+        host_latency_changed(inst.host);
+        host_request_restart(inst.host);
     }
 }
 
@@ -468,6 +534,13 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
     for (c, host_ptr) in host_out.iter().enumerate() {
         let dst = unsafe { std::slice::from_raw_parts_mut(*host_ptr, frames) };
         dst.copy_from_slice(&owned_out[c]);
+    }
+
+    // PDC: if latency moved, schedule main-thread notify (never call host
+    // latency.changed from the audio thread).
+    if inst.update_latency_cache() {
+        inst.latency_dirty.store(true, Ordering::Relaxed);
+        host_request_callback(inst.host);
     }
 
     match status {
@@ -598,6 +671,9 @@ unsafe extern "C" fn plugin_get_extension<L: PluginLogic>(
     if id == CLAP_EXT_REMOTE_CONTROLS || id == CLAP_EXT_REMOTE_CONTROLS_COMPAT {
         return remote_controls_ext::<L>() as *const _ as *const c_void;
     }
+    if id == CLAP_EXT_LATENCY {
+        return latency_ext::<L>() as *const _ as *const c_void;
+    }
     if id == CLAP_EXT_STATE {
         return state_ext::<L>() as *const _ as *const c_void;
     }
@@ -613,7 +689,37 @@ unsafe extern "C" fn plugin_get_extension<L: PluginLogic>(
     ptr::null()
 }
 
-unsafe extern "C" fn plugin_on_main_thread(_plugin: *const clap_plugin) {}
+unsafe extern "C" fn plugin_on_main_thread<L: PluginLogic>(plugin: *const clap_plugin) {
+    let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
+        return;
+    };
+    if !inst.latency_dirty.swap(false, Ordering::Relaxed) {
+        return;
+    }
+    // Mid-run latency change: notify + restart so the host re-activates
+    // and re-reads get() for PDC (free-audio: change only during activate,
+    // otherwise request_restart).
+    host_latency_changed(inst.host);
+    host_request_restart(inst.host);
+}
+
+// ---------------------------------------------------------------------------
+// latency (PDC)
+// ---------------------------------------------------------------------------
+
+fn latency_ext<L: PluginLogic>() -> &'static clap_plugin_latency {
+    static CELL: OnceLock<clap_plugin_latency> = OnceLock::new();
+    CELL.get_or_init(|| clap_plugin_latency {
+        get: Some(latency_get::<L>),
+    })
+}
+
+unsafe extern "C" fn latency_get<L: PluginLogic>(plugin: *const clap_plugin) -> u32 {
+    let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
+        return 0;
+    };
+    inst.latency_cache.load(Ordering::Relaxed)
+}
 
 // ---------------------------------------------------------------------------
 // audio-ports (main in/out from selected BusLayout)
@@ -1536,5 +1642,25 @@ mod bus_layout_clap_tests {
         assert_eq!(BusLayout::stereo().main_out, ChannelConfig::Stereo);
         assert_eq!(BusLayout::mono().main_out, ChannelConfig::Mono);
         assert_eq!(BusLayout::stereo_and_mono().len(), 2);
+    }
+}
+
+#[cfg(test)]
+mod latency_cache_tests {
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    /// Mirrors the cache swap used by `Instance::update_latency_cache`.
+    fn swap_latency(cache: &AtomicU32, new: u32) -> bool {
+        let old = cache.swap(new, Ordering::Relaxed);
+        old != new
+    }
+
+    #[test]
+    fn cache_detects_change_and_stability() {
+        let cache = AtomicU32::new(0);
+        assert!(swap_latency(&cache, 512));
+        assert!(!swap_latency(&cache, 512));
+        assert!(swap_latency(&cache, 1024));
+        assert_eq!(cache.load(Ordering::Relaxed), 1024);
     }
 }
