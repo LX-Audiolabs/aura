@@ -9,8 +9,9 @@
 //! ```
 //!
 //! Covers: `GetPluginFactory` entry, single-component model (`IComponent` +
-//! `IAudioProcessor` + `IEditController` on one object), stereo FX bus, f32
-//! samples, params (1:1 `ParamID` map, no hash), flat state blob via
+//! `IAudioProcessor` + `IEditController` on one object), main FX bus
+//! (mono/stereo from [`PluginLogic::bus_layouts`]), f32 samples, params
+//! (1:1 `ParamID` map, no hash), flat state blob via
 //! [`aura_core::encode_state`] / [`aura_core::decode_state`], parented GUI
 //! via `IPlugView` + the same [`Editor`] trait as CLAP. No MIDI.
 
@@ -43,7 +44,8 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 use aura_core::info::PluginCategory;
 use aura_core::transport::Transport;
 use aura_core::{
-    AudioBuffer, AudioConfig, PluginLogic, ProcessContext, ProcessMode, decode_state, encode_state,
+    AudioBuffer, AudioConfig, BusLayout, PluginLogic, ProcessContext, ProcessMode, decode_state,
+    encode_state, layout_at,
 };
 use aura_params::{ParamFlags, ParamInfo, ParamValueKind, Params};
 use gui::GuiState;
@@ -382,6 +384,8 @@ struct Inner<L: PluginLogic> {
     process_mode: ProcessMode,
     active: bool,
     processing: bool,
+    /// Index into `L::bus_layouts()` last accepted by `setBusArrangements`.
+    layout_index: usize,
 }
 
 impl<L: PluginLogic> Component<L> {
@@ -398,8 +402,32 @@ impl<L: PluginLogic> Component<L> {
                 process_mode: ProcessMode::Realtime,
                 active: false,
                 processing: false,
+                layout_index: 0,
             }),
         }
+    }
+
+    fn selected_layout(&self) -> BusLayout {
+        let layouts = L::bus_layouts();
+        let idx = self.lock().layout_index;
+        layout_at(&layouts, idx)
+    }
+
+    /// Max main-bus channel count across all declared layouts (`BusInfo` report).
+    fn max_main_channels(is_input: bool) -> i32 {
+        let layouts = L::bus_layouts();
+        let n = layouts
+            .iter()
+            .map(|l| {
+                if is_input {
+                    l.main_input_channels()
+                } else {
+                    l.main_output_channels()
+                }
+            })
+            .max()
+            .unwrap_or(2);
+        n as i32
     }
 
     fn lock(&self) -> MutexGuard<'_, Inner<L>> {
@@ -601,9 +629,19 @@ impl<L: PluginLogic> IComponentTrait for Component<L> {
         kResultOk
     }
 
-    unsafe fn getBusCount(&self, r#type: MediaType, _dir: BusDirection) -> int32 {
-        // One stereo audio bus per direction; no event buses.
-        i32::from(r#type == kAudio as MediaType)
+    unsafe fn getBusCount(&self, r#type: MediaType, dir: BusDirection) -> int32 {
+        if r#type != kAudio as MediaType {
+            return 0;
+        }
+        // Main bus only. No input bus when all layouts are output-only.
+        if dir == kInput as BusDirection {
+            let has_in = L::bus_layouts()
+                .iter()
+                .any(|l| l.main_in.is_some());
+            i32::from(has_in)
+        } else {
+            1
+        }
     }
 
     unsafe fn getBusInfo(
@@ -622,11 +660,14 @@ impl<L: PluginLogic> IComponentTrait for Component<L> {
         {
             return kInvalidArgument;
         }
+        if dir == kInput as BusDirection && Self::max_main_channels(true) == 0 {
+            return kInvalidArgument;
+        }
         // SAFETY: non-null, host-owned out struct per spec.
         let bus = unsafe { &mut *bus };
         bus.mediaType = kAudio as MediaType;
         bus.direction = dir;
-        bus.channelCount = 2;
+        bus.channelCount = Self::max_main_channels(dir == kInput as BusDirection);
         write_string128(
             &mut bus.name,
             if dir == kInput as BusDirection {
@@ -664,8 +705,10 @@ impl<L: PluginLogic> IComponentTrait for Component<L> {
             if inner.active {
                 return kResultOk;
             }
+            let layout = layout_at(&L::bus_layouts(), inner.layout_index);
             let config = AudioConfig::new(inner.sample_rate, inner.max_samples)
-                .with_process_mode(inner.process_mode);
+                .with_process_mode(inner.process_mode)
+                .with_channels(layout.main_input_channels(), layout.main_output_channels());
             let mut dsp = L::init(&self.params, inner.sample_rate);
             self.params.set_sample_rate(inner.sample_rate);
             L::reset(&mut dsp, &self.params, &config);
@@ -696,31 +739,50 @@ impl<L: PluginLogic> IAudioProcessorTrait for Component<L> {
         outputs: *mut SpeakerArrangement,
         numOuts: int32,
     ) -> tresult {
-        if numIns != 1 || numOuts != 1 || inputs.is_null() || outputs.is_null() {
+        if numOuts != 1 || outputs.is_null() {
             return kResultFalse;
         }
-        // SAFETY: one arrangement per side, counts checked above.
-        let (ins, outs) = unsafe { (*inputs, *outputs) };
-        if ins == vst3::Steinberg::Vst::SpeakerArr::kStereo
-            && outs == vst3::Steinberg::Vst::SpeakerArr::kStereo
-        {
-            kResultOk
+        // SAFETY: host arrays sized by numIns/numOuts.
+        let out_arr = unsafe { *outputs };
+        let out_ch = speaker_channel_count(out_arr);
+        let in_ch = if numIns == 0 {
+            0
+        } else if numIns == 1 && !inputs.is_null() {
+            speaker_channel_count(unsafe { *inputs })
         } else {
-            kResultFalse
-        }
+            return kResultFalse;
+        };
+
+        let layouts = L::bus_layouts();
+        let Some(idx) = layouts.iter().position(|l| {
+            l.main_input_channels() == in_ch && l.main_output_channels() == out_ch
+        }) else {
+            return kResultFalse;
+        };
+        self.lock().layout_index = idx;
+        kResultOk
     }
 
     unsafe fn getBusArrangement(
         &self,
-        _dir: BusDirection,
+        dir: BusDirection,
         index: int32,
         arr: *mut SpeakerArrangement,
     ) -> tresult {
         if index != 0 || arr.is_null() {
             return kInvalidArgument;
         }
+        let layout = self.selected_layout();
+        let channels = if dir == kInput as BusDirection {
+            layout.main_input_channels()
+        } else {
+            layout.main_output_channels()
+        };
+        let Some(sa) = arrangement_for_channels(channels) else {
+            return kInvalidArgument;
+        };
         // SAFETY: non-null, host-owned out value per spec.
-        unsafe { *arr = vst3::Steinberg::Vst::SpeakerArr::kStereo };
+        unsafe { *arr = sa };
         kResultOk
     }
 
@@ -898,6 +960,31 @@ impl<L: PluginLogic> IEditControllerTrait for Component<L> {
             return ptr::null_mut();
         }
         gui::PlugView::create(Arc::clone(&self.gui))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Bus / speaker helpers
+// ---------------------------------------------------------------------------
+
+fn speaker_channel_count(arr: SpeakerArrangement) -> u32 {
+    use vst3::Steinberg::Vst::SpeakerArr::{kMono, kStereo};
+    if arr == kMono {
+        1
+    } else if arr == kStereo {
+        2
+    } else {
+        // Fall back to popcount of speaker bits for exotic layouts we reject.
+        arr.count_ones()
+    }
+}
+
+fn arrangement_for_channels(n: u32) -> Option<SpeakerArrangement> {
+    use vst3::Steinberg::Vst::SpeakerArr::{kMono, kStereo};
+    match n {
+        1 => Some(kMono),
+        2 => Some(kStereo),
+        _ => None,
     }
 }
 

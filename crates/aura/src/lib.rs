@@ -35,9 +35,9 @@ pub use aura_lv2 as lv2;
 
 // --- core surface ---
 pub use aura_core::{
-    AudioBuffer, AudioConfig, Editor, EditorBridge, IntoEditor, MidiDialect, ParamEvent,
-    ParamEventQueue, PluginCategory, PluginContext, PluginInfo, PluginLogic, ProcessContext,
-    ProcessMode, ProcessStatus, RawWindowHandle, Transport,
+    AudioBuffer, AudioConfig, BusLayout, ChannelConfig, Editor, EditorBridge, IntoEditor,
+    MidiDialect, ParamEvent, ParamEventQueue, PluginCategory, PluginContext, PluginInfo,
+    PluginLogic, ProcessContext, ProcessMode, ProcessStatus, RawWindowHandle, Transport,
 };
 
 // --- params surface ---
@@ -69,10 +69,10 @@ pub mod prelude {
     pub use std::sync::Arc;
 
     pub use crate::{
-        AudioBuffer, AudioConfig, BoolParam, Editor, EnumParam, FloatParam, IntParam, IntoEditor,
-        MeterSlot, ParamEnum, ParamInfo, ParamRange, ParamUnit, ParamValueKind, Params,
-        PluginCategory, PluginContext, PluginInfo, PluginLogic, ProcessContext, ProcessMode,
-        ProcessStatus, RawWindowHandle, SmoothingStyle,
+        AudioBuffer, AudioConfig, BoolParam, BusLayout, ChannelConfig, Editor, EnumParam,
+        FloatParam, IntParam, IntoEditor, MeterSlot, ParamEnum, ParamInfo, ParamRange, ParamUnit,
+        ParamValueKind, Params, PluginCategory, PluginContext, PluginInfo, PluginLogic,
+        ProcessContext, ProcessMode, ProcessStatus, RawWindowHandle, SmoothingStyle,
     };
     pub use crate::params::sample::Float;
 }

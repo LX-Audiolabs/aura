@@ -8,8 +8,8 @@
 //! aura_clap::export!(MyPlugin);
 //! ```
 //!
-//! Covers: `clap_entry` factory, stereo audio ports, params, process,
-//! state, GUI, remote-controls (pages from `ParamInfo.group`).
+//! Covers: `clap_entry` factory, audio ports (mono/stereo layouts), params,
+//! process, state, GUI, remote-controls, optional audio-ports-config.
 
 #![allow(clippy::missing_safety_doc)]
 // ponytail: CLAP FFI glue — raw-pointer casts and C-int size conversions are
@@ -33,7 +33,8 @@ use aura_core::editor::{Editor, EditorBridge, PluginContext, RawWindowHandle};
 use aura_core::events::{ParamEvent, ParamEventQueue};
 use aura_core::transport::Transport;
 use aura_core::{
-    AudioBuffer, AudioConfig, PluginLogic, ProcessContext, ProcessMode, ProcessStatus,
+    AudioBuffer, AudioConfig, BusLayout, ChannelConfig, PluginLogic, ProcessContext, ProcessMode,
+    ProcessStatus, layout_at,
 };
 use aura_params::{ParamFlags, ParamInfo, ParamRange, Params};
 use clap_sys::events::{
@@ -46,8 +47,11 @@ use clap_sys::events::{
     clap_output_events,
 };
 use clap_sys::ext::audio_ports::{
-    CLAP_AUDIO_PORT_IS_MAIN, CLAP_EXT_AUDIO_PORTS, CLAP_PORT_STEREO, clap_audio_port_info,
-    clap_plugin_audio_ports,
+    CLAP_AUDIO_PORT_IS_MAIN, CLAP_EXT_AUDIO_PORTS, CLAP_PORT_MONO, CLAP_PORT_STEREO,
+    clap_audio_port_info, clap_plugin_audio_ports,
+};
+use clap_sys::ext::audio_ports_config::{
+    CLAP_EXT_AUDIO_PORTS_CONFIG, clap_audio_ports_config, clap_plugin_audio_ports_config,
 };
 use clap_sys::ext::gui::{
     CLAP_EXT_GUI, CLAP_WINDOW_API_COCOA, CLAP_WINDOW_API_WIN32, CLAP_WINDOW_API_X11,
@@ -180,6 +184,7 @@ unsafe extern "C" fn factory_create_plugin<L: PluginLogic>(
         sample_rate: 44_100.0,
         max_frames: 0,
         active: false,
+        layout_index: 0,
     });
 
     let plugin = Box::new(clap_plugin {
@@ -277,9 +282,16 @@ struct Instance<L: PluginLogic> {
     sample_rate: f64,
     max_frames: u32,
     active: bool,
+    /// Index into `L::bus_layouts()` selected via `audio-ports-config`.
+    layout_index: usize,
 }
 
 impl<L: PluginLogic> Instance<L> {
+    fn selected_layout(&self) -> BusLayout {
+        let layouts = L::bus_layouts();
+        layout_at(&layouts, self.layout_index)
+    }
+
     unsafe fn from_plugin<'a>(plugin: *const clap_plugin) -> Option<&'a mut Self> {
         if plugin.is_null() {
             return None;
@@ -326,7 +338,9 @@ unsafe extern "C" fn plugin_activate<L: PluginLogic>(
     };
     inst.sample_rate = sample_rate;
     inst.max_frames = max_frames;
-    let config = AudioConfig::new(sample_rate, max_frames as usize);
+    let layout = inst.selected_layout();
+    let config = AudioConfig::new(sample_rate, max_frames as usize)
+        .with_channels(layout.main_input_channels(), layout.main_output_channels());
     let mut state = L::init(&inst.params, sample_rate);
     L::reset(&mut state, &inst.params, &config);
     inst.params.set_sample_rate(sample_rate);
@@ -349,10 +363,13 @@ unsafe extern "C" fn plugin_start_processing<L: PluginLogic>(plugin: *const clap
 unsafe extern "C" fn plugin_stop_processing<L: PluginLogic>(_plugin: *const clap_plugin) {}
 
 unsafe extern "C" fn plugin_reset<L: PluginLogic>(plugin: *const clap_plugin) {
-    if let Some(inst) = unsafe { Instance::<L>::from_plugin(plugin) }
-        && let Some(state) = inst.state.as_mut()
-    {
-        let config = AudioConfig::new(inst.sample_rate, inst.max_frames as usize);
+    let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
+        return;
+    };
+    let layout = inst.selected_layout();
+    let config = AudioConfig::new(inst.sample_rate, inst.max_frames as usize)
+        .with_channels(layout.main_input_channels(), layout.main_output_channels());
+    if let Some(state) = inst.state.as_mut() {
         L::reset(state, &inst.params, &config);
         inst.params.snap_smoothers();
     }
@@ -570,7 +587,10 @@ unsafe extern "C" fn plugin_get_extension<L: PluginLogic>(
     }
     let id = unsafe { CStr::from_ptr(id) };
     if id == CLAP_EXT_AUDIO_PORTS {
-        return audio_ports_ext() as *const _ as *const c_void;
+        return audio_ports_ext::<L>() as *const _ as *const c_void;
+    }
+    if id == CLAP_EXT_AUDIO_PORTS_CONFIG && L::bus_layouts().len() > 1 {
+        return audio_ports_config_ext::<L>() as *const _ as *const c_void;
     }
     if id == CLAP_EXT_PARAMS {
         return params_ext::<L>() as *const _ as *const c_void;
@@ -596,23 +616,41 @@ unsafe extern "C" fn plugin_get_extension<L: PluginLogic>(
 unsafe extern "C" fn plugin_on_main_thread(_plugin: *const clap_plugin) {}
 
 // ---------------------------------------------------------------------------
-// audio-ports (shared — stereo I/O fixed for v1)
+// audio-ports (main in/out from selected BusLayout)
 // ---------------------------------------------------------------------------
 
-fn audio_ports_ext() -> &'static clap_plugin_audio_ports {
+fn clap_port_type(channels: ChannelConfig) -> *const c_char {
+    match channels {
+        ChannelConfig::Mono => CLAP_PORT_MONO.as_ptr(),
+        ChannelConfig::Stereo => CLAP_PORT_STEREO.as_ptr(),
+    }
+}
+
+fn audio_ports_ext<L: PluginLogic>() -> &'static clap_plugin_audio_ports {
     static CELL: OnceLock<clap_plugin_audio_ports> = OnceLock::new();
     CELL.get_or_init(|| clap_plugin_audio_ports {
-        count: Some(audio_ports_count),
-        get: Some(audio_ports_get),
+        count: Some(audio_ports_count::<L>),
+        get: Some(audio_ports_get::<L>),
     })
 }
 
-unsafe extern "C" fn audio_ports_count(_plugin: *const clap_plugin, _is_input: bool) -> u32 {
-    1
+unsafe extern "C" fn audio_ports_count<L: PluginLogic>(
+    plugin: *const clap_plugin,
+    is_input: bool,
+) -> u32 {
+    let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
+        return 0;
+    };
+    let layout = inst.selected_layout();
+    if is_input {
+        u32::from(layout.main_in.is_some())
+    } else {
+        1
+    }
 }
 
-unsafe extern "C" fn audio_ports_get(
-    _plugin: *const clap_plugin,
+unsafe extern "C" fn audio_ports_get<L: PluginLogic>(
+    plugin: *const clap_plugin,
     index: u32,
     is_input: bool,
     info: *mut clap_audio_port_info,
@@ -620,13 +658,89 @@ unsafe extern "C" fn audio_ports_get(
     if index != 0 || info.is_null() {
         return false;
     }
+    let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
+        return false;
+    };
+    let layout = inst.selected_layout();
+    let (channels, name) = if is_input {
+        let Some(ch) = layout.main_in else {
+            return false;
+        };
+        (ch, "Input")
+    } else {
+        (layout.main_out, "Output")
+    };
     let info = unsafe { &mut *info };
     info.id = u32::from(!is_input);
-    write_name(&mut info.name, if is_input { "Input" } else { "Output" });
+    write_name(&mut info.name, name);
     info.flags = CLAP_AUDIO_PORT_IS_MAIN;
-    info.channel_count = 2;
-    info.port_type = CLAP_PORT_STEREO.as_ptr();
+    info.channel_count = channels.channel_count();
+    info.port_type = clap_port_type(channels);
     info.in_place_pair = CLAP_INVALID_ID;
+    true
+}
+
+// ---------------------------------------------------------------------------
+// audio-ports-config (when bus_layouts().len() > 1)
+// ---------------------------------------------------------------------------
+
+fn audio_ports_config_ext<L: PluginLogic>() -> &'static clap_plugin_audio_ports_config {
+    static CELL: OnceLock<clap_plugin_audio_ports_config> = OnceLock::new();
+    CELL.get_or_init(|| clap_plugin_audio_ports_config {
+        count: Some(audio_ports_config_count::<L>),
+        get: Some(audio_ports_config_get::<L>),
+        select: Some(audio_ports_config_select::<L>),
+    })
+}
+
+unsafe extern "C" fn audio_ports_config_count<L: PluginLogic>(_plugin: *const clap_plugin) -> u32 {
+    L::bus_layouts().len() as u32
+}
+
+unsafe extern "C" fn audio_ports_config_get<L: PluginLogic>(
+    _plugin: *const clap_plugin,
+    index: u32,
+    config: *mut clap_audio_ports_config,
+) -> bool {
+    if config.is_null() {
+        return false;
+    }
+    let layouts = L::bus_layouts();
+    let Some(layout) = layouts.get(index as usize).copied() else {
+        return false;
+    };
+    let out = unsafe { &mut *config };
+    out.id = index;
+    write_name(&mut out.name, &layout.config_name());
+    out.input_port_count = u32::from(layout.main_in.is_some());
+    out.output_port_count = 1;
+    out.has_main_input = layout.main_in.is_some();
+    out.main_input_channel_count = layout.main_input_channels();
+    out.main_input_port_type = layout
+        .main_in
+        .map_or(ptr::null(), clap_port_type);
+    out.has_main_output = true;
+    out.main_output_channel_count = layout.main_output_channels();
+    out.main_output_port_type = clap_port_type(layout.main_out);
+    true
+}
+
+unsafe extern "C" fn audio_ports_config_select<L: PluginLogic>(
+    plugin: *const clap_plugin,
+    config_id: clap_id,
+) -> bool {
+    let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
+        return false;
+    };
+    if inst.active {
+        // Spec: select only while deactivated.
+        return false;
+    }
+    let n = L::bus_layouts().len();
+    if (config_id as usize) >= n {
+        return false;
+    }
+    inst.layout_index = config_id as usize;
     true
 }
 
@@ -1409,5 +1523,18 @@ mod remote_controls_tests {
             remote_controls_page_id("EQ", 0),
             remote_controls_page_id("DYN", 0)
         );
+    }
+}
+
+#[cfg(test)]
+mod bus_layout_clap_tests {
+    use aura_core::{BusLayout, ChannelConfig};
+
+    #[test]
+    fn default_layout_is_stereo() {
+        // PluginLogic default is stereo; pure layout helpers used by ports.
+        assert_eq!(BusLayout::stereo().main_out, ChannelConfig::Stereo);
+        assert_eq!(BusLayout::mono().main_out, ChannelConfig::Mono);
+        assert_eq!(BusLayout::stereo_and_mono().len(), 2);
     }
 }

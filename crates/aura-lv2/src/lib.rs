@@ -14,7 +14,8 @@
 //!   <binary>          # smoke_gain.dll / libsmoke_gain.so / …
 //! ```
 //!
-//! Port map (stereo FX): 0/1 in L/R · 2/3 out L/R · 4+ control (plain values).
+//! Port map follows the plugin's first `bus_layouts()` entry (LV2 is static):
+//! mono → 0 in · 1 out · 2+ controls; stereo → 0/1 in · 2/3 out · 4+ controls.
 //! State: shared [`aura_core::encode_state`] blob when the host maps URIDs.
 //! No GUI in v1 (LV2 UI is a separate story).
 
@@ -39,14 +40,15 @@
 
 mod ttl;
 
-pub use ttl::{BundleTtl, generate_ttl};
+pub use ttl::{BundleTtl, generate_ttl, generate_ttl_with_layout};
 
 use std::ffi::{CStr, CString, c_char, c_void};
 use std::ptr;
 use std::sync::{Arc, OnceLock};
 
 use aura_core::{
-    AudioBuffer, AudioConfig, PluginLogic, ProcessContext, ProcessMode, decode_state, encode_state,
+    AudioBuffer, AudioConfig, BusLayout, PluginLogic, ProcessContext, ProcessMode, decode_state,
+    encode_state, layout_at,
 };
 use aura_core::info::PluginInfo;
 use aura_params::Params;
@@ -115,11 +117,14 @@ fn param_list<L: PluginLogic>() -> Vec<aura_params::ParamInfo> {
 // Instance
 // ---------------------------------------------------------------------------
 
-const PORT_IN_L: u32 = 0;
-const PORT_IN_R: u32 = 1;
-const PORT_OUT_L: u32 = 2;
-const PORT_OUT_R: u32 = 3;
-const PORT_CTRL0: u32 = 4;
+/// Static layout for LV2 (first declared `bus_layouts()` entry).
+fn static_layout<L: PluginLogic>() -> BusLayout {
+    layout_at(&L::bus_layouts(), 0)
+}
+
+fn audio_port_count(layout: BusLayout) -> usize {
+    layout.main_input_channels() as usize + layout.main_output_channels() as usize
+}
 
 struct Instance<L: PluginLogic> {
     params: Arc<L::Params>,
@@ -129,6 +134,9 @@ struct Instance<L: PluginLogic> {
     ports: Vec<*mut c_void>,
     state_key: u32,
     chunk_type: u32,
+    layout: BusLayout,
+    /// First control-port index (= audio port count).
+    ctrl0: u32,
 }
 
 impl<L: PluginLogic> Instance<L> {
@@ -140,7 +148,7 @@ impl<L: PluginLogic> Instance<L> {
     }
 
     fn n_ports() -> usize {
-        4 + param_list::<L>().len()
+        audio_port_count(static_layout::<L>()) + param_list::<L>().len()
     }
 }
 
@@ -181,7 +189,9 @@ unsafe extern "C" fn instantiate<L: PluginLogic>(
 ) -> LV2_Handle {
     let params = Arc::new(L::Params::default());
     params.set_sample_rate(sample_rate);
+    let layout = static_layout::<L>();
     let n = Instance::<L>::n_ports();
+    let ctrl0 = audio_port_count(layout) as u32;
     let mut map_ptr: Option<*const LV2_URID_Map> = None;
     if !features.is_null() {
         let mut i = 0isize;
@@ -212,6 +222,8 @@ unsafe extern "C" fn instantiate<L: PluginLogic>(
         ports: vec![ptr::null_mut(); n],
         state_key,
         chunk_type,
+        layout,
+        ctrl0,
     });
     Box::into_raw(inst) as LV2_Handle
 }
@@ -246,7 +258,12 @@ unsafe extern "C" fn activate<L: PluginLogic>(instance: LV2_Handle) {
         return;
     };
     // Block size unknown until first run — use a generous default for reset.
-    let config = AudioConfig::new(inst.sample_rate, 8192).with_process_mode(ProcessMode::Realtime);
+    let config = AudioConfig::new(inst.sample_rate, 8192)
+        .with_process_mode(ProcessMode::Realtime)
+        .with_channels(
+            inst.layout.main_input_channels(),
+            inst.layout.main_output_channels(),
+        );
     let mut dsp = L::init(&inst.params, inst.sample_rate);
     L::reset(&mut dsp, &inst.params, &config);
     inst.state = Some(dsp);
@@ -275,8 +292,9 @@ unsafe extern "C" fn run<L: PluginLogic>(instance: LV2_Handle, sample_count: u32
 
     // Control ports → params (plain floats).
     let infos = param_list::<L>();
+    let ctrl0 = inst.ctrl0;
     for (i, meta) in infos.iter().enumerate() {
-        let port = PORT_CTRL0 + i as u32;
+        let port = ctrl0 + i as u32;
         let ptr = inst.ports.get(port as usize).copied().unwrap_or(ptr::null_mut());
         if !ptr.is_null() {
             let v = unsafe { *(ptr as *const f32) };
@@ -288,43 +306,42 @@ unsafe extern "C" fn run<L: PluginLogic>(instance: LV2_Handle, sample_count: u32
         return;
     };
 
-    let in_l = port_audio(inst.ports.get(PORT_IN_L as usize).copied(), n);
-    let in_r = port_audio(inst.ports.get(PORT_IN_R as usize).copied(), n);
-    let out_l = port_audio_mut(inst.ports.get(PORT_OUT_L as usize).copied(), n);
-    let out_r = port_audio_mut(inst.ports.get(PORT_OUT_R as usize).copied(), n);
+    let in_ch = inst.layout.main_input_channels() as usize;
+    let out_ch = inst.layout.main_output_channels() as usize;
+    if out_ch == 0 {
+        return;
+    }
 
-    // Fallback silence if a port is missing.
-    let zero = vec![0.0f32; n];
-    let in_l = in_l.unwrap_or(&zero);
-    let in_r = in_r.unwrap_or(&zero);
+    // Copy host inputs (or silence) into owned buffers.
+    let mut owned_in: Vec<Vec<f32>> = Vec::with_capacity(out_ch);
+    for c in 0..out_ch {
+        if c < in_ch {
+            if let Some(s) = port_audio(inst.ports.get(c).copied(), n) {
+                owned_in.push(s.to_vec());
+            } else {
+                owned_in.push(vec![0.0; n]);
+            }
+        } else {
+            owned_in.push(vec![0.0; n]);
+        }
+    }
 
-    // Own output scratch if host didn't connect.
-    let mut scratch_l;
-    let mut scratch_r;
-    let out_l_slice: &mut [f32] = if let Some(s) = out_l {
-        s
-    } else {
-        scratch_l = vec![0.0f32; n];
-        &mut scratch_l
-    };
-    let out_r_slice: &mut [f32] = if let Some(s) = out_r {
-        s
-    } else {
-        scratch_r = vec![0.0f32; n];
-        &mut scratch_r
-    };
+    let mut owned_out = owned_in.clone();
+    {
+        let in_refs: Vec<&[f32]> = owned_in.iter().map(Vec::as_slice).collect();
+        let mut out_refs: Vec<&mut [f32]> = owned_out.iter_mut().map(Vec::as_mut_slice).collect();
+        let mut buffer = AudioBuffer::from_slices_checked(&in_refs, &mut out_refs, n);
+        let mut ctx =
+            ProcessContext::new(inst.sample_rate, n).with_process_mode(ProcessMode::Realtime);
+        let _ = L::process(dsp, &inst.params, &mut buffer, &mut ctx);
+    }
 
-    // Copy in→own buffers for AudioBuffer (may alias).
-    let owned_in_l = in_l.to_vec();
-    let owned_in_r = in_r.to_vec();
-    out_l_slice.copy_from_slice(&owned_in_l);
-    out_r_slice.copy_from_slice(&owned_in_r);
-
-    let in_refs: [&[f32]; 2] = [&owned_in_l, &owned_in_r];
-    let mut out_refs: [&mut [f32]; 2] = [out_l_slice, out_r_slice];
-    let mut buffer = AudioBuffer::from_slices_checked(&in_refs, &mut out_refs, n);
-    let mut ctx = ProcessContext::new(inst.sample_rate, n).with_process_mode(ProcessMode::Realtime);
-    let _ = L::process(dsp, &inst.params, &mut buffer, &mut ctx);
+    for (c, out_ch_buf) in owned_out.iter().enumerate() {
+        let port_i = in_ch + c;
+        if let Some(s) = port_audio_mut(inst.ports.get(port_i).copied(), n) {
+            s.copy_from_slice(out_ch_buf);
+        }
+    }
 }
 
 fn port_audio<'a>(ptr: Option<*mut c_void>, n: usize) -> Option<&'a [f32]> {
@@ -434,10 +451,13 @@ pub fn bundle_ttl_for<L: PluginLogic>(binary_stem: &str) -> BundleTtl {
     let info = L::info();
     let uri = plugin_uri(&info);
     let params = param_list::<L>();
-    generate_ttl(&info, &uri, binary_stem, &params)
+    let layout = static_layout::<L>();
+    generate_ttl_with_layout(&info, &uri, binary_stem, &params, layout)
 }
 
 /// Non-generic install helper: TTL from free functions + binary stem.
+///
+/// Defaults to stereo main I/O when the caller has no layout.
 pub fn bundle_ttl_from_parts(
     info: &PluginInfo,
     params: &[aura_params::ParamInfo],

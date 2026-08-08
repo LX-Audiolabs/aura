@@ -10,7 +10,7 @@ CLAP format wrapper for AURA.
 |-------|------|
 | **Spec / ABI** | free-audio/clap (`CLAP_VERSION` on their `main` / releases) |
 | **Rust bindings** | [`clap-sys`](https://crates.io/crates/clap-sys) — C layout + constants from those headers |
-| **Our code** | `export!`, factory, process, audio-ports, params, state, GUI, remote-controls |
+| **Our code** | `export!`, factory, process, audio-ports (+ config), params, state, GUI, remote-controls |
 
 Rules:
 
@@ -41,8 +41,10 @@ aura::export!(MyPlugin);
 
 ## Status
 
-Entry, factory, stereo audio-ports, params, process, state, GUI, **remote-controls**.
+Entry, factory, audio-ports (mono/stereo layouts), audio-ports-config (when multi-layout), params, process, state, GUI, remote-controls.
 
-**Remote-controls:** pages of ≤8 params from `ParamInfo.group`. Empty group = no device page (still in the host param list). `"Section/Page"` splits on the first `/`. Hidden/readonly never take a hardware slot. Stable FNV-1a `page_id` per group + chunk.
+**Layouts:** `PluginLogic::bus_layouts()` — default stereo. Override with `BusLayout::mono()` or `BusLayout::stereo_and_mono()`. Host switches via `clap.audio-ports-config` when more than one layout is declared.
 
-Later: note-ports, latency, multi-layout ports, … per free-audio + product need.
+**Remote-controls:** pages of ≤8 params from `ParamInfo.group`. Empty group = no device page. `"Section/Page"` splits on the first `/`. Hidden/readonly never take a hardware slot.
+
+Later: note-ports, latency, multi-bus / sidechain, … per free-audio + product need.

@@ -26,21 +26,35 @@ pub struct AudioConfig {
     pub sample_rate: f64,
     pub max_block_size: usize,
     pub process_mode: ProcessMode,
+    /// Main input channel count for the selected bus layout (`0` = no input).
+    pub main_input_channels: u32,
+    /// Main output channel count for the selected bus layout.
+    pub main_output_channels: u32,
 }
 
 impl AudioConfig {
+    /// Stereo main I/O defaults (matches [`BusLayout::stereo`](crate::BusLayout::stereo)).
     #[must_use]
     pub fn new(sample_rate: f64, max_block_size: usize) -> Self {
         Self {
             sample_rate,
             max_block_size,
             process_mode: ProcessMode::Realtime,
+            main_input_channels: 2,
+            main_output_channels: 2,
         }
     }
 
     #[must_use]
     pub fn with_process_mode(mut self, mode: ProcessMode) -> Self {
         self.process_mode = mode;
+        self
+    }
+
+    #[must_use]
+    pub fn with_channels(mut self, main_in: u32, main_out: u32) -> Self {
+        self.main_input_channels = main_in;
+        self.main_output_channels = main_out;
         self
     }
 }

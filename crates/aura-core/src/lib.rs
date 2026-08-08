@@ -1,12 +1,11 @@
 //! AURA core — minimal process / editor / plugin surface.
 //!
-//! Grown feature-by-feature. Not a full truce-core port.
-//!
 //! UI windowing lives in [`aura_baseview`]; host Editor adapter in
 //! `aura-editor`. This crate only defines the host-facing [`Editor`]
 //! trait and plugin process API that formats and the adapter will share.
 
 pub mod buffer;
+pub mod bus;
 pub mod config;
 pub mod editor;
 pub mod events;
@@ -17,6 +16,7 @@ pub mod state;
 pub mod transport;
 
 pub use buffer::AudioBuffer;
+pub use bus::{BusLayout, ChannelConfig, layout_at};
 pub use config::{AudioConfig, ProcessMode};
 pub use editor::{Editor, EditorBridge, IntoEditor, PluginContext, RawWindowHandle};
 pub use events::{ParamEvent, ParamEventQueue};

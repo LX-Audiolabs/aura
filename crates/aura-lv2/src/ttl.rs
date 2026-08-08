@@ -7,6 +7,7 @@
 )]
 
 use aura_core::info::{PluginCategory, PluginInfo};
+use aura_core::{BusLayout, ChannelConfig};
 use aura_params::{ParamInfo, ParamRange, ParamValueKind};
 
 /// Files to write into `<name>.lv2/` next to the shared library.
@@ -17,17 +18,31 @@ pub struct BundleTtl {
     pub binary_name: String,
 }
 
-/// Generate `manifest.ttl` + plugin TTL for a stereo FX with control ports.
+/// Generate `manifest.ttl` + plugin TTL for a main-bus FX with control ports.
 ///
-/// Port layout (must match the runtime wrapper):
-/// - 0/1: audio in L/R  
-/// - 2/3: audio out L/R  
-/// - 4..: one control input per param (declaration order)
+/// Port layout (must match the runtime wrapper) for **stereo**:
+/// - 0/1: audio in L/R · 2/3: audio out L/R · 4..: controls
+///
+/// For **mono**: 0 in · 1 out · 2..: controls.
+///
+/// LV2 has no runtime layout switch — `layout` is the static declaration
+/// (typically the plugin's first / only `bus_layouts()` entry).
 pub fn generate_ttl(
     info: &PluginInfo,
     uri: &str,
     binary_stem: &str,
     params: &[ParamInfo],
+) -> BundleTtl {
+    generate_ttl_with_layout(info, uri, binary_stem, params, BusLayout::stereo())
+}
+
+/// Like [`generate_ttl`] but with an explicit main-bus layout.
+pub fn generate_ttl_with_layout(
+    info: &PluginInfo,
+    uri: &str,
+    binary_stem: &str,
+    params: &[ParamInfo],
+    layout: BusLayout,
 ) -> BundleTtl {
     let binary_name = {
         #[cfg(target_os = "windows")]
@@ -52,17 +67,40 @@ pub fn generate_ttl(
     };
 
     let mut ports = String::new();
-    ports.push_str(&audio_port(0, "in_l", "Input L", true, true));
-    ports.push_str(&audio_port(1, "in_r", "Input R", true, false));
-    ports.push_str(&audio_port(2, "out_l", "Output L", false, true));
-    ports.push_str(&audio_port(3, "out_r", "Output R", false, false));
-
+    let mut idx = 0usize;
+    match layout.main_in {
+        Some(ChannelConfig::Mono) => {
+            ports.push_str(&audio_port(idx, "in", "Input", true));
+            idx += 1;
+        }
+        Some(ChannelConfig::Stereo) => {
+            ports.push_str(&audio_port(idx, "in_l", "Input L", true));
+            idx += 1;
+            ports.push_str(&audio_port(idx, "in_r", "Input R", true));
+            idx += 1;
+        }
+        None => {}
+    }
+    match layout.main_out {
+        ChannelConfig::Mono => {
+            ports.push_str(&audio_port(idx, "out", "Output", false));
+            idx += 1;
+        }
+        ChannelConfig::Stereo => {
+            ports.push_str(&audio_port(idx, "out_l", "Output L", false));
+            idx += 1;
+            ports.push_str(&audio_port(idx, "out_r", "Output R", false));
+            idx += 1;
+        }
+    }
+    let ctrl0 = idx;
     for (i, p) in params.iter().enumerate() {
-        let idx = 4 + i;
+        let port_idx = ctrl0 + i;
         let sym = param_symbol(p);
-        ports.push_str(&control_port(idx, &sym, p));
+        ports.push_str(&control_port(port_idx, &sym, p));
     }
 
+    let io_note = layout.config_name();
     let plugin = format!(
         r#"@prefix doap:  <http://usefulinc.com/ns/doap#> .
 @prefix foaf:  <http://xmlns.com/foaf/0.1/> .
@@ -78,13 +116,14 @@ pub fn generate_ttl(
     lv2:project <https://lx-audiolabs.com/> ;
     lv2:optionalFeature lv2:hardRTCapable, state:loadDefaultState ;
     lv2:extensionData state:interface ;
-    rdfs:comment "AURA LV2 wrapper — stereo FX, control ports for params." ;
+    rdfs:comment "AURA LV2 wrapper — {io_note}, control ports for params." ;
 {ports}
     .
 "#,
         uri = uri,
         class = class,
         name = escape_ttl(info.name),
+        io_note = escape_ttl(&io_note),
         ports = ports,
     );
 
@@ -132,19 +171,12 @@ fn param_symbol(p: &ParamInfo) -> String {
     s
 }
 
-fn audio_port(index: usize, symbol: &str, name: &str, input: bool, optional_pair: bool) -> String {
+fn audio_port(index: usize, symbol: &str, name: &str, input: bool) -> String {
     let dir = if input {
         "lv2:InputPort, lv2:AudioPort"
     } else {
         "lv2:OutputPort, lv2:AudioPort"
     };
-    let opt = if optional_pair {
-        ""
-    } else {
-        // second channel of a stereo pair still required for our wrapper
-        ""
-    };
-    let _ = opt;
     format!(
         r#"
     lv2:port [
@@ -213,10 +245,8 @@ mod tests {
     use super::*;
     use aura_core::PluginInfo;
 
-    #[test]
-    fn ttl_mentions_uri_and_ports() {
-        let info = PluginInfo::new("Test", "LX", "0.1.0", "test");
-        let params = vec![ParamInfo {
+    fn one_param() -> Vec<ParamInfo> {
+        vec![ParamInfo {
             id: 1,
             name: "Gain",
             short_name: "gain",
@@ -231,11 +261,34 @@ mod tests {
             kind: ParamValueKind::Float,
             midi_map: None,
             midi_channel: None,
-        }];
-        let ttl = generate_ttl(&info, "https://example.com/lv2/test", "test_plug", &params);
+        }]
+    }
+
+    #[test]
+    fn ttl_mentions_uri_and_ports() {
+        let info = PluginInfo::new("Test", "LX", "0.1.0", "test");
+        let ttl = generate_ttl(&info, "https://example.com/lv2/test", "test_plug", &one_param());
         assert!(ttl.manifest.contains("https://example.com/lv2/test"));
         assert!(ttl.plugin.contains("lv2:AudioPort"));
+        assert!(ttl.plugin.contains("in_l"));
         assert!(ttl.plugin.contains("p_1") || ttl.plugin.contains("gain"));
         assert!(ttl.plugin.contains("lv2:ControlPort"));
+    }
+
+    #[test]
+    fn mono_ttl_has_single_in_out() {
+        let info = PluginInfo::new("Test", "LX", "0.1.0", "test");
+        let ttl = generate_ttl_with_layout(
+            &info,
+            "https://example.com/lv2/mono",
+            "mono_plug",
+            &one_param(),
+            BusLayout::mono(),
+        );
+        assert!(ttl.plugin.contains("lv2:symbol \"in\""));
+        assert!(ttl.plugin.contains("lv2:symbol \"out\""));
+        assert!(!ttl.plugin.contains("in_l"));
+        // control index 2 after mono in/out
+        assert!(ttl.plugin.contains("lv2:index 2"));
     }
 }
