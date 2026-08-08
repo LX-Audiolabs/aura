@@ -45,9 +45,9 @@ pub use aura_core::{
 
 // --- params surface ---
 pub use aura_params::{
-    BoolParam, EnumParam, FloatParam, IntParam, MeterSlot, MidiSource, ParamEnum, ParamFlags,
-    ParamInfo, ParamRange, ParamUnit, ParamValueKind, Params, Smoother, SmoothingStyle,
-    format_param_value,
+    BoolParam, EnumParam, FloatParam, FloatParamReadF32, FloatParamReadF64, IntParam, MeterSlot,
+    MidiSource, ParamEnum, ParamFlags, ParamInfo, ParamRange, ParamUnit, ParamValueKind, Params,
+    Smoother, SmoothingStyle, format_param_value,
 };
 pub use aura_params::sample::{Float, Sample};
 
@@ -73,9 +73,11 @@ pub mod prelude {
 
     pub use crate::{
         AudioBuffer, AudioConfig, BoolParam, BusLayout, ChannelConfig, Editor, EnumParam,
-        FloatParam, IntParam, IntoEditor, MeterSlot, ParamEnum, ParamInfo, ParamRange, ParamUnit,
-        ParamValueKind, Params, PluginCategory, PluginContext, PluginInfo, PluginLogic,
-        ProcessContext, ProcessMode, ProcessStatus, RawWindowHandle, SmoothingStyle,
+        FloatParam, FloatParamReadF32, IntParam, IntoEditor, MeterSlot, ParamEnum, ParamInfo,
+        ParamRange, ParamUnit, ParamValueKind, Params, PluginCategory, PluginContext, PluginInfo,
+        PluginLogic, ProcessContext, ProcessMode, ProcessStatus, RawWindowHandle, SmoothingStyle,
     };
+    // FloatParamReadF64 available as `aura::FloatParamReadF64` — not in prelude
+    // (same method name as F32 → E0034 if both imported).
     pub use crate::params::sample::Float;
 }

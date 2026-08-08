@@ -432,6 +432,13 @@ fn has_meter_attr(field: &syn::Field) -> bool {
     field.attrs.iter().any(|a| a.path().is_ident("meter"))
 }
 
+/// `#[skip]` — plain data field (e.g. `Arc<SharedMeters>`). Default-init in
+/// `new()`, excluded from param ids / infos / state. Product plugins hold
+/// DSP↔UI shared atomics here without host automation.
+fn has_skip_attr(field: &syn::Field) -> bool {
+    field.attrs.iter().any(|a| a.path().is_ident("skip"))
+}
+
 /// Check if a field type is `MeterSlot`.
 fn is_meter_slot(ty: &Type) -> bool {
     type_last_segment(ty).is_some_and(|s| s == "MeterSlot")
@@ -467,13 +474,14 @@ fn persist_key(field: &syn::Field) -> String {
         .map_or_else(String::new, std::string::ToString::to_string)
 }
 
-/// Collect parameter fields, nested fields, meter fields, and persist
-/// fields from a struct.
+/// Collect parameter fields, nested fields, meter fields, persist fields,
+/// and `#[skip]` plain fields from a struct.
 type CollectedFields = (
     Vec<ParamField>,
     Vec<NestedField>,
     Vec<MeterField>,
     Vec<PersistField>,
+    Vec<syn::Ident>,
 );
 
 /// A `#[persist]` field: ident, blob key, and the parsed wrapper type.
@@ -617,13 +625,14 @@ fn parse_persist_type(field: &syn::Field) -> Result<PersistType, TokenStream2> {
 
 fn collect_fields(fields: &Fields) -> Result<CollectedFields, TokenStream2> {
     let Fields::Named(named) = fields else {
-        return Ok((Vec::new(), Vec::new(), Vec::new(), Vec::new()));
+        return Ok((Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()));
     };
 
     let mut params = Vec::new();
     let mut nested = Vec::new();
     let mut meters = Vec::new();
     let mut persist = Vec::new();
+    let mut skipped = Vec::new();
 
     for f in &named.named {
         let Some(ident) = f.ident.clone() else {
@@ -640,6 +649,11 @@ fn collect_fields(fields: &Fields) -> Result<CollectedFields, TokenStream2> {
                 key: persist_key(f),
                 ty: parse_persist_type(f)?,
             });
+            continue;
+        }
+
+        if has_skip_attr(f) {
+            skipped.push(ident);
             continue;
         }
 
@@ -672,7 +686,7 @@ fn collect_fields(fields: &Fields) -> Result<CollectedFields, TokenStream2> {
         }
     }
 
-    Ok((params, nested, meters, persist))
+    Ok((params, nested, meters, persist, skipped))
 }
 
 /// Emit an `f64` as a decimal literal (`60.0`, `-60.0`) rather than the
@@ -1381,7 +1395,7 @@ fn gen_field_constructor(f: &ParamField) -> TokenStream2 {
 /// happens on syntactically broken input (rustc would already be
 /// rejecting the same file), so the panic surfaces a derive-internal
 /// regression rather than user error.
-#[proc_macro_derive(Params, attributes(param, nested, meter, persist))]
+#[proc_macro_derive(Params, attributes(param, nested, meter, persist, skip))]
 #[allow(clippy::too_many_lines)]
 pub fn derive_params(input: TokenStream) -> TokenStream {
     let ast: DeriveInput = syn::parse(input).expect("Failed to parse input for Params derive");
@@ -1405,7 +1419,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
         }
     };
 
-    let (param_fields, nested_fields, mut meter_fields, persist_fields) =
+    let (param_fields, nested_fields, mut meter_fields, persist_fields, skip_fields) =
         match collect_fields(fields) {
             Ok(c) => c,
             Err(err_tokens) => return err_tokens.into(),
@@ -2066,6 +2080,13 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
         })
         .collect();
 
+    let skip_inits: Vec<_> = skip_fields
+        .iter()
+        .map(|ident| {
+            quote! { #ident: ::core::default::Default::default() }
+        })
+        .collect();
+
     let new_impl = quote! {
         impl #struct_name {
             /// Construct with every parameter at its declared default.
@@ -2083,6 +2104,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                     #(#nested_inits,)*
                     #(#meter_inits,)*
                     #(#persist_inits,)*
+                    #(#skip_inits,)*
                 };
                 // The per-struct compile-time ID check can't see
                 // across nested types; a parent id matching a nested
