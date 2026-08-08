@@ -10,11 +10,11 @@ CLAP format wrapper for AURA.
 |-------|------|
 | **Spec / ABI** | free-audio/clap (`CLAP_VERSION` on their `main` / releases) |
 | **Rust bindings** | [`clap-sys`](https://crates.io/crates/clap-sys) — C layout + constants from those headers |
-| **Our code** | `export!`, factory, process, audio-ports, params (growing) |
+| **Our code** | `export!`, factory, process, audio-ports, params, state, GUI, remote-controls |
 
 Rules:
 
-1. **New extensions and behaviour** come from free-audio docs/headers, not from truce or folklore.
+1. **New extensions and behaviour** come from free-audio docs/headers (product needs decide *which* extensions we ship).
 2. **`clap-sys` may lag** the latest free-audio **revision** (1.2.x). Major/minor 1.2 stay ABI-compatible (`clap_version_is_compatible`: major ≥ 1). We still design against free-audio; bump `clap-sys` when bindings catch up or switch to git/bindgen if we need a newer header.
 3. **Do not invent** extension IDs or struct layouts — copy free-audio names.
 
@@ -41,5 +41,8 @@ aura::export!(MyPlugin);
 
 ## Status
 
-Minimal: entry, factory, stereo audio-ports, params, process.  
-Later: state, GUI, note-ports, latency, … per free-audio ext headers + clap-validator.
+Entry, factory, stereo audio-ports, params, process, state, GUI, **remote-controls**.
+
+**Remote-controls:** pages of ≤8 params from `ParamInfo.group`. Empty group = no device page (still in the host param list). `"Section/Page"` splits on the first `/`. Hidden/readonly never take a hardware slot. Stable FNV-1a `page_id` per group + chunk.
+
+Later: note-ports, latency, multi-layout ports, … per free-audio + product need.

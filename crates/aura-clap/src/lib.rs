@@ -8,8 +8,8 @@
 //! aura_clap::export!(MyPlugin);
 //! ```
 //!
-//! Covers: `clap_entry` factory, stereo audio ports, params, process.
-//! GUI / state / MIDI ports come later (free-audio ext list).
+//! Covers: `clap_entry` factory, stereo audio ports, params, process,
+//! state, GUI, remote-controls (pages from `ParamInfo.group`).
 
 #![allow(clippy::missing_safety_doc)]
 // ponytail: CLAP FFI glue — raw-pointer casts and C-int size conversions are
@@ -35,7 +35,7 @@ use aura_core::transport::Transport;
 use aura_core::{
     AudioBuffer, AudioConfig, PluginLogic, ProcessContext, ProcessMode, ProcessStatus,
 };
-use aura_params::{ParamFlags, ParamRange, Params};
+use aura_params::{ParamFlags, ParamInfo, ParamRange, Params};
 use clap_sys::events::{
     CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_IS_LIVE, CLAP_EVENT_PARAM_GESTURE_BEGIN,
     CLAP_EVENT_PARAM_GESTURE_END, CLAP_EVENT_PARAM_VALUE, CLAP_TRANSPORT_HAS_BEATS_TIMELINE,
@@ -58,11 +58,15 @@ use clap_sys::ext::params::{
     CLAP_PARAM_IS_READONLY, CLAP_PARAM_IS_STEPPED, CLAP_PARAM_RESCAN_VALUES, clap_host_params,
     clap_param_info, clap_plugin_params,
 };
+use clap_sys::ext::remote_controls::{
+    CLAP_EXT_REMOTE_CONTROLS, CLAP_EXT_REMOTE_CONTROLS_COMPAT, CLAP_REMOTE_CONTROLS_COUNT,
+    clap_plugin_remote_controls, clap_remote_controls_page,
+};
 use clap_sys::ext::state::{CLAP_EXT_STATE, clap_plugin_state};
 use clap_sys::stream::{clap_istream, clap_ostream};
 use clap_sys::factory::plugin_factory::{CLAP_PLUGIN_FACTORY_ID, clap_plugin_factory};
 use clap_sys::host::clap_host;
-use clap_sys::id::CLAP_INVALID_ID;
+use clap_sys::id::{CLAP_INVALID_ID, clap_id};
 use clap_sys::plugin::{clap_plugin, clap_plugin_descriptor};
 use clap_sys::plugin_features::{
     CLAP_PLUGIN_FEATURE_ANALYZER, CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_INSTRUMENT,
@@ -571,6 +575,9 @@ unsafe extern "C" fn plugin_get_extension<L: PluginLogic>(
     if id == CLAP_EXT_PARAMS {
         return params_ext::<L>() as *const _ as *const c_void;
     }
+    if id == CLAP_EXT_REMOTE_CONTROLS || id == CLAP_EXT_REMOTE_CONTROLS_COMPAT {
+        return remote_controls_ext::<L>() as *const _ as *const c_void;
+    }
     if id == CLAP_EXT_STATE {
         return state_ext::<L>() as *const _ as *const c_void;
     }
@@ -620,6 +627,117 @@ unsafe extern "C" fn audio_ports_get(
     info.channel_count = 2;
     info.port_type = CLAP_PORT_STEREO.as_ptr();
     info.in_place_pair = CLAP_INVALID_ID;
+    true
+}
+
+// ---------------------------------------------------------------------------
+// remote-controls (device pages from ParamInfo.group)
+// ---------------------------------------------------------------------------
+//
+// free-audio: clap.remote-controls/2 — up to 8 param slots per page, sections
+// cycle through pages. We map `ParamInfo.group` to pages:
+// - empty group → no remote page (host generic param list still has the param)
+// - `"Section/Page"` → section + page names (first `/` only)
+// - `"Section"` alone → section and page share the same name
+// - >8 params in one group → multiple pages (chunk index in stable page_id)
+// - HIDDEN / READONLY never consume a scarce hardware slot
+
+/// Split `group` on the first `/` into `(section_name, page_name)`.
+fn split_group(group: &str) -> (&str, &str) {
+    match group.split_once('/') {
+        Some((section, page)) => (section, page),
+        None => (group, group),
+    }
+}
+
+/// Chunk params into remote-control pages (≤8 ids each), one run per
+/// distinct non-empty `ParamInfo.group` (declaration order).
+fn remote_control_pages(infos: &[ParamInfo]) -> Vec<(&str, Vec<u32>)> {
+    let mut pages: Vec<(&str, Vec<u32>)> = Vec::new();
+    for info in infos {
+        if info.group.is_empty()
+            || info
+                .flags
+                .intersects(ParamFlags::HIDDEN | ParamFlags::READONLY)
+        {
+            continue;
+        }
+        let existing = pages
+            .iter()
+            .rposition(|page| page.0 == info.group && page.1.len() < CLAP_REMOTE_CONTROLS_COUNT);
+        match existing {
+            Some(idx) => pages[idx].1.push(info.id),
+            None => pages.push((info.group, vec![info.id])),
+        }
+    }
+    pages
+}
+
+/// Stable FNV-1a page id from group name + chunk index (host may persist
+/// the user's last page; must not depend on process-local hashers).
+fn remote_controls_page_id(group: &str, chunk_index: usize) -> clap_id {
+    let mut hash: u32 = 0x811c_9dc5;
+    for &b in group.as_bytes() {
+        hash ^= u32::from(b);
+        hash = hash.wrapping_mul(0x0100_0193);
+    }
+    for &b in &chunk_index.to_le_bytes() {
+        hash ^= u32::from(b);
+        hash = hash.wrapping_mul(0x0100_0193);
+    }
+    hash
+}
+
+fn remote_controls_ext<L: PluginLogic>() -> &'static clap_plugin_remote_controls {
+    static CELL: OnceLock<clap_plugin_remote_controls> = OnceLock::new();
+    CELL.get_or_init(|| clap_plugin_remote_controls {
+        count: Some(remote_controls_count::<L>),
+        get: Some(remote_controls_get::<L>),
+    })
+}
+
+unsafe extern "C" fn remote_controls_count<L: PluginLogic>(plugin: *const clap_plugin) -> u32 {
+    let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
+        return 0;
+    };
+    let infos = inst.params.param_infos();
+    remote_control_pages(&infos).len() as u32
+}
+
+unsafe extern "C" fn remote_controls_get<L: PluginLogic>(
+    plugin: *const clap_plugin,
+    page_index: u32,
+    out: *mut clap_remote_controls_page,
+) -> bool {
+    let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
+        return false;
+    };
+    if out.is_null() {
+        return false;
+    }
+    let infos = inst.params.param_infos();
+    let pages = remote_control_pages(&infos);
+    let page_index = page_index as usize;
+    if page_index >= pages.len() {
+        return false;
+    }
+    let group = pages[page_index].0;
+    let ids = &pages[page_index].1;
+    let chunk_index = pages[..page_index]
+        .iter()
+        .filter(|page| page.0 == group)
+        .count();
+    let (section_name, page_name) = split_group(group);
+
+    let out = unsafe { &mut *out };
+    write_name(&mut out.section_name, section_name);
+    out.page_id = remote_controls_page_id(group, chunk_index);
+    write_name(&mut out.page_name, page_name);
+    out.param_ids = [CLAP_INVALID_ID; CLAP_REMOTE_CONTROLS_COUNT];
+    for (slot, &id) in out.param_ids.iter_mut().zip(ids.iter()) {
+        *slot = id;
+    }
+    out.is_for_preset = false;
     true
 }
 
@@ -1210,4 +1328,86 @@ fn write_c_buf(out: *mut c_char, cap: usize, s: &str) -> bool {
         *out.add(n) = 0;
     }
     true
+}
+
+#[cfg(test)]
+mod remote_controls_tests {
+    use super::{
+        remote_control_pages, remote_controls_page_id, split_group,
+    };
+    use aura_params::{ParamFlags, ParamInfo, ParamRange, ParamUnit, ParamValueKind};
+
+    fn info(id: u32, group: &'static str) -> ParamInfo {
+        ParamInfo {
+            id,
+            name: "p",
+            short_name: "p",
+            group,
+            range: ParamRange::Linear { min: 0.0, max: 1.0 },
+            default_plain: 0.0,
+            flags: ParamFlags::empty(),
+            unit: ParamUnit::None,
+            kind: ParamValueKind::Float,
+            midi_map: None,
+            midi_channel: None,
+        }
+    }
+
+    #[test]
+    fn ungrouped_params_produce_no_page() {
+        let infos = [info(0, ""), info(1, "")];
+        assert!(remote_control_pages(&infos).is_empty());
+    }
+
+    #[test]
+    fn hidden_and_readonly_grouped_params_take_no_slot() {
+        let mut hidden = info(0, "EQ");
+        hidden.flags = ParamFlags::HIDDEN;
+        let visible = info(1, "EQ");
+        let mut readonly = info(2, "EQ");
+        readonly.flags = ParamFlags::READONLY;
+        let infos = [hidden, visible, readonly];
+        let pages = remote_control_pages(&infos);
+        assert_eq!(pages, vec![("EQ", vec![1])]);
+    }
+
+    #[test]
+    fn group_over_eight_params_splits_into_two_pages() {
+        let infos: Vec<ParamInfo> = (0..10).map(|id| info(id, "EQ")).collect();
+        let pages = remote_control_pages(&infos);
+        assert_eq!(pages.len(), 2);
+        assert_eq!(pages[0].1.len(), 8);
+        assert_eq!(pages[1].1, vec![8, 9]);
+    }
+
+    #[test]
+    fn distinct_groups_get_distinct_pages() {
+        let mut infos: Vec<ParamInfo> = (0..3).map(|id| info(id, "EQ")).collect();
+        infos.extend((3..5).map(|id| info(id, "DYN")));
+        let pages = remote_control_pages(&infos);
+        assert_eq!(pages, vec![("EQ", vec![0, 1, 2]), ("DYN", vec![3, 4])]);
+    }
+
+    #[test]
+    fn section_page_split_on_first_slash() {
+        assert_eq!(split_group("EQ/Lo Shelf"), ("EQ", "Lo Shelf"));
+        assert_eq!(split_group("EQ/Lo Shelf/Extra"), ("EQ", "Lo Shelf/Extra"));
+        assert_eq!(split_group("Compressor"), ("Compressor", "Compressor"));
+    }
+
+    #[test]
+    fn page_id_stable_and_distinct() {
+        assert_eq!(
+            remote_controls_page_id("EQ", 0),
+            remote_controls_page_id("EQ", 0)
+        );
+        assert_ne!(
+            remote_controls_page_id("EQ", 0),
+            remote_controls_page_id("EQ", 1)
+        );
+        assert_ne!(
+            remote_controls_page_id("EQ", 0),
+            remote_controls_page_id("DYN", 0)
+        );
+    }
 }
