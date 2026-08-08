@@ -48,7 +48,7 @@ use std::sync::{Arc, OnceLock};
 
 use aura_core::{
     AudioBuffer, AudioConfig, BusLayout, PluginLogic, ProcessContext, ProcessMode, decode_state,
-    encode_state, layout_at,
+    encode_state, host_callback, host_callback_with, layout_at,
 };
 use aura_core::info::PluginInfo;
 use aura_params::Params;
@@ -282,66 +282,69 @@ unsafe extern "C" fn cleanup<L: PluginLogic>(instance: LV2_Handle) {
 }
 
 unsafe extern "C" fn run<L: PluginLogic>(instance: LV2_Handle, sample_count: u32) {
-    let Some(inst) = Instance::<L>::from_handle(instance) else {
-        return;
-    };
-    let n = sample_count as usize;
-    if n == 0 {
-        return;
-    }
-
-    // Control ports → params (plain floats).
-    let infos = param_list::<L>();
-    let ctrl0 = inst.ctrl0;
-    for (i, meta) in infos.iter().enumerate() {
-        let port = ctrl0 + i as u32;
-        let ptr = inst.ports.get(port as usize).copied().unwrap_or(ptr::null_mut());
-        if !ptr.is_null() {
-            let v = unsafe { *(ptr as *const f32) };
-            inst.params.set_plain(meta.id, f64::from(v));
+    host_callback("LV2", "run", || {
+        let Some(inst) = Instance::<L>::from_handle(instance) else {
+            return;
+        };
+        let n = sample_count as usize;
+        if n == 0 {
+            return;
         }
-    }
 
-    let Some(dsp) = inst.state.as_mut() else {
-        return;
-    };
+        // Control ports → params (plain floats).
+        let infos = param_list::<L>();
+        let ctrl0 = inst.ctrl0;
+        for (i, meta) in infos.iter().enumerate() {
+            let port = ctrl0 + i as u32;
+            let ptr = inst.ports.get(port as usize).copied().unwrap_or(ptr::null_mut());
+            if !ptr.is_null() {
+                let v = unsafe { *(ptr as *const f32) };
+                inst.params.set_plain(meta.id, f64::from(v));
+            }
+        }
 
-    let in_ch = inst.layout.main_input_channels() as usize;
-    let out_ch = inst.layout.main_output_channels() as usize;
-    if out_ch == 0 {
-        return;
-    }
+        let Some(dsp) = inst.state.as_mut() else {
+            return;
+        };
 
-    // Copy host inputs (or silence) into owned buffers.
-    let mut owned_in: Vec<Vec<f32>> = Vec::with_capacity(out_ch);
-    for c in 0..out_ch {
-        if c < in_ch {
-            if let Some(s) = port_audio(inst.ports.get(c).copied(), n) {
-                owned_in.push(s.to_vec());
+        let in_ch = inst.layout.main_input_channels() as usize;
+        let out_ch = inst.layout.main_output_channels() as usize;
+        if out_ch == 0 {
+            return;
+        }
+
+        // Copy host inputs (or silence) into owned buffers.
+        let mut owned_in: Vec<Vec<f32>> = Vec::with_capacity(out_ch);
+        for c in 0..out_ch {
+            if c < in_ch {
+                if let Some(s) = port_audio(inst.ports.get(c).copied(), n) {
+                    owned_in.push(s.to_vec());
+                } else {
+                    owned_in.push(vec![0.0; n]);
+                }
             } else {
                 owned_in.push(vec![0.0; n]);
             }
-        } else {
-            owned_in.push(vec![0.0; n]);
         }
-    }
 
-    let mut owned_out = owned_in.clone();
-    {
-        let in_refs: Vec<&[f32]> = owned_in.iter().map(Vec::as_slice).collect();
-        let mut out_refs: Vec<&mut [f32]> = owned_out.iter_mut().map(Vec::as_mut_slice).collect();
-        let mut buffer = AudioBuffer::from_slices_checked(&in_refs, &mut out_refs, n);
-        let mut ctx =
-            ProcessContext::new(inst.sample_rate, n).with_process_mode(ProcessMode::Realtime);
-        let _ = L::process(dsp, &inst.params, &mut buffer, &mut ctx);
-    }
-
-    for (c, out_ch_buf) in owned_out.iter().enumerate() {
-        let port_i = in_ch + c;
-        if let Some(s) = port_audio_mut(inst.ports.get(port_i).copied(), n) {
-            s.copy_from_slice(out_ch_buf);
+        let mut owned_out = owned_in.clone();
+        {
+            let in_refs: Vec<&[f32]> = owned_in.iter().map(Vec::as_slice).collect();
+            let mut out_refs: Vec<&mut [f32]> =
+                owned_out.iter_mut().map(Vec::as_mut_slice).collect();
+            let mut buffer = AudioBuffer::from_slices_checked(&in_refs, &mut out_refs, n);
+            let mut ctx =
+                ProcessContext::new(inst.sample_rate, n).with_process_mode(ProcessMode::Realtime);
+            let _ = L::process(dsp, &inst.params, &mut buffer, &mut ctx);
         }
-    }
+
+        for (c, out_ch_buf) in owned_out.iter().enumerate() {
+            let port_i = in_ch + c;
+            if let Some(s) = port_audio_mut(inst.ports.get(port_i).copied(), n) {
+                s.copy_from_slice(out_ch_buf);
+            }
+        }
+    });
 }
 
 fn port_audio<'a>(ptr: Option<*mut c_void>, n: usize) -> Option<&'a [f32]> {
@@ -384,31 +387,39 @@ unsafe extern "C" fn state_save<L: PluginLogic>(
     _flags: u32,
     _features: *const *const LV2_Feature,
 ) -> LV2_State_Status {
-    let Some(inst) = Instance::<L>::from_handle(instance) else {
-        return LV2_State_Status_LV2_STATE_ERR_UNKNOWN;
-    };
-    let Some(store) = store else {
-        return LV2_State_Status_LV2_STATE_ERR_NO_FEATURE;
-    };
-    if inst.state_key == 0 || inst.chunk_type == 0 {
-        return LV2_State_Status_LV2_STATE_ERR_NO_FEATURE;
-    }
-    let blob = encode_state(&*inst.params);
-    if blob.is_empty() {
-        return LV2_State_Status_LV2_STATE_SUCCESS;
-    }
-    let flags = (LV2_State_Flags::LV2_STATE_IS_POD.0 | LV2_State_Flags::LV2_STATE_IS_PORTABLE.0)
-        as u32;
-    unsafe {
-        store(
-            handle,
-            inst.state_key,
-            blob.as_ptr().cast(),
-            blob.len(),
-            inst.chunk_type,
-            flags,
-        )
-    }
+    host_callback_with(
+        "LV2",
+        "state_save",
+        LV2_State_Status_LV2_STATE_ERR_UNKNOWN,
+        || {
+            let Some(inst) = Instance::<L>::from_handle(instance) else {
+                return LV2_State_Status_LV2_STATE_ERR_UNKNOWN;
+            };
+            let Some(store) = store else {
+                return LV2_State_Status_LV2_STATE_ERR_NO_FEATURE;
+            };
+            if inst.state_key == 0 || inst.chunk_type == 0 {
+                return LV2_State_Status_LV2_STATE_ERR_NO_FEATURE;
+            }
+            let blob = encode_state(&*inst.params);
+            if blob.is_empty() {
+                return LV2_State_Status_LV2_STATE_SUCCESS;
+            }
+            let flags =
+                (LV2_State_Flags::LV2_STATE_IS_POD.0 | LV2_State_Flags::LV2_STATE_IS_PORTABLE.0)
+                    as u32;
+            unsafe {
+                store(
+                    handle,
+                    inst.state_key,
+                    blob.as_ptr().cast(),
+                    blob.len(),
+                    inst.chunk_type,
+                    flags,
+                )
+            }
+        },
+    )
 }
 
 unsafe extern "C" fn state_restore<L: PluginLogic>(
@@ -418,28 +429,36 @@ unsafe extern "C" fn state_restore<L: PluginLogic>(
     _flags: u32,
     _features: *const *const LV2_Feature,
 ) -> LV2_State_Status {
-    let Some(inst) = Instance::<L>::from_handle(instance) else {
-        return LV2_State_Status_LV2_STATE_ERR_UNKNOWN;
-    };
-    let Some(retrieve) = retrieve else {
-        return LV2_State_Status_LV2_STATE_ERR_NO_FEATURE;
-    };
-    if inst.state_key == 0 {
-        return LV2_State_Status_LV2_STATE_ERR_NO_FEATURE;
-    }
-    let mut size = 0usize;
-    let mut type_ = 0u32;
-    let mut flags = 0u32;
-    let ptr = unsafe { retrieve(handle, inst.state_key, &mut size, &mut type_, &mut flags) };
-    if ptr.is_null() || size == 0 {
-        return LV2_State_Status_LV2_STATE_SUCCESS; // empty = defaults
-    }
-    let slice = unsafe { std::slice::from_raw_parts(ptr as *const u8, size) };
-    if decode_state(&*inst.params, slice) {
-        LV2_State_Status_LV2_STATE_SUCCESS
-    } else {
-        LV2_State_Status_LV2_STATE_ERR_UNKNOWN
-    }
+    host_callback_with(
+        "LV2",
+        "state_restore",
+        LV2_State_Status_LV2_STATE_ERR_UNKNOWN,
+        || {
+            let Some(inst) = Instance::<L>::from_handle(instance) else {
+                return LV2_State_Status_LV2_STATE_ERR_UNKNOWN;
+            };
+            let Some(retrieve) = retrieve else {
+                return LV2_State_Status_LV2_STATE_ERR_NO_FEATURE;
+            };
+            if inst.state_key == 0 {
+                return LV2_State_Status_LV2_STATE_ERR_NO_FEATURE;
+            }
+            let mut size = 0usize;
+            let mut type_ = 0u32;
+            let mut flags = 0u32;
+            let ptr =
+                unsafe { retrieve(handle, inst.state_key, &mut size, &mut type_, &mut flags) };
+            if ptr.is_null() || size == 0 {
+                return LV2_State_Status_LV2_STATE_SUCCESS; // empty = defaults
+            }
+            let slice = unsafe { std::slice::from_raw_parts(ptr as *const u8, size) };
+            if decode_state(&*inst.params, slice) {
+                LV2_State_Status_LV2_STATE_SUCCESS
+            } else {
+                LV2_State_Status_LV2_STATE_ERR_UNKNOWN
+            }
+        },
+    )
 }
 
 // ---------------------------------------------------------------------------

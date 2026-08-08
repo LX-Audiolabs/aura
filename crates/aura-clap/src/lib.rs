@@ -35,7 +35,7 @@ use aura_core::events::{ParamEvent, ParamEventQueue};
 use aura_core::transport::Transport;
 use aura_core::{
     AudioBuffer, AudioConfig, BusLayout, ChannelConfig, PluginLogic, ProcessContext, ProcessMode,
-    ProcessStatus, layout_at,
+    ProcessStatus, host_callback, host_callback_with, layout_at,
 };
 use aura_params::{ParamFlags, ParamInfo, ParamRange, Params};
 use clap_sys::events::{
@@ -377,10 +377,13 @@ unsafe extern "C" fn plugin_destroy<L: PluginLogic>(plugin: *const clap_plugin) 
     if plugin.is_null() {
         return;
     }
-    let plugin = unsafe { Box::from_raw(plugin.cast_mut()) };
-    if !plugin.plugin_data.is_null() {
-        drop(unsafe { Box::from_raw(plugin.plugin_data as *mut Instance<L>) });
-    }
+    // Drop (editor teardown, GPU) must not unwind across the C ABI.
+    host_callback("CLAP", "destroy", || {
+        let plugin = unsafe { Box::from_raw(plugin.cast_mut()) };
+        if !plugin.plugin_data.is_null() {
+            drop(unsafe { Box::from_raw(plugin.plugin_data as *mut Instance<L>) });
+        }
+    });
 }
 
 unsafe extern "C" fn plugin_activate<L: PluginLogic>(
@@ -389,32 +392,36 @@ unsafe extern "C" fn plugin_activate<L: PluginLogic>(
     _min_frames: u32,
     max_frames: u32,
 ) -> bool {
-    let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
-        return false;
-    };
-    inst.sample_rate = sample_rate;
-    inst.max_frames = max_frames;
-    let layout = inst.selected_layout();
-    let config = AudioConfig::new(sample_rate, max_frames as usize)
-        .with_channels(layout.main_input_channels(), layout.main_output_channels());
-    let mut state = L::init(&inst.params, sample_rate);
-    L::reset(&mut state, &inst.params, &config);
-    inst.params.set_sample_rate(sample_rate);
-    let latency = L::latency(&state);
-    inst.state = Some(state);
-    inst.latency_cache.store(latency, Ordering::Relaxed);
-    inst.latency_dirty.store(false, Ordering::Relaxed);
-    inst.active = true;
-    // Spec: latency may change during activate — tell the host now (main thread).
-    host_latency_changed(inst.host);
-    true
+    host_callback_with("CLAP", "activate", false, || {
+        let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
+            return false;
+        };
+        inst.sample_rate = sample_rate;
+        inst.max_frames = max_frames;
+        let layout = inst.selected_layout();
+        let config = AudioConfig::new(sample_rate, max_frames as usize)
+            .with_channels(layout.main_input_channels(), layout.main_output_channels());
+        let mut state = L::init(&inst.params, sample_rate);
+        L::reset(&mut state, &inst.params, &config);
+        inst.params.set_sample_rate(sample_rate);
+        let latency = L::latency(&state);
+        inst.state = Some(state);
+        inst.latency_cache.store(latency, Ordering::Relaxed);
+        inst.latency_dirty.store(false, Ordering::Relaxed);
+        inst.active = true;
+        // Spec: latency may change during activate — tell the host now (main thread).
+        host_latency_changed(inst.host);
+        true
+    })
 }
 
 unsafe extern "C" fn plugin_deactivate<L: PluginLogic>(plugin: *const clap_plugin) {
-    if let Some(inst) = unsafe { Instance::<L>::from_plugin(plugin) } {
-        inst.active = false;
-        inst.state = None;
-    }
+    host_callback("CLAP", "deactivate", || {
+        if let Some(inst) = unsafe { Instance::<L>::from_plugin(plugin) } {
+            inst.active = false;
+            inst.state = None;
+        }
+    });
 }
 
 unsafe extern "C" fn plugin_start_processing<L: PluginLogic>(plugin: *const clap_plugin) -> bool {
@@ -424,130 +431,135 @@ unsafe extern "C" fn plugin_start_processing<L: PluginLogic>(plugin: *const clap
 unsafe extern "C" fn plugin_stop_processing<L: PluginLogic>(_plugin: *const clap_plugin) {}
 
 unsafe extern "C" fn plugin_reset<L: PluginLogic>(plugin: *const clap_plugin) {
-    let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
-        return;
-    };
-    let layout = inst.selected_layout();
-    let config = AudioConfig::new(inst.sample_rate, inst.max_frames as usize)
-        .with_channels(layout.main_input_channels(), layout.main_output_channels());
-    if let Some(state) = inst.state.as_mut() {
-        L::reset(state, &inst.params, &config);
-        inst.params.snap_smoothers();
-    }
-    if inst.update_latency_cache() {
-        // Reset runs while active; free-audio wants restart for mid-run changes.
-        host_latency_changed(inst.host);
-        host_request_restart(inst.host);
-    }
+    host_callback("CLAP", "reset", || {
+        let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
+            return;
+        };
+        let layout = inst.selected_layout();
+        let config = AudioConfig::new(inst.sample_rate, inst.max_frames as usize)
+            .with_channels(layout.main_input_channels(), layout.main_output_channels());
+        if let Some(state) = inst.state.as_mut() {
+            L::reset(state, &inst.params, &config);
+            inst.params.snap_smoothers();
+        }
+        if inst.update_latency_cache() {
+            // Reset runs while active; free-audio wants restart for mid-run changes.
+            host_latency_changed(inst.host);
+            host_request_restart(inst.host);
+        }
+    });
 }
 
 unsafe extern "C" fn plugin_process<L: PluginLogic>(
     plugin: *const clap_plugin,
     process: *const clap_process,
 ) -> clap_process_status {
-    let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
-        return CLAP_PROCESS_ERROR;
-    };
-    if process.is_null() || !inst.active {
-        return CLAP_PROCESS_ERROR;
-    }
-    let process = unsafe { &*process };
-    let frames = process.frames_count as usize;
-    if frames == 0 {
-        return CLAP_PROCESS_CONTINUE;
-    }
-
-    if !process.in_events.is_null() {
-        unsafe { apply_input_events(&*inst.params, process.in_events) };
-    }
-    unsafe { emit_param_events(&inst.param_events, process.out_events) };
-
-    let transport = if process.transport.is_null() {
-        None
-    } else {
-        Some(map_transport(unsafe { &*process.transport }))
-    };
-
-    let Some(state) = inst.state.as_mut() else {
-        return CLAP_PROCESS_ERROR;
-    };
-
-    let out_port = if process.audio_outputs_count > 0 && !process.audio_outputs.is_null() {
-        unsafe { &*process.audio_outputs }
-    } else {
-        return CLAP_PROCESS_ERROR;
-    };
-    let in_port = if process.audio_inputs_count > 0 && !process.audio_inputs.is_null() {
-        Some(unsafe { &*process.audio_inputs })
-    } else {
-        None
-    };
-
-    let ch_out = out_port.channel_count as usize;
-    if ch_out == 0 || out_port.data32.is_null() {
-        return CLAP_PROCESS_ERROR;
-    }
-
-    // Own channel buffers for the block (safe AudioBuffer construction).
-    let mut owned_in: Vec<Vec<f32>> = Vec::with_capacity(ch_out);
-    let mut owned_out: Vec<Vec<f32>> = Vec::with_capacity(ch_out);
-    let mut host_out: Vec<*mut f32> = Vec::with_capacity(ch_out);
-
-    for c in 0..ch_out {
-        let op = unsafe { *out_port.data32.add(c) };
-        if op.is_null() {
+    // Author `process` + buffer glue: never unwind into the host.
+    host_callback_with("CLAP", "process", CLAP_PROCESS_ERROR, || {
+        let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
+            return CLAP_PROCESS_ERROR;
+        };
+        if process.is_null() || !inst.active {
             return CLAP_PROCESS_ERROR;
         }
-        host_out.push(op);
-
-        let in_data = in_port
-            .filter(|p| !p.data32.is_null() && (c as u32) < p.channel_count)
-            .and_then(|p| {
-                let ip = unsafe { *p.data32.add(c) };
-                if ip.is_null() {
-                    None
-                } else {
-                    Some(unsafe { std::slice::from_raw_parts(ip, frames) })
-                }
-            });
-
-        if let Some(s) = in_data {
-            owned_in.push(s.to_vec());
-            owned_out.push(s.to_vec());
-        } else {
-            owned_in.push(vec![0.0; frames]);
-            owned_out.push(vec![0.0; frames]);
+        let process = unsafe { &*process };
+        let frames = process.frames_count as usize;
+        if frames == 0 {
+            return CLAP_PROCESS_CONTINUE;
         }
-    }
 
-    let in_refs: Vec<&[f32]> = owned_in.iter().map(Vec::as_slice).collect();
-    let mut out_refs: Vec<&mut [f32]> = owned_out.iter_mut().map(Vec::as_mut_slice).collect();
+        if !process.in_events.is_null() {
+            unsafe { apply_input_events(&*inst.params, process.in_events) };
+        }
+        unsafe { emit_param_events(&inst.param_events, process.out_events) };
 
-    let status = {
-        let mut buffer = AudioBuffer::from_slices_checked(&in_refs, &mut out_refs, frames);
-        let mut ctx =
-            ProcessContext::new(inst.sample_rate, frames).with_process_mode(ProcessMode::Realtime);
-        ctx.transport = transport;
-        L::process(state, &inst.params, &mut buffer, &mut ctx)
-    };
+        let transport = if process.transport.is_null() {
+            None
+        } else {
+            Some(map_transport(unsafe { &*process.transport }))
+        };
 
-    for (c, host_ptr) in host_out.iter().enumerate() {
-        let dst = unsafe { std::slice::from_raw_parts_mut(*host_ptr, frames) };
-        dst.copy_from_slice(&owned_out[c]);
-    }
+        let Some(state) = inst.state.as_mut() else {
+            return CLAP_PROCESS_ERROR;
+        };
 
-    // PDC: if latency moved, schedule main-thread notify (never call host
-    // latency.changed from the audio thread).
-    if inst.update_latency_cache() {
-        inst.latency_dirty.store(true, Ordering::Relaxed);
-        host_request_callback(inst.host);
-    }
+        let out_port = if process.audio_outputs_count > 0 && !process.audio_outputs.is_null() {
+            unsafe { &*process.audio_outputs }
+        } else {
+            return CLAP_PROCESS_ERROR;
+        };
+        let in_port = if process.audio_inputs_count > 0 && !process.audio_inputs.is_null() {
+            Some(unsafe { &*process.audio_inputs })
+        } else {
+            None
+        };
 
-    match status {
-        ProcessStatus::Continue => CLAP_PROCESS_CONTINUE,
-        ProcessStatus::TailFinished => CLAP_PROCESS_TAIL,
-        ProcessStatus::Error => CLAP_PROCESS_ERROR,
-    }
+        let ch_out = out_port.channel_count as usize;
+        if ch_out == 0 || out_port.data32.is_null() {
+            return CLAP_PROCESS_ERROR;
+        }
+
+        // Own channel buffers for the block (safe AudioBuffer construction).
+        let mut owned_in: Vec<Vec<f32>> = Vec::with_capacity(ch_out);
+        let mut owned_out: Vec<Vec<f32>> = Vec::with_capacity(ch_out);
+        let mut host_out: Vec<*mut f32> = Vec::with_capacity(ch_out);
+
+        for c in 0..ch_out {
+            let op = unsafe { *out_port.data32.add(c) };
+            if op.is_null() {
+                return CLAP_PROCESS_ERROR;
+            }
+            host_out.push(op);
+
+            let in_data = in_port
+                .filter(|p| !p.data32.is_null() && (c as u32) < p.channel_count)
+                .and_then(|p| {
+                    let ip = unsafe { *p.data32.add(c) };
+                    if ip.is_null() {
+                        None
+                    } else {
+                        Some(unsafe { std::slice::from_raw_parts(ip, frames) })
+                    }
+                });
+
+            if let Some(s) = in_data {
+                owned_in.push(s.to_vec());
+                owned_out.push(s.to_vec());
+            } else {
+                owned_in.push(vec![0.0; frames]);
+                owned_out.push(vec![0.0; frames]);
+            }
+        }
+
+        let in_refs: Vec<&[f32]> = owned_in.iter().map(Vec::as_slice).collect();
+        let mut out_refs: Vec<&mut [f32]> = owned_out.iter_mut().map(Vec::as_mut_slice).collect();
+
+        let status = {
+            let mut buffer = AudioBuffer::from_slices_checked(&in_refs, &mut out_refs, frames);
+            let mut ctx = ProcessContext::new(inst.sample_rate, frames)
+                .with_process_mode(ProcessMode::Realtime);
+            ctx.transport = transport;
+            L::process(state, &inst.params, &mut buffer, &mut ctx)
+        };
+
+        for (c, host_ptr) in host_out.iter().enumerate() {
+            let dst = unsafe { std::slice::from_raw_parts_mut(*host_ptr, frames) };
+            dst.copy_from_slice(&owned_out[c]);
+        }
+
+        // PDC: if latency moved, schedule main-thread notify (never call host
+        // latency.changed from the audio thread).
+        if inst.update_latency_cache() {
+            inst.latency_dirty.store(true, Ordering::Relaxed);
+            host_request_callback(inst.host);
+        }
+
+        match status {
+            ProcessStatus::Continue => CLAP_PROCESS_CONTINUE,
+            ProcessStatus::TailFinished => CLAP_PROCESS_TAIL,
+            ProcessStatus::Error => CLAP_PROCESS_ERROR,
+        }
+    })
 }
 
 unsafe fn apply_input_events(params: &dyn Params, in_events: *const clap_input_events) {
@@ -1408,70 +1420,75 @@ unsafe extern "C" fn state_save<L: PluginLogic>(
     plugin: *const clap_plugin,
     stream: *const clap_ostream,
 ) -> bool {
-    let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
-        return false;
-    };
-    if stream.is_null() {
-        return false;
-    }
-    let Some(write) = (unsafe { &*stream }).write else {
-        return false;
-    };
-
-    let blob = aura_core::encode_state(&*inst.params);
-
-    let mut written = 0usize;
-    while written < blob.len() {
-        let n = unsafe {
-            write(
-                stream,
-                blob.as_ptr().add(written) as *const c_void,
-                (blob.len() - written) as u64,
-            )
+    host_callback_with("CLAP", "state_save", false, || {
+        let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
+            return false;
         };
-        if n <= 0 {
+        if stream.is_null() {
             return false;
         }
-        written += n as usize;
-    }
-    true
+        let Some(write) = (unsafe { &*stream }).write else {
+            return false;
+        };
+
+        let blob = aura_core::encode_state(&*inst.params);
+
+        let mut written = 0usize;
+        while written < blob.len() {
+            let n = unsafe {
+                write(
+                    stream,
+                    blob.as_ptr().add(written) as *const c_void,
+                    (blob.len() - written) as u64,
+                )
+            };
+            if n <= 0 {
+                return false;
+            }
+            written += n as usize;
+        }
+        true
+    })
 }
 
 unsafe extern "C" fn state_load<L: PluginLogic>(
     plugin: *const clap_plugin,
     stream: *const clap_istream,
 ) -> bool {
-    let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
-        return false;
-    };
-    if stream.is_null() {
-        return false;
-    }
-    let Some(read) = (unsafe { &*stream }).read else {
-        return false;
-    };
-
-    let mut blob = Vec::new();
-    let mut chunk = [0u8; 4096];
-    loop {
-        let n = unsafe { read(stream, chunk.as_mut_ptr() as *mut c_void, chunk.len() as u64) };
-        if n < 0 {
+    host_callback_with("CLAP", "state_load", false, || {
+        let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
+            return false;
+        };
+        if stream.is_null() {
             return false;
         }
-        if n == 0 {
-            break;
-        }
-        blob.extend_from_slice(&chunk[..n as usize]);
-    }
+        let Some(read) = (unsafe { &*stream }).read else {
+            return false;
+        };
 
-    let ok = aura_core::decode_state(&*inst.params, &blob);
-    if ok {
-        // Values changed behind the host's back: per CLAP spec the plugin
-        // must ask for a value rescan after a state load, or the host (and
-        // clap-validator's state-reproducibility tests) sees stale values.
-        unsafe { request_param_rescan(inst.host) };
-    }
-    ok
+        let mut blob = Vec::new();
+        let mut chunk = [0u8; 4096];
+        loop {
+            let n =
+                unsafe { read(stream, chunk.as_mut_ptr() as *mut c_void, chunk.len() as u64) };
+            if n < 0 {
+                return false;
+            }
+            if n == 0 {
+                break;
+            }
+            blob.extend_from_slice(&chunk[..n as usize]);
+        }
+
+        let ok = aura_core::decode_state(&*inst.params, &blob);
+        if ok {
+            // Values changed behind the host's back: per CLAP spec the plugin
+            // must ask for a value rescan after a state load, or the host (and
+            // clap-validator's state-reproducibility tests) sees stale values.
+            unsafe { request_param_rescan(inst.host) };
+        }
+        ok
+    })
 }
 
 /// Ask the host to rescan param values (`clap_host_params.rescan`) after a

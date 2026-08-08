@@ -45,7 +45,7 @@ use aura_core::info::PluginCategory;
 use aura_core::transport::Transport;
 use aura_core::{
     AudioBuffer, AudioConfig, BusLayout, PluginLogic, ProcessContext, ProcessMode, decode_state,
-    encode_state, layout_at,
+    encode_state, host_callback_with, layout_at,
 };
 use aura_params::{ParamFlags, ParamInfo, ParamValueKind, Params};
 use gui::GuiState;
@@ -466,117 +466,121 @@ impl<L: PluginLogic> Component<L> {
     }
 
     unsafe fn process_audio(&self, data: *mut ProcessData) -> tresult {
-        if data.is_null() {
-            return kInvalidArgument;
-        }
-        // SAFETY: non-null; valid for the duration of the process call.
-        let data = unsafe { &*data };
-        let frames = data.numSamples.max(0) as usize;
-
-        if !data.inputParameterChanges.is_null() {
-            unsafe { self.apply_param_changes(data.inputParameterChanges) };
-        }
-
-        let transport = if data.processContext.is_null() {
-            None
-        } else {
+        // Author `process` must not unwind across the COM ABI.
+        host_callback_with("VST3", "process", kInternalError, || {
+            if data.is_null() {
+                return kInvalidArgument;
+            }
             // SAFETY: non-null; valid for the duration of the process call.
-            Some(map_transport(unsafe { &*data.processContext }))
-        };
+            let data = unsafe { &*data };
+            let frames = data.numSamples.max(0) as usize;
 
-        if frames == 0 {
-            return kResultOk;
-        }
+            if !data.inputParameterChanges.is_null() {
+                unsafe { self.apply_param_changes(data.inputParameterChanges) };
+            }
 
-        let mut inner = self.lock();
-        if !inner.active || !inner.processing {
-            return kResultOk;
-        }
-        if data.symbolicSampleSize != kSample32 as int32 {
-            return kResultFalse;
-        }
-        let sample_rate = inner.sample_rate;
-        let process_mode = inner.process_mode;
-        let Some(state) = inner.state.as_mut() else {
-            return kResultOk;
-        };
+            let transport = if data.processContext.is_null() {
+                None
+            } else {
+                // SAFETY: non-null; valid for the duration of the process call.
+                Some(map_transport(unsafe { &*data.processContext }))
+            };
 
-        let out_bus = if data.numOutputs > 0 && !data.outputs.is_null() {
-            // SAFETY: non-null; host-owned bus array, valid for this call.
-            unsafe { &*data.outputs }
-        } else {
-            return kResultOk;
-        };
-        let ch_out = out_bus.numChannels.max(0) as usize;
-        if ch_out == 0 {
-            return kResultOk;
-        }
-        // SAFETY: union field valid because symbolicSampleSize == kSample32.
-        let out_ptrs = unsafe { out_bus.__field0.channelBuffers32 };
-        if out_ptrs.is_null() {
-            return kResultOk;
-        }
-        let in_bus = if data.numInputs > 0 && !data.inputs.is_null() {
-            // SAFETY: non-null; host-owned bus array, valid for this call.
-            Some(unsafe { &*data.inputs })
-        } else {
-            None
-        };
+            if frames == 0 {
+                return kResultOk;
+            }
 
-        // Own channel buffers for the block (safe AudioBuffer construction).
-        let mut owned_in: Vec<Vec<f32>> = Vec::with_capacity(ch_out);
-        let mut owned_out: Vec<Vec<f32>> = Vec::with_capacity(ch_out);
-        let mut host_out: Vec<*mut f32> = Vec::with_capacity(ch_out);
-
-        for c in 0..ch_out {
-            // SAFETY: `c < ch_out` channels, per AudioBusBuffers contract.
-            let op = unsafe { *out_ptrs.add(c) };
-            if op.is_null() {
+            let mut inner = self.lock();
+            if !inner.active || !inner.processing {
+                return kResultOk;
+            }
+            if data.symbolicSampleSize != kSample32 as int32 {
                 return kResultFalse;
             }
-            host_out.push(op);
+            let sample_rate = inner.sample_rate;
+            let process_mode = inner.process_mode;
+            let Some(state) = inner.state.as_mut() else {
+                return kResultOk;
+            };
 
-            let in_data = in_bus
-                .filter(|b| (c as int32) < b.numChannels)
-                .and_then(|b| {
-                    // SAFETY: union field valid for kSample32.
-                    let ptrs = unsafe { b.__field0.channelBuffers32 };
-                    if ptrs.is_null() {
-                        return None;
-                    }
-                    // SAFETY: `c < numChannels` per the filter above.
-                    let ip = unsafe { *ptrs.add(c) };
-                    // SAFETY: host channel buffers hold at least `frames`.
-                    (!ip.is_null()).then(|| unsafe { std::slice::from_raw_parts(ip, frames) })
-                });
-
-            if let Some(s) = in_data {
-                owned_in.push(s.to_vec());
-                owned_out.push(s.to_vec());
+            let out_bus = if data.numOutputs > 0 && !data.outputs.is_null() {
+                // SAFETY: non-null; host-owned bus array, valid for this call.
+                unsafe { &*data.outputs }
             } else {
-                owned_in.push(vec![0.0; frames]);
-                owned_out.push(vec![0.0; frames]);
+                return kResultOk;
+            };
+            let ch_out = out_bus.numChannels.max(0) as usize;
+            if ch_out == 0 {
+                return kResultOk;
             }
-        }
+            // SAFETY: union field valid because symbolicSampleSize == kSample32.
+            let out_ptrs = unsafe { out_bus.__field0.channelBuffers32 };
+            if out_ptrs.is_null() {
+                return kResultOk;
+            }
+            let in_bus = if data.numInputs > 0 && !data.inputs.is_null() {
+                // SAFETY: non-null; host-owned bus array, valid for this call.
+                Some(unsafe { &*data.inputs })
+            } else {
+                None
+            };
 
-        let in_refs: Vec<&[f32]> = owned_in.iter().map(Vec::as_slice).collect();
-        let mut out_refs: Vec<&mut [f32]> =
-            owned_out.iter_mut().map(Vec::as_mut_slice).collect();
+            // Own channel buffers for the block (safe AudioBuffer construction).
+            let mut owned_in: Vec<Vec<f32>> = Vec::with_capacity(ch_out);
+            let mut owned_out: Vec<Vec<f32>> = Vec::with_capacity(ch_out);
+            let mut host_out: Vec<*mut f32> = Vec::with_capacity(ch_out);
 
-        {
-            let mut buffer = AudioBuffer::from_slices_checked(&in_refs, &mut out_refs, frames);
-            let mut ctx = ProcessContext::new(sample_rate, frames).with_process_mode(process_mode);
-            ctx.transport = transport;
-            // ProcessStatus has no VST3 per-block equivalent; drop it.
-            let _ = L::process(state, &self.params, &mut buffer, &mut ctx);
-        }
+            for c in 0..ch_out {
+                // SAFETY: `c < ch_out` channels, per AudioBusBuffers contract.
+                let op = unsafe { *out_ptrs.add(c) };
+                if op.is_null() {
+                    return kResultFalse;
+                }
+                host_out.push(op);
 
-        for (c, host_ptr) in host_out.iter().enumerate() {
-            // SAFETY: host channel buffers hold at least `frames`.
-            let dst = unsafe { std::slice::from_raw_parts_mut(*host_ptr, frames) };
-            dst.copy_from_slice(&owned_out[c]);
-        }
-        kResultOk
+                let in_data = in_bus
+                    .filter(|b| (c as int32) < b.numChannels)
+                    .and_then(|b| {
+                        // SAFETY: union field valid for kSample32.
+                        let ptrs = unsafe { b.__field0.channelBuffers32 };
+                        if ptrs.is_null() {
+                            return None;
+                        }
+                        // SAFETY: `c < numChannels` per the filter above.
+                        let ip = unsafe { *ptrs.add(c) };
+                        // SAFETY: host channel buffers hold at least `frames`.
+                        (!ip.is_null()).then(|| unsafe { std::slice::from_raw_parts(ip, frames) })
+                    });
+
+                if let Some(s) = in_data {
+                    owned_in.push(s.to_vec());
+                    owned_out.push(s.to_vec());
+                } else {
+                    owned_in.push(vec![0.0; frames]);
+                    owned_out.push(vec![0.0; frames]);
+                }
+            }
+
+            let in_refs: Vec<&[f32]> = owned_in.iter().map(Vec::as_slice).collect();
+            let mut out_refs: Vec<&mut [f32]> =
+                owned_out.iter_mut().map(Vec::as_mut_slice).collect();
+
+            {
+                let mut buffer = AudioBuffer::from_slices_checked(&in_refs, &mut out_refs, frames);
+                let mut ctx =
+                    ProcessContext::new(sample_rate, frames).with_process_mode(process_mode);
+                ctx.transport = transport;
+                // ProcessStatus has no VST3 per-block equivalent; drop it.
+                let _ = L::process(state, &self.params, &mut buffer, &mut ctx);
+            }
+
+            for (c, host_ptr) in host_out.iter().enumerate() {
+                // SAFETY: host channel buffers hold at least `frames`.
+                let dst = unsafe { std::slice::from_raw_parts_mut(*host_ptr, frames) };
+                dst.copy_from_slice(&owned_out[c]);
+            }
+            kResultOk
+        })
     }
 }
 
@@ -1101,6 +1105,10 @@ unsafe fn read_stream(stream: *mut IBStream) -> Option<Vec<u8>> {
 }
 
 fn load_state(params: &dyn Params, stream: *mut IBStream) -> tresult {
+    host_callback_with("VST3", "state_load", kInternalError, || load_state_inner(params, stream))
+}
+
+fn load_state_inner(params: &dyn Params, stream: *mut IBStream) -> tresult {
     let Some(blob) = (unsafe { read_stream(stream) }) else {
         return kInvalidArgument;
     };
@@ -1112,26 +1120,28 @@ fn load_state(params: &dyn Params, stream: *mut IBStream) -> tresult {
 }
 
 fn save_state(params: &dyn Params, stream: *mut IBStream) -> tresult {
-    // SAFETY: host passes a valid IBStream; ComRef does not touch the refcount.
-    let Some(stream) = (unsafe { ComRef::from_raw(stream) }) else {
-        return kInvalidArgument;
-    };
-    let blob = encode_state(params);
-    let mut written: int32 = 0;
-    // SAFETY: `blob` is a valid readable buffer of `blob.len()` bytes; the
-    // stream only reads from it.
-    let result = unsafe {
-        stream.write(
-            blob.as_ptr().cast_mut().cast::<c_void>(),
-            blob.len() as int32,
-            &mut written,
-        )
-    };
-    if result == kResultOk && written as usize == blob.len() {
-        kResultOk
-    } else {
-        kInternalError
-    }
+    host_callback_with("VST3", "state_save", kInternalError, || {
+        // SAFETY: host passes a valid IBStream; ComRef does not touch the refcount.
+        let Some(stream) = (unsafe { ComRef::from_raw(stream) }) else {
+            return kInvalidArgument;
+        };
+        let blob = encode_state(params);
+        let mut written: int32 = 0;
+        // SAFETY: `blob` is a valid readable buffer of `blob.len()` bytes; the
+        // stream only reads from it.
+        let result = unsafe {
+            stream.write(
+                blob.as_ptr().cast_mut().cast::<c_void>(),
+                blob.len() as int32,
+                &mut written,
+            )
+        };
+        if result == kResultOk && written as usize == blob.len() {
+            kResultOk
+        } else {
+            kInternalError
+        }
+    })
 }
 
 // ---------------------------------------------------------------------------
