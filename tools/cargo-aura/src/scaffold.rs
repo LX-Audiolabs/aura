@@ -1,4 +1,4 @@
-//! Shared scaffold engine for `cargo aura new` / `cargo aura init`.
+//! Shared scaffold engine for `cargo aura new` / `init` / `add`.
 //!
 //! Pure template emission: [`files`] returns `(relative path, contents)`
 //! pairs; the commands own every filesystem decision (destination dir,
@@ -650,6 +650,50 @@ impl PluginLogic for {struct_name} {{
     )
 }
 
+/// Scaffold paths for `cargo aura add` (crate only — no root `aura.toml` / `agal.toml`).
+pub fn plugin_crate_files(spec: &ScaffoldSpec) -> Vec<(String, String)> {
+    files(spec)
+        .into_iter()
+        .filter(|(p, _)| p != "aura.toml" && p != "agal.toml")
+        .collect()
+}
+
+/// `[[plugin]]` table to append to a workspace `aura.toml`.
+pub fn plugin_table_block(display: &str, name: &str, category: &str, crate_path: &str) -> String {
+    format!(
+        r#"
+[[plugin]]
+name = "{display}"
+bundle_id = "{name}"
+crate = "{crate_path}"
+category = "{category}"
+"#
+    )
+}
+
+/// Whether `aura.toml` text already lists `bundle_id = "…"`.
+pub fn aura_toml_has_bundle(text: &str, bundle_id: &str) -> bool {
+    let needle = format!("bundle_id = \"{bundle_id}\"");
+    text.lines().any(|l| l.trim() == needle)
+}
+
+/// Append a `[[plugin]]` block; ensures a trailing newline before it.
+pub fn append_plugin_table(text: &str, block: &str) -> String {
+    let mut out = text.to_string();
+    if !out.ends_with('\n') {
+        out.push('\n');
+    }
+    // Separate tables with a blank line when the file doesn't already end empty.
+    if !out.ends_with("\n\n") {
+        out.push('\n');
+    }
+    out.push_str(block.trim_start_matches('\n'));
+    if !out.ends_with('\n') {
+        out.push('\n');
+    }
+    out
+}
+
 /// Write `files` under `dest`, creating parent dirs as needed.
 pub fn write_files(dest: &Path, files: &[(String, String)]) -> io::Result<()> {
     for (rel, contents) in files {
@@ -804,5 +848,37 @@ mod tests {
         assert!(slint.contains("Meter"), "{slint}");
         assert!(aura.contains("category = \"analyzer\""), "{aura}");
         assert!(!lib.contains("BusLayout::mono()"), "{lib}");
+    }
+
+    #[test]
+    fn plugin_crate_files_skip_root_manifests() {
+        let out = plugin_crate_files(&spec("extra", &[]));
+        let paths: Vec<&str> = out.iter().map(|(p, _)| p.as_str()).collect();
+        assert!(!paths.contains(&"aura.toml"));
+        assert!(!paths.contains(&"agal.toml"));
+        assert!(paths.contains(&"src/lib.rs"));
+        assert!(paths.contains(&"Cargo.toml"));
+    }
+
+    #[test]
+    fn append_plugin_detects_bundle_and_appends() {
+        let base = r#"[vendor]
+name = "LX"
+
+[[plugin]]
+name = "First"
+bundle_id = "first"
+crate = "first"
+category = "effect"
+"#;
+        assert!(aura_toml_has_bundle(base, "first"));
+        assert!(!aura_toml_has_bundle(base, "second"));
+        let block = plugin_table_block("Second", "second", "analyzer", "plugins/second");
+        let merged = append_plugin_table(base, &block);
+        assert!(merged.contains("bundle_id = \"second\""));
+        assert!(merged.contains("crate = \"plugins/second\""));
+        assert!(merged.contains("category = \"analyzer\""));
+        // Original plugin still present.
+        assert!(merged.contains("bundle_id = \"first\""));
     }
 }

@@ -5,6 +5,7 @@
 //!
 //! Usage:
 //!   cargo aura new my-plugin
+//!   cargo aura add other-plugin
 //!   cargo aura build [--clap|--vst3|--lv2]
 //!   cargo aura install [--clap|--vst3|--lv2]
 //!   cargo aura preview [path] [--no-watch]
@@ -30,6 +31,7 @@ fn main() -> ExitCode {
     match cmd {
         "new" => cmd_new(&args[1..]),
         "init" => cmd_init(&args[1..]),
+        "add" => cmd_add(&args[1..]),
         "build" => cmd_build(&args[1..]),
         "install" => cmd_install(&args[1..]),
         "preview" => cmd_preview(&args[1..]),
@@ -63,6 +65,9 @@ Commands:
   init [path] [--vst3] [--lv2] [--kind <k>]
                           Same scaffold, into an existing empty directory
                           (default: current dir; name comes from the dir name)
+  add <name> [--vst3] [--lv2] [--kind <k>]
+                          Add another plugin under plugins/<name>/ and append
+                          [[plugin]] to the workspace aura.toml (re-open)
   build [--clap|--vst3|--lv2] [--release]
                           cargo build with format feature(s)
   install [--clap|--vst3|--lv2] [--release]
@@ -353,6 +358,100 @@ fn cmd_init(args: &[String]) -> ExitCode {
     }
 
     print_scaffold_success("initialized", &dest, cd.as_deref(), &spec.formats);
+    ExitCode::SUCCESS
+}
+
+/// `cargo aura add <name>` — re-open: scaffold under `plugins/<name>/` and
+/// append `[[plugin]]` to the workspace `aura.toml`.
+fn cmd_add(args: &[String]) -> ExitCode {
+    let (formats, kind, positional) = match parse_scaffold_args(args) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    if positional.len() != 1 {
+        eprintln!(
+            "usage: cargo aura add <name> [--vst3] [--lv2] [--kind {}]",
+            Kind::SUPPORTED
+        );
+        return ExitCode::FAILURE;
+    }
+    let name = &positional[0];
+
+    let aura_path = PathBuf::from("aura.toml");
+    if !aura_path.is_file() {
+        eprintln!(
+            "error: no aura.toml in current directory — run `cargo aura new` / `init` first, \
+             then `add` from that project root"
+        );
+        return ExitCode::FAILURE;
+    }
+
+    let aura_text = match fs::read_to_string(&aura_path) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("error: read {}: {e}", aura_path.display());
+            return ExitCode::FAILURE;
+        }
+    };
+
+    if scaffold::aura_toml_has_bundle(&aura_text, name) {
+        eprintln!("error: aura.toml already lists bundle_id = \"{name}\"");
+        return ExitCode::FAILURE;
+    }
+
+    let dest = PathBuf::from("plugins").join(name);
+    if dest.exists() {
+        eprintln!("error: {} already exists", dest.display());
+        return ExitCode::FAILURE;
+    }
+
+    let spec = match make_spec(name, formats, kind) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let crate_path = format!("plugins/{name}");
+    let files = scaffold::plugin_crate_files(&spec);
+    if let Err(e) = scaffold::write_files(&dest, &files) {
+        eprintln!("error: scaffold failed: {e}");
+        let _ = fs::remove_dir_all(&dest);
+        return ExitCode::FAILURE;
+    }
+
+    let block = scaffold::plugin_table_block(
+        &spec.display(),
+        name,
+        kind.category(),
+        &crate_path,
+    );
+    let merged = scaffold::append_plugin_table(&aura_text, &block);
+    if let Err(e) = fs::write(&aura_path, merged) {
+        eprintln!("error: update {}: {e}", aura_path.display());
+        let _ = fs::remove_dir_all(&dest);
+        return ExitCode::FAILURE;
+    }
+
+    let mut all: Vec<&str> = vec!["clap"];
+    all.extend(spec.formats.iter().map(String::as_str));
+    let flags = all
+        .iter()
+        .map(|f| format!("--{f}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    println!("added {}", dest.display());
+    println!("  updated aura.toml  (+ [[plugin]] {name})");
+    println!();
+    println!("next:");
+    println!("  cd plugins/{name}");
+    println!("  cargo aura build {flags}");
+    println!("  cargo aura install {flags} --release");
     ExitCode::SUCCESS
 }
 

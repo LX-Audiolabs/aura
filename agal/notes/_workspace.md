@@ -12,7 +12,7 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 
 ## Open
 
-- [ ] Stage 6: multi-plugin re-open / `add` + aura-gui
+- [ ] Stage 6: aura-gui (CLI parity shell)
 - [ ] Stage 7 pilot (simple stereo FX first)
 
 ## Decisions
@@ -20,7 +20,7 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 ```text
 [ATOM] type=decision | detail=Basis fertig 2026-08-08 — DoD green; cutover gate open
 [ATOM] type=decision | detail=Stage 5b P1 done: G9 layouts, G10 remote-controls, G11 latency
-[ATOM] type=decision | detail=Stage 6: kind templates effect|effect-mono|analyzer; next add-plugin + aura-gui
+[ATOM] type=decision | detail=Stage 6: kinds + cargo aura add done; next aura-gui
 [ATOM] type=constraint | detail=PeakMeter/FFT/Spectrum stay lx-ui-slint + lx-analysis (product); @aura basics incl XYPad only
 [ATOM] type=constraint | detail=No AU/egui zoo; no product DSP into AURA
 ```
