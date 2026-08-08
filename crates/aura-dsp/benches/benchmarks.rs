@@ -1,17 +1,17 @@
-//! Criterion benchmarks for naad synthesis primitives.
+//! Criterion benchmarks for aura-dsp synthesis primitives.
 
 use std::hint::black_box;
 
 use criterion::{Criterion, criterion_group, criterion_main};
 
-use naad::delay::{AllpassDelay, CombFilter};
-use naad::effects::{Chorus, Distortion, DistortionType, Phaser};
-use naad::envelope::Adsr;
-use naad::filter::{BiquadFilter, FilterType, StateVariableFilter};
-use naad::modulation::FmModulator;
-use naad::noise::{NoiseGenerator, NoiseType};
-use naad::oscillator::{Oscillator, Waveform};
-use naad::wavetable::{Wavetable, WavetableOscillator};
+use aura_dsp::delay::{AllpassDelay, CombFilter};
+use aura_dsp::effects::{Chorus, Distortion, DistortionType, Phaser};
+use aura_dsp::envelope::Adsr;
+use aura_dsp::filter::{BiquadFilter, FilterType, StateVariableFilter};
+use aura_dsp::modulation::FmModulator;
+use aura_dsp::noise::{NoiseGenerator, NoiseType};
+use aura_dsp::oscillator::{Oscillator, Waveform};
+use aura_dsp::wavetable::{Wavetable, WavetableOscillator};
 
 fn oscillator_sine_1024(c: &mut Criterion) {
     c.bench_function("oscillator_sine_1024", |b| {
@@ -179,7 +179,7 @@ fn distortion_wavefold_1024(c: &mut Criterion) {
 
 fn compressor_1024(c: &mut Criterion) {
     c.bench_function("compressor_1024", |b| {
-        let mut comp = naad::dynamics::Compressor::new(-20.0, 4.0, 0.01, 0.1, 44100.0);
+        let mut comp = aura_dsp::dynamics::Compressor::new(-20.0, 4.0, 0.01, 0.1, 44100.0);
         let buffer = [0.5f32; 1024];
         b.iter(|| {
             for &s in black_box(&buffer) {
@@ -191,7 +191,7 @@ fn compressor_1024(c: &mut Criterion) {
 
 fn reverb_1024(c: &mut Criterion) {
     c.bench_function("reverb_1024", |b| {
-        let mut rev = naad::reverb::Reverb::new(0.8, 0.3, 10.0, 1.0, 44100.0).unwrap();
+        let mut rev = aura_dsp::reverb::Reverb::new(0.8, 0.3, 10.0, 1.0, 44100.0).unwrap();
         let buffer = [0.5f32; 1024];
         b.iter(|| {
             for &s in black_box(&buffer) {
@@ -203,7 +203,7 @@ fn reverb_1024(c: &mut Criterion) {
 
 fn parametric_eq_1024(c: &mut Criterion) {
     c.bench_function("parametric_eq_4band_1024", |b| {
-        let mut eq = naad::eq::ParametricEq::new(44100.0);
+        let mut eq = aura_dsp::eq::ParametricEq::new(44100.0);
         eq.add_band(FilterType::Peak, 250.0, 1.0, 3.0).unwrap();
         eq.add_band(FilterType::Peak, 1000.0, 1.0, -2.0).unwrap();
         eq.add_band(FilterType::Peak, 4000.0, 1.0, 1.5).unwrap();
@@ -221,8 +221,8 @@ fn parametric_eq_1024(c: &mut Criterion) {
 #[cfg(feature = "synthesis")]
 fn subtractive_synth_1024(c: &mut Criterion) {
     c.bench_function("subtractive_synth_1024", |b| {
-        let mut synth = naad::synth::subtractive::SubtractiveSynth::new(
-            naad::oscillator::Waveform::Saw,
+        let mut synth = aura_dsp::synth::subtractive::SubtractiveSynth::new(
+            aura_dsp::oscillator::Waveform::Saw,
             440.0,
             2000.0,
             0.707,
@@ -241,7 +241,7 @@ fn subtractive_synth_1024(c: &mut Criterion) {
 #[cfg(feature = "synthesis")]
 fn karplus_strong_1024(c: &mut Criterion) {
     c.bench_function("karplus_strong_1024", |b| {
-        let mut ks = naad::synth::physical::KarplusStrong::new(440.0, 0.99, 0.5, 44100.0).unwrap();
+        let mut ks = aura_dsp::synth::physical::KarplusStrong::new(440.0, 0.99, 0.5, 44100.0).unwrap();
         ks.pluck();
         let mut buffer = [0.0f32; 1024];
         b.iter(|| {

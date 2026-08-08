@@ -1,6 +1,6 @@
 //! Basic example: generate a 1-second 440 Hz sine wave and print the first 10 samples.
 
-use naad::oscillator::{Oscillator, Waveform};
+use aura_dsp::oscillator::{Oscillator, Waveform};
 
 fn main() {
     let sample_rate = 44100.0;
@@ -14,7 +14,7 @@ fn main() {
         }
     };
 
-    println!("naad — 440 Hz Sine Wave");
+    println!("aura_dsp — 440 Hz Sine Wave");
     println!("Sample rate: {sample_rate} Hz");
     println!("Frequency: {frequency} Hz");
     println!();

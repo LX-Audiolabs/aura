@@ -1,15 +1,16 @@
 //! Portable analysis primitives (from product `lx-analysis`).
 //!
 //! **In scope:** FFT / SNAP, spectrum display maths, clip-wave rings,
-//! audio↔UI meter building blocks.
+//! audio↔UI meter building blocks, per-plugin shared state aggregates,
+//! plugin config persistence.
 //!
-//! **Out of scope (stay product):** `lx-shm`, `lx-vault`, and per-plugin
-//! `*Shared` types (`AetherShared`, `AurumShared`, …). Product plugins
-//! compose those from [`shared`] building blocks.
+//! **Out of scope:** Product-specific Slint widgets and chrome.
 
 pub mod dev_log;
 pub mod shared;
 pub mod snap_fft;
+pub mod product_shared;
+pub mod vault;
 
 pub use shared::{
     AutoLoud, PeakMeters, ScopeRing, ShmClaimShared, SnapPipeline, SpectrumView, band5, band5_tol,

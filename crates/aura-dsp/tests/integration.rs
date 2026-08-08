@@ -1,14 +1,14 @@
-//! Integration tests for naad.
+//! Integration tests for aura_dsp.
 
-use naad::delay::{AllpassDelay, CombFilter, DelayLine};
-use naad::effects::{Chorus, Distortion, DistortionType, Flanger, Phaser};
-use naad::envelope::{Adsr, EnvelopeSegment, MultiStageEnvelope};
-use naad::filter::{BiquadFilter, FilterType, StateVariableFilter};
-use naad::modulation::{FmModulator, Lfo, LfoShape, RingModulator};
-use naad::noise::{NoiseGenerator, NoiseType};
-use naad::oscillator::{Oscillator, Waveform};
-use naad::tuning;
-use naad::wavetable::{MorphWavetable, Wavetable, WavetableOscillator};
+use aura_dsp::delay::{AllpassDelay, CombFilter, DelayLine};
+use aura_dsp::effects::{Chorus, Distortion, DistortionType, Flanger, Phaser};
+use aura_dsp::envelope::{Adsr, EnvelopeSegment, MultiStageEnvelope};
+use aura_dsp::filter::{BiquadFilter, FilterType, StateVariableFilter};
+use aura_dsp::modulation::{FmModulator, Lfo, LfoShape, RingModulator};
+use aura_dsp::noise::{NoiseGenerator, NoiseType};
+use aura_dsp::oscillator::{Oscillator, Waveform};
+use aura_dsp::tuning;
+use aura_dsp::wavetable::{MorphWavetable, Wavetable, WavetableOscillator};
 
 /// Test that a 440 Hz sine wave has the correct period.
 ///
@@ -249,9 +249,9 @@ fn serde_roundtrip_adsr() {
 
 #[test]
 fn serde_roundtrip_filter_type() {
-    let ft = naad::filter::FilterType::BandPass;
+    let ft = aura_dsp::filter::FilterType::BandPass;
     let json = serde_json::to_string(&ft).unwrap();
-    let back: naad::filter::FilterType = serde_json::from_str(&json).unwrap();
+    let back: aura_dsp::filter::FilterType = serde_json::from_str(&json).unwrap();
     assert_eq!(ft, back);
 }
 
@@ -489,7 +489,7 @@ fn serde_roundtrip_lfo_sh_works_after_deser() {
 
 #[test]
 fn serde_roundtrip_unison_works_after_deser() {
-    use naad::oscillator::UnisonOscillator;
+    use aura_dsp::oscillator::UnisonOscillator;
     let uni = UnisonOscillator::new(Waveform::Saw, 440.0, 4, 10.0, 44100.0).unwrap();
     let json = serde_json::to_string(&uni).unwrap();
     let mut back: UnisonOscillator = serde_json::from_str(&json).unwrap();

@@ -11,10 +11,12 @@ publish = false
 [dependencies]
 aura-baseview = { workspace = true, default-features = false }
 aura-core = { workspace = true }
+aura-params = { workspace = true }
 baseview = { workspace = true }
 slint = { workspace = true }
 raw-window-handle = { workspace = true }
 log = "0.4"
+paste = "1"
 
 [features]
 default = ["backend-femtovg"]

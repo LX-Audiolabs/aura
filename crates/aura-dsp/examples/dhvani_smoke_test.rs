@@ -1,21 +1,21 @@
 //! dhvani integration smoke test.
 //!
-//! Demonstrates how dhvani (the sound engine) would compose naad primitives
+//! Demonstrates how dhvani (the sound engine) would compose aura_dsp primitives
 //! into a playable instrument with voice allocation, modulation, and effects.
 //!
 //! This validates API ergonomics and proves the abstraction boundary works:
-//! naad provides the DSP building blocks, dhvani wires them together.
+//! aura_dsp provides the DSP building blocks, dhvani wires them together.
 
-use naad::dynamics::Compressor;
-use naad::envelope::Adsr;
-use naad::filter::{BiquadFilter, FilterType, StateVariableFilter};
-use naad::mod_matrix::{ModDestination, ModMatrix, ModRouting, ModSource};
-use naad::modulation::{Lfo, LfoShape};
-use naad::oscillator::{UnisonOscillator, Waveform};
-use naad::panning::{PanLaw, pan_mono};
-use naad::reverb::Reverb;
-use naad::smoothing::ParamSmoother;
-use naad::voice::{PolyMode, StealMode, VoiceManager};
+use aura_dsp::dynamics::Compressor;
+use aura_dsp::envelope::Adsr;
+use aura_dsp::filter::{BiquadFilter, FilterType, StateVariableFilter};
+use aura_dsp::mod_matrix::{ModDestination, ModMatrix, ModRouting, ModSource};
+use aura_dsp::modulation::{Lfo, LfoShape};
+use aura_dsp::oscillator::{UnisonOscillator, Waveform};
+use aura_dsp::panning::{PanLaw, pan_mono};
+use aura_dsp::reverb::Reverb;
+use aura_dsp::smoothing::ParamSmoother;
+use aura_dsp::voice::{PolyMode, StealMode, VoiceManager};
 
 fn main() {
     let sample_rate = 44100.0;
@@ -73,7 +73,7 @@ fn main() {
             mod_matrix.compute();
 
             let cutoff_mod = mod_matrix.get_destination(ModDestination::FilterCutoff);
-            let modulated_cutoff = (2000.0 * (cutoff_mod * 2.0).exp2()).clamp(20.0, 20000.0);
+            let modulated_cutoff = (2000.0_f32 * (cutoff_mod * 2.0).exp2()).clamp(20.0, 20000.0);
             let _ = filter.set_params(modulated_cutoff, 2.0);
 
             // --- Synthesis chain ---

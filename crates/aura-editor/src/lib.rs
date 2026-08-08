@@ -31,6 +31,8 @@
 //! ```
 
 mod parent;
+pub mod typed;
+pub mod ui_zoom;
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
