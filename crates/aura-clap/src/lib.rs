@@ -55,7 +55,8 @@ use clap_sys::ext::gui::{
 };
 use clap_sys::ext::params::{
     CLAP_EXT_PARAMS, CLAP_PARAM_IS_AUTOMATABLE, CLAP_PARAM_IS_BYPASS, CLAP_PARAM_IS_HIDDEN,
-    CLAP_PARAM_IS_READONLY, CLAP_PARAM_IS_STEPPED, clap_param_info, clap_plugin_params,
+    CLAP_PARAM_IS_READONLY, CLAP_PARAM_IS_STEPPED, CLAP_PARAM_RESCAN_VALUES, clap_host_params,
+    clap_param_info, clap_plugin_params,
 };
 use clap_sys::ext::state::{CLAP_EXT_STATE, clap_plugin_state};
 use clap_sys::stream::{clap_istream, clap_ostream};
@@ -1125,7 +1126,33 @@ unsafe extern "C" fn state_load<L: PluginLogic>(
         blob.extend_from_slice(&chunk[..n as usize]);
     }
 
-    aura_core::decode_state(&*inst.params, &blob)
+    let ok = aura_core::decode_state(&*inst.params, &blob);
+    if ok {
+        // Values changed behind the host's back: per CLAP spec the plugin
+        // must ask for a value rescan after a state load, or the host (and
+        // clap-validator's state-reproducibility tests) sees stale values.
+        unsafe { request_param_rescan(inst.host) };
+    }
+    ok
+}
+
+/// Ask the host to rescan param values (`clap_host_params.rescan`) after a
+/// state load. No-op when the host is null or lacks the params extension.
+unsafe fn request_param_rescan(host: *const clap_host) {
+    if host.is_null() {
+        return;
+    }
+    let Some(get) = (unsafe { &*host }).get_extension else {
+        return;
+    };
+    let ext = unsafe { get(host, CLAP_EXT_PARAMS.as_ptr()) };
+    if ext.is_null() {
+        return;
+    }
+    let host_params = unsafe { &*(ext as *const clap_host_params) };
+    if let Some(rescan) = host_params.rescan {
+        unsafe { rescan(host, CLAP_PARAM_RESCAN_VALUES) };
+    }
 }
 
 // ---------------------------------------------------------------------------

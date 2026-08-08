@@ -52,7 +52,10 @@ impl PluginLogic for SmokeGain {
         info.clap_id = "com.lx-audiolabs.aura.smoke-gain";
         // Stable once shipped — host sessions key off this string → TUID.
         info.vst3_id = "com.lx-audiolabs.aura.smoke-gain";
-        info.lv2_uri = "https://lx-audiolabs.com/lv2/aura-smoke-gain";
+        // Must match cargo-aura's LV2 fallback TTL (derived from package name)
+        // until a build-time TTL sidecar exists — host scans TTL, then matches
+        // lv2_descriptor's URI against it.
+        info.lv2_uri = "https://lx-audiolabs.com/lv2/smoke-gain";
         info.category = PluginCategory::Effect;
         info
     }
