@@ -13,6 +13,8 @@ publish = false
 aura-core = { workspace = true }
 aura-params = { workspace = true }
 aura-derive = { workspace = true }
+aura-dsp = { workspace = true }
+aura-midi = { workspace = true }
 aura-clap = { workspace = true, optional = true }
 aura-vst3 = { workspace = true, optional = true }
 aura-lv2 = { workspace = true, optional = true }

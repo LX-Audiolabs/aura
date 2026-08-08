@@ -1,0 +1,52 @@
+[package]
+name = "aura-dsp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+description = "AURA DSP — synthesis, effects, analysis, maths (JUCE juce_dsp analogue; naad fork + LX FX)"
+publish = false
+keywords = ["dsp", "synthesis", "audio", "filter", "effects"]
+categories = ["multimedia::audio"]
+
+# Core primitives forked from naad v1.2.5 (GPL-3.0-only) by Robert MacCracken.
+# https://github.com/MacCracken/naad/tree/main/rust-old
+# Upstream rewritten in Cyrius; this Rust version maintained as part of AURA.
+# Layout target (JUCE-style): oscillators/filters/fx/analysis under this crate;
+# MIDI messages live in `aura-midi`.
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+smallvec = { version = "1", features = ["serde", "const_generics"] }
+thiserror = "2"
+tracing = "0.1"
+# LUFS / true-peak (`fx::AutoLoudMeter`, `fx::MasteringMeter`) — from lx-dsp
+ebur128 = "0.1"
+# Analysis (`analysis::SnapFFT`, spectrum bins) — from lx-analysis
+realfft = "3"
+atomic_float = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"], optional = true }
+goonj = { version = "1", features = ["binaural"], optional = true }
+hisab = { version = "1.1", optional = true }
+
+[dev-dependencies]
+criterion = { version = "0.8", features = ["html_reports"] }
+
+[features]
+default = ["synthesis"]
+synthesis = ["dep:hisab"]
+logging = ["dep:tracing-subscriber"]
+# Alias for product plugins that used lx-analysis `dev-logging`
+dev-logging = ["logging"]
+acoustics = ["dep:goonj", "dep:hisab"]
+full = ["synthesis", "acoustics", "logging"]
+
+[[bench]]
+name = "benchmarks"
+harness = false
+
+[lints]
+workspace = true

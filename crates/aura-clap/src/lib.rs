@@ -38,14 +38,16 @@ use aura_core::{
     ProcessStatus, host_callback, host_callback_with, layout_at,
 };
 use aura_params::{ParamFlags, ParamInfo, ParamRange, Params};
+use aura_core::{MidiBuffer, MidiMessage};
 use clap_sys::events::{
-    CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_IS_LIVE, CLAP_EVENT_PARAM_GESTURE_BEGIN,
+    CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_IS_LIVE, CLAP_EVENT_MIDI, CLAP_EVENT_NOTE_CHOKE,
+    CLAP_EVENT_NOTE_OFF, CLAP_EVENT_NOTE_ON, CLAP_EVENT_PARAM_GESTURE_BEGIN,
     CLAP_EVENT_PARAM_GESTURE_END, CLAP_EVENT_PARAM_VALUE, CLAP_TRANSPORT_HAS_BEATS_TIMELINE,
     CLAP_TRANSPORT_HAS_SECONDS_TIMELINE, CLAP_TRANSPORT_HAS_TEMPO,
     CLAP_TRANSPORT_HAS_TIME_SIGNATURE, CLAP_TRANSPORT_IS_LOOP_ACTIVE, CLAP_TRANSPORT_IS_PLAYING,
-    CLAP_TRANSPORT_IS_RECORDING, clap_event_header, clap_event_param_gesture,
-    clap_event_param_value, clap_event_transport, clap_event_type, clap_input_events,
-    clap_output_events,
+    CLAP_TRANSPORT_IS_RECORDING, clap_event_header, clap_event_midi, clap_event_note,
+    clap_event_param_gesture, clap_event_param_value, clap_event_transport, clap_event_type,
+    clap_input_events, clap_output_events,
 };
 use clap_sys::ext::audio_ports::{
     CLAP_AUDIO_PORT_IS_MAIN, CLAP_EXT_AUDIO_PORTS, CLAP_PORT_MONO, CLAP_PORT_STEREO,
@@ -468,8 +470,9 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
             return CLAP_PROCESS_CONTINUE;
         }
 
+        let mut midi = MidiBuffer::with_capacity(32);
         if !process.in_events.is_null() {
-            unsafe { apply_input_events(&*inst.params, process.in_events) };
+            unsafe { apply_input_events(&*inst.params, process.in_events, &mut midi) };
         }
         unsafe { emit_param_events(&inst.param_events, process.out_events) };
 
@@ -537,7 +540,8 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
         let status = {
             let mut buffer = AudioBuffer::from_slices_checked(&in_refs, &mut out_refs, frames);
             let mut ctx = ProcessContext::new(inst.sample_rate, frames)
-                .with_process_mode(ProcessMode::Realtime);
+                .with_process_mode(ProcessMode::Realtime)
+                .with_midi(midi);
             ctx.transport = transport;
             L::process(state, &inst.params, &mut buffer, &mut ctx)
         };
@@ -562,7 +566,12 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
     })
 }
 
-unsafe fn apply_input_events(params: &dyn Params, in_events: *const clap_input_events) {
+unsafe fn apply_input_events(
+    params: &dyn Params,
+    in_events: *const clap_input_events,
+    midi: &mut MidiBuffer,
+) {
+    midi.clear();
     let ev = unsafe { &*in_events };
     let Some(size_fn) = ev.size else {
         return;
@@ -580,10 +589,47 @@ unsafe fn apply_input_events(params: &dyn Params, in_events: *const clap_input_e
         if header.space_id != CLAP_CORE_EVENT_SPACE_ID {
             continue;
         }
-        if header.type_ == CLAP_EVENT_PARAM_VALUE {
-            let pev = unsafe { &*(hdr as *const clap_event_param_value) };
-            params.set_plain(pev.param_id, pev.value);
+        match header.type_ {
+            CLAP_EVENT_PARAM_VALUE => {
+                let pev = unsafe { &*(hdr as *const clap_event_param_value) };
+                params.set_plain(pev.param_id, pev.value);
+            }
+            CLAP_EVENT_NOTE_ON | CLAP_EVENT_NOTE_OFF | CLAP_EVENT_NOTE_CHOKE => {
+                if let Some(msg) = clap_note_to_midi(header.type_, hdr) {
+                    midi.push(header.time, msg);
+                }
+            }
+            CLAP_EVENT_MIDI => {
+                let m = unsafe { &*(hdr as *const clap_event_midi) };
+                midi.push(
+                    header.time,
+                    MidiMessage::raw(m.data[0], m.data[1], m.data[2]),
+                );
+            }
+            _ => {}
         }
+    }
+}
+
+/// Map CLAP note events into channel MIDI (velocity 0..=127).
+fn clap_note_to_midi(type_: clap_event_type, hdr: *const clap_event_header) -> Option<MidiMessage> {
+    let n = unsafe { &*(hdr as *const clap_event_note) };
+    if n.key < 0 || n.key > 127 {
+        return None;
+    }
+    let channel = if n.channel < 0 {
+        0
+    } else {
+        (n.channel as u8) & 0x0F
+    };
+    let key = n.key as u8;
+    let velocity = (n.velocity * 127.0).round().clamp(0.0, 127.0) as u8;
+    match type_ {
+        CLAP_EVENT_NOTE_ON => Some(MidiMessage::note_on(channel, key, velocity.max(1))),
+        CLAP_EVENT_NOTE_OFF | CLAP_EVENT_NOTE_CHOKE => {
+            Some(MidiMessage::note_off(channel, key, velocity))
+        }
+        _ => None,
     }
 }
 
@@ -1094,7 +1140,9 @@ unsafe extern "C" fn params_flush<L: PluginLogic>(
         return;
     };
     if !in_.is_null() {
-        unsafe { apply_input_events(&*inst.params, in_) };
+        // Flush is param-only; MIDI discarded (no process block).
+        let mut midi = MidiBuffer::new();
+        unsafe { apply_input_events(&*inst.params, in_, &mut midi) };
     }
     unsafe { emit_param_events(&inst.param_events, out) };
 }

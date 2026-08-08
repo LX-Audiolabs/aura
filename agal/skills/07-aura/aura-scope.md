@@ -24,20 +24,23 @@ unless deleted. Canonical long form: root `README.md` + `docs/migration-steps.md
 | **Hosts** | Bitwig-first; then other CLAP/VST3/LV2 hosts |
 | **Platforms** | Windows, Linux, macOS |
 | **Layout** | `crates/` · `examples/` · `tools/` · `cargo aura` CLI |
+| **DSP / MIDI** | `aura-dsp` (juce_dsp-shaped) · `aura-midi` (messages/buffer) |
 
 ## Out of scope (do not build here)
 
 - egui / iced / Vizia as first-class UIs
 - AU / AAX / VST2
-- Absorbing product DSP (`lx-dsp`, `lx-analysis`, `lx-vault`) into AURA
+- Absorbing product infra (`lx-shm`, `lx-vault`) or per-plugin `*Shared` UI state into AURA
 - Bulk product plugin migrate before **basis** DoD is green
 - Kitchen-sink multi-UI framework (that is truce / nice-plug territory)
+
+Portable **algorithms** from product `lx-dsp` / `lx-analysis` → modules under **`aura-dsp`** (see `docs/dsp-layout.md`).
 
 ## Rules (also in `agal.toml` → agent map)
 
 1. **basis_first** — finish framework basis (`docs/migration-steps.md` DoD) before product cutover.
 2. **thin_formats** — one `PluginLogic` API; format crates stay thin.
-3. **product_dsp_out** — product DSP stays in lx-audiolabs-plugins.
+3. **product_infra_out** — `lx-shm` / `lx-vault` / product UI shared-state stay in plugins repo; portable DSP algos may live in `aura-dsp`.
 4. **roadmap** — single status source: `docs/migration-steps.md`.
 5. **agal_optional** — orientation only; never hard-depend for `cargo aura` build.
 6. **nice_plug** — external multi-UI stacks → nice-plug / truce / clack, not NIH-plug rewrites.

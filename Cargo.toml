@@ -10,6 +10,8 @@ members = [
     "crates/aura-lv2",
     "crates/aura-baseview",
     "crates/aura-editor",
+    "crates/aura-dsp",
+    "crates/aura-midi",
     "crates/aura-build",
     "crates/aura-test",
     "tools/cargo-aura",
@@ -42,6 +44,8 @@ aura-vst3 = { path = "crates/aura-vst3" }
 aura-lv2 = { path = "crates/aura-lv2" }
 aura-baseview = { path = "crates/aura-baseview", default-features = false }
 aura-editor = { path = "crates/aura-editor", default-features = false }
+aura-dsp = { path = "crates/aura-dsp" }
+aura-midi = { path = "crates/aura-midi" }
 aura-build = { path = "crates/aura-build" }
 aura-test = { path = "crates/aura-test" }
 

@@ -10,6 +10,7 @@ publish = false
 
 [dependencies]
 aura-params = { workspace = true }
+aura-midi = { workspace = true }
 
 [lints]
 workspace = true

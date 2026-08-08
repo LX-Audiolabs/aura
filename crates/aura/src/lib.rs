@@ -23,6 +23,8 @@
 
 pub use aura_core as core;
 pub use aura_params as params;
+pub use aura_dsp as dsp;
+pub use aura_midi as midi;
 
 // Test helpers are a separate crate (`aura-test`) so release plugins
 // don't pull them; product crates depend on `aura-test` as a dev-dep.
@@ -39,8 +41,9 @@ pub use aura_lv2 as lv2;
 // --- core surface ---
 pub use aura_core::{
     AudioBuffer, AudioConfig, BusLayout, ChannelConfig, Editor, EditorBridge, IntoEditor,
-    MidiDialect, ParamEvent, ParamEventQueue, PluginCategory, PluginContext, PluginInfo,
-    PluginLogic, ProcessContext, ProcessMode, ProcessStatus, RawWindowHandle, Transport,
+    MidiBuffer, MidiDialect, MidiEvent, MidiMessage, MidiStatus, ParamEvent, ParamEventQueue,
+    PluginCategory, PluginContext, PluginInfo, PluginLogic, ProcessContext, ProcessMode,
+    ProcessStatus, RawWindowHandle, Transport,
 };
 
 // --- params surface ---
@@ -73,9 +76,10 @@ pub mod prelude {
 
     pub use crate::{
         AudioBuffer, AudioConfig, BoolParam, BusLayout, ChannelConfig, Editor, EnumParam,
-        FloatParam, FloatParamReadF32, IntParam, IntoEditor, MeterSlot, ParamEnum, ParamInfo,
-        ParamRange, ParamUnit, ParamValueKind, Params, PluginCategory, PluginContext, PluginInfo,
-        PluginLogic, ProcessContext, ProcessMode, ProcessStatus, RawWindowHandle, SmoothingStyle,
+        FloatParam, FloatParamReadF32, IntParam, IntoEditor, MeterSlot, MidiBuffer, MidiMessage,
+        ParamEnum, ParamInfo, ParamRange, ParamUnit, ParamValueKind, Params, PluginCategory,
+        PluginContext, PluginInfo, PluginLogic, ProcessContext, ProcessMode, ProcessStatus,
+        RawWindowHandle, SmoothingStyle,
     };
     // FloatParamReadF64 available as `aura::FloatParamReadF64` — not in prelude
     // (same method name as F32 → E0034 if both imported).

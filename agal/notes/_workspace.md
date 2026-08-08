@@ -23,7 +23,13 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 [ATOM] type=decision | detail=Stage 6 core tooling done: kinds, add, aura-gui (CLI parity)
 [ATOM] type=decision | detail=Host panic fence in aura-core + CLAP/VST3/LV2 process+state (cutover blocker 1)
 [ATOM] type=decision | detail=aura-test crate: state round-trip + process smoke (cutover blocker 2 minimal)
-[ATOM] type=constraint | detail=PeakMeter/FFT/Spectrum stay lx-ui-slint + lx-analysis (product); @aura basics incl XYPad only
-[ATOM] type=constraint | detail=No AU/egui zoo; no product DSP into AURA
+[ATOM] type=constraint | detail=PeakMeter/FFT/Spectrum widgets stay lx-ui-slint (product); @aura basics incl XYPad only
+[ATOM] type=constraint | detail=No AU/egui zoo; lx-shm/vault/product *Shared stay product
+[ATOM] type=decision | detail=JUCE-shaped: aura-dsp (signal) + aura-midi (messages); ex aura-synth
+[ATOM] type=decision | detail=Portable lx-dsp/lx-analysis algos land under aura-dsp modules (docs/dsp-layout.md)
+[ATOM] type=decision | detail=lx-dsp ported → aura_dsp::fx (2026-08-08); product lx-dsp may thin-reexport later
+[ATOM] type=decision | detail=lx-analysis portable → aura_dsp::analysis; *Shared/shm/vault stay product
+[ATOM] type=decision | detail=ProcessContext.midi MidiBuffer; CLAP note/MIDI → buffer (VST3/LV2 later)
+[ATOM] type=decision | detail=Product lx-dsp/lx-analysis thin façade over aura-dsp (+ product *Shared)
 ```
 
