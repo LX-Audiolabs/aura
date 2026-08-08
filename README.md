@@ -1,5 +1,10 @@
 # AURA
 
+[![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/rust-1.96+-orange.svg)](rust-toolchain.toml)
+[![Slint](https://img.shields.io/badge/UI-Slint-2379F4.svg)](https://slint.dev)
+[![agal](https://img.shields.io/badge/oriented-agal-00ADD8.svg)](https://github.com/LX-Audiolabs/agal)
+
 **Audio Unified Rust Architecture**  
 *(DE-Gag: **AU**dio **RA**hmenwerk)*
 
