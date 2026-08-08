@@ -13,7 +13,8 @@
 //! (mono/stereo from [`PluginLogic::bus_layouts`]), f32 samples, params
 //! (1:1 `ParamID` map, no hash), flat state blob via
 //! [`aura_core::encode_state`] / [`aura_core::decode_state`], parented GUI
-//! via `IPlugView` + the same [`Editor`] trait as CLAP. No MIDI.
+//! via `IPlugView` + the same [`Editor`] trait as CLAP. MIDI note input
+//! (`PluginInfo::accepts_midi_in` declares the event input bus).
 
 #![allow(clippy::missing_safety_doc)]
 // ponytail: VST3 FFI glue — raw-pointer casts and C-int size conversions are
@@ -44,15 +45,16 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 use aura_core::info::PluginCategory;
 use aura_core::transport::Transport;
 use aura_core::{
-    AudioBuffer, AudioConfig, BusLayout, PluginLogic, ProcessContext, ProcessMode, decode_state,
-    encode_state, host_callback_with, layout_at,
+    AudioBuffer, AudioConfig, BusLayout, MidiBuffer, MidiMessage, PluginLogic, ProcessContext,
+    ProcessMode, decode_state, encode_state, host_callback_with, layout_at,
 };
 use aura_params::{ParamFlags, ParamInfo, ParamValueKind, Params};
 use gui::GuiState;
 use vst3::Steinberg::Vst::BusDirections_::{kInput, kOutput};
 use vst3::Steinberg::Vst::BusInfo_::BusFlags_::kDefaultActive;
 use vst3::Steinberg::Vst::BusTypes_::kMain;
-use vst3::Steinberg::Vst::MediaTypes_::kAudio;
+use vst3::Steinberg::Vst::Event_::EventTypes_;
+use vst3::Steinberg::Vst::MediaTypes_::{kAudio, kEvent};
 use vst3::Steinberg::Vst::ParameterInfo_::ParameterFlags_::{
     kCanAutomate, kIsBypass, kIsHidden, kIsList, kIsReadOnly,
 };
@@ -63,11 +65,12 @@ use vst3::Steinberg::Vst::ProcessContext_::StatesAndFlags_::{
 use vst3::Steinberg::Vst::ProcessModes_::{kOffline, kPrefetch};
 use vst3::Steinberg::Vst::SymbolicSampleSizes_::kSample32;
 use vst3::Steinberg::Vst::{
-    BusDirection, BusInfo, BusType, IAudioProcessor, IAudioProcessorTrait, IAudioProcessor_iid,
-    IComponent, IComponentHandler, IComponentTrait, IComponent_iid, IEditController,
-    IEditControllerTrait, IEditController_iid, IParamValueQueueTrait, IParameterChanges,
-    IParameterChangesTrait, IoMode, MediaType, ParamID, ParamValue, ParameterInfo, ProcessData,
-    ProcessSetup, RoutingInfo, SpeakerArrangement, String128, TChar, kRootUnitId,
+    BusDirection, BusInfo, BusType, Event, IAudioProcessor, IAudioProcessorTrait,
+    IAudioProcessor_iid, IComponent, IComponentHandler, IComponentTrait, IComponent_iid,
+    IEditController, IEditControllerTrait, IEditController_iid, IEventList, IEventListTrait,
+    IParamValueQueueTrait, IParameterChanges, IParameterChangesTrait, IoMode, MediaType, ParamID,
+    ParamValue, ParameterInfo, ProcessData, ProcessSetup, RoutingInfo, SpeakerArrangement,
+    String128, TChar, kRootUnitId,
 };
 // IPlugView / TBool live in Steinberg root, not Steinberg::Vst.
 use vst3::Steinberg::{
@@ -569,6 +572,12 @@ impl<L: PluginLogic> Component<L> {
                 let mut buffer = AudioBuffer::from_slices_checked(&in_refs, &mut out_refs, frames);
                 let mut ctx =
                     ProcessContext::new(sample_rate, frames).with_process_mode(process_mode);
+                if L::info().accepts_midi_in && !data.inputEvents.is_null() {
+                    let mut midi = MidiBuffer::with_capacity(32);
+                    // SAFETY: host guarantees `inputEvents` is valid for this call.
+                    unsafe { collect_input_events(data.inputEvents, &mut midi) };
+                    ctx = ctx.with_midi(midi);
+                }
                 ctx.transport = transport;
                 // ProcessStatus has no VST3 per-block equivalent; drop it.
                 let _ = L::process(state, &self.params, &mut buffer, &mut ctx);
@@ -634,6 +643,10 @@ impl<L: PluginLogic> IComponentTrait for Component<L> {
     }
 
     unsafe fn getBusCount(&self, r#type: MediaType, dir: BusDirection) -> int32 {
+        if r#type == kEvent as MediaType {
+            // One event input bus so hosts route MIDI to us.
+            return int32::from(dir == kInput as BusDirection && L::info().accepts_midi_in);
+        }
         if r#type != kAudio as MediaType {
             return 0;
         }
@@ -657,6 +670,20 @@ impl<L: PluginLogic> IComponentTrait for Component<L> {
     ) -> tresult {
         if bus.is_null() {
             return kInvalidArgument;
+        }
+        if r#type == kEvent as MediaType {
+            if !L::info().accepts_midi_in || dir != kInput as BusDirection || index != 0 {
+                return kInvalidArgument;
+            }
+            // SAFETY: non-null, host-owned out struct per spec.
+            let bus = unsafe { &mut *bus };
+            bus.mediaType = kEvent as MediaType;
+            bus.direction = dir;
+            bus.channelCount = 1;
+            write_string128(&mut bus.name, "MIDI In");
+            bus.busType = kMain as BusType;
+            bus.flags = kDefaultActive as uint32;
+            return kResultOk;
         }
         if r#type != kAudio as MediaType
             || index != 0
@@ -968,6 +995,59 @@ impl<L: PluginLogic> IEditControllerTrait for Component<L> {
             return ptr::null_mut();
         }
         gui::PlugView::create(Arc::clone(&self.gui))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// MIDI input helpers
+// ---------------------------------------------------------------------------
+
+/// Drain the host input event list into `midi` (note on/off only).
+unsafe fn collect_input_events(events: *mut IEventList, midi: &mut MidiBuffer) {
+    // SAFETY: host guarantees `events` is valid for this process call;
+    // ComRef does not touch the refcount.
+    let Some(events) = (unsafe { ComRef::from_raw(events) }) else {
+        return;
+    };
+    let count = unsafe { events.getEventCount() };
+    for i in 0..count {
+        // SAFETY: plain-C out struct, fully overwritten by getEvent on success.
+        let mut ev: Event = unsafe { std::mem::zeroed() };
+        if unsafe { events.getEvent(i, &mut ev) } != kResultOk {
+            continue;
+        }
+        let offset = ev.sampleOffset.max(0) as u32;
+        let msg = match u32::from(ev.r#type) {
+            t if t == EventTypes_::kNoteOnEvent as u32 => {
+                // SAFETY: union field valid for kNoteOnEvent.
+                let n = unsafe { ev.__field0.noteOn };
+                note_to_midi(true, n.channel, n.pitch, n.velocity)
+            }
+            t if t == EventTypes_::kNoteOffEvent as u32 => {
+                // SAFETY: union field valid for kNoteOffEvent.
+                let n = unsafe { ev.__field0.noteOff };
+                note_to_midi(false, n.channel, n.pitch, n.velocity)
+            }
+            _ => None,
+        };
+        if let Some(msg) = msg {
+            midi.push(offset, msg);
+        }
+    }
+}
+
+/// Map a VST3 note event into channel MIDI (velocity 0..=127), same
+/// conventions as the CLAP wrapper.
+fn note_to_midi(is_on: bool, channel: i16, pitch: i16, velocity: f32) -> Option<MidiMessage> {
+    if !(0..=127).contains(&pitch) {
+        return None;
+    }
+    let channel = channel.clamp(0, 15) as u8;
+    let velocity = (f64::from(velocity) * 127.0).round().clamp(0.0, 127.0) as u8;
+    if is_on {
+        Some(MidiMessage::note_on(channel, pitch as u8, velocity.max(1)))
+    } else {
+        Some(MidiMessage::note_off(channel, pitch as u8, velocity))
     }
 }
 

@@ -18,6 +18,7 @@ members = [
     "tools/aura-preview",
     "tools/aura-gui",
     "examples/smoke-gain",
+    "examples/smoke-synth",
     # Window-stack demos (aura-baseview)
     "crates/aura-baseview/examples/render_femtovg",
     "crates/aura-baseview/examples/open_parented",

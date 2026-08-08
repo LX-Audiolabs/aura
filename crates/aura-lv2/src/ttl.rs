@@ -99,12 +99,18 @@ pub fn generate_ttl_with_layout(
         let sym = param_symbol(p);
         ports.push_str(&control_port(port_idx, &sym, p));
     }
+    if info.accepts_midi_in {
+        // MIDI atom input goes last — must match the runtime wrapper's port map.
+        ports.push_str(&midi_in_port(ctrl0 + params.len()));
+    }
 
     let io_note = layout.config_name();
     let plugin = format!(
         r#"@prefix doap:  <http://usefulinc.com/ns/doap#> .
 @prefix foaf:  <http://xmlns.com/foaf/0.1/> .
 @prefix lv2:   <http://lv2plug.in/ns/lv2core#> .
+@prefix atom:  <http://lv2plug.in/ns/ext/atom#> .
+@prefix midi:  <http://lv2plug.in/ns/ext/midi#> .
 @prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix unit:  <http://lv2plug.in/ns/extensions/units#> .
 @prefix state: <http://lv2plug.in/ns/ext/state#> .
@@ -236,6 +242,20 @@ fn control_port(index: usize, symbol: &str, p: &ParamInfo) -> String {
     )
 }
 
+fn midi_in_port(index: usize) -> String {
+    format!(
+        r#"
+    lv2:port [
+        a lv2:InputPort, lv2:AtomPort ;
+        lv2:index {index} ;
+        lv2:symbol "midi_in" ;
+        lv2:name "MIDI In" ;
+        atom:bufferType atom:Sequence ;
+        atom:supports midi:MidiEvent ;
+    ] ;"#
+    )
+}
+
 fn escape_ttl(s: &str) -> String {
     s.replace('\\', "\\\\").replace('"', "\\\"")
 }
@@ -290,5 +310,22 @@ mod tests {
         assert!(!ttl.plugin.contains("in_l"));
         // control index 2 after mono in/out
         assert!(ttl.plugin.contains("lv2:index 2"));
+    }
+
+    #[test]
+    fn midi_port_appended_last_when_accepted() {
+        let mut info = PluginInfo::new("Test", "LX", "0.1.0", "test");
+        info.accepts_midi_in = true;
+        // stereo: 0/1 in, 2/3 out, 4 control → midi at 5
+        let ttl = generate_ttl(&info, "https://example.com/lv2/test", "test_plug", &one_param());
+        assert!(ttl.plugin.contains("lv2:AtomPort"));
+        assert!(ttl.plugin.contains("atom:bufferType atom:Sequence"));
+        assert!(ttl.plugin.contains("atom:supports midi:MidiEvent"));
+        assert!(ttl.plugin.contains("lv2:index 5"));
+        assert!(ttl.plugin.contains("lv2:symbol \"midi_in\""));
+
+        info.accepts_midi_in = false;
+        let ttl = generate_ttl(&info, "https://example.com/lv2/test", "test_plug", &one_param());
+        assert!(!ttl.plugin.contains("lv2:AtomPort"));
     }
 }
