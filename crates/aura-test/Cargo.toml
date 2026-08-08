@@ -1,0 +1,16 @@
+[package]
+name = "aura-test"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Test helpers for AURA plugins (state round-trip, process smoke)"
+publish = false
+
+[dependencies]
+aura-core = { workspace = true }
+aura-params = { workspace = true }
+
+[lints]
+workspace = true

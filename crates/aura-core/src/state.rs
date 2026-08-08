@@ -41,6 +41,12 @@ pub fn decode_state(params: &dyn Params, blob: &[u8]) -> bool {
     else {
         return false;
     };
+    // Each entry is 12 bytes; reject lying counts before allocating.
+    // Header is 4 bytes (already consumed); remaining payload must fit.
+    let need = (count as usize).saturating_mul(12);
+    if blob.len().saturating_sub(4) < need {
+        return false;
+    }
     let mut values = Vec::with_capacity(count as usize);
     for _ in 0..count {
         let (Some(id), Some(bits)) = (

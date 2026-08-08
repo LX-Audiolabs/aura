@@ -11,6 +11,7 @@ members = [
     "crates/aura-baseview",
     "crates/aura-editor",
     "crates/aura-build",
+    "crates/aura-test",
     "tools/cargo-aura",
     "tools/aura-preview",
     "tools/aura-gui",
@@ -42,6 +43,7 @@ aura-lv2 = { path = "crates/aura-lv2" }
 aura-baseview = { path = "crates/aura-baseview", default-features = false }
 aura-editor = { path = "crates/aura-editor", default-features = false }
 aura-build = { path = "crates/aura-build" }
+aura-test = { path = "crates/aura-test" }
 
 # --- Slint + windowing (pinned with aura-baseview) ---
 baseview = "0.3"

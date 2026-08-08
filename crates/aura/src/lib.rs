@@ -24,6 +24,9 @@
 pub use aura_core as core;
 pub use aura_params as params;
 
+// Test helpers are a separate crate (`aura-test`) so release plugins
+// don't pull them; product crates depend on `aura-test` as a dev-dep.
+
 #[cfg(feature = "clap")]
 pub use aura_clap as clap;
 

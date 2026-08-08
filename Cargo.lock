@@ -584,6 +584,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "aura-test"
+version = "0.1.0"
+dependencies = [
+ "aura-core",
+ "aura-params",
+]
+
+[[package]]
 name = "aura-vst3"
 version = "0.1.0"
 dependencies = [
