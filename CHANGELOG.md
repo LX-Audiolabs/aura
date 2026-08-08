@@ -12,9 +12,12 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 - `cargo aura new <name> --vst3 --lv2`: scaffold emits format feature lines + `export_vst3!` / `export_lv2!` (CLAP stays default)
 - VST3 Bitwig host smoke green (smoke-gain) — recorded in roadmap status
 - LV2 host smoke green (smoke-gain, 2026-08-08) — no LV2 UI by design; roadmap P1 closed
+- `cargo aura init [path]`: scaffold into an existing empty directory (name from dir, refuses overwrite) — shares the new scaffold engine (`tools/cargo-aura/src/scaffold.rs`, pure `files()` + unit tests) with `new`
+- `new`/`init` accept `--kind <effect>` (template surface for future kinds)
 
 ### Changed
 
+- `cargo aura doctor`: probes for `agal` on PATH (info only — builds never gate on orientation tooling)
 ### Fixed
 
 - `aura-clap`: `state.load` now requests `clap_host_params.rescan(CLAP_PARAM_RESCAN_VALUES)` after a successful restore — clap-validator's state-reproducibility tests failed without it ("parameter values changed without a rescan request")

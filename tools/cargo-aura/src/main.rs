@@ -11,10 +11,13 @@
 //!   cargo aura doctor
 
 use std::env;
-use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
+
+mod scaffold;
+
+use scaffold::{Kind, ScaffoldSpec};
 
 fn main() -> ExitCode {
     // Cargo invokes us as `cargo-aura aura <args…>` or `cargo-aura <args…>`.
@@ -26,6 +29,7 @@ fn main() -> ExitCode {
     let cmd = args.first().map_or("help", String::as_str);
     match cmd {
         "new" => cmd_new(&args[1..]),
+        "init" => cmd_init(&args[1..]),
         "build" => cmd_build(&args[1..]),
         "install" => cmd_install(&args[1..]),
         "preview" => cmd_preview(&args[1..]),
@@ -51,9 +55,13 @@ Usage:
   cargo aura <command> [options]
 
 Commands:
-  new <name> [--vst3] [--lv2]
-                          Scaffold a plugin project (Slint + derive + aura.toml + agal)
+  new <name> [--vst3] [--lv2] [--kind effect]
+                          Scaffold a plugin project in ./<name>
+                          (Slint + derive + aura.toml + agal)
                           CLAP is always on; flags add VST3 / LV2 feature + export
+  init [path] [--vst3] [--lv2] [--kind effect]
+                          Same scaffold, into an existing empty directory
+                          (default: current dir; name comes from the dir name)
   build [--clap|--vst3|--lv2] [--release]
                           cargo build with format feature(s)
   install [--clap|--vst3|--lv2] [--release]
@@ -125,6 +133,14 @@ fn cmd_doctor() -> ExitCode {
         println!("  --  clap-validator not on PATH (optional, recommended)");
     }
 
+    // agal is orientation only (agal_optional rule) — probe for info, never
+    // a gate: builds/installs must work without it.
+    if which("agal").is_some() {
+        println!("  ok  agal on PATH (orientation mesh available)");
+    } else {
+        println!("  --  agal not on PATH (optional; orientation only, builds don't need it)");
+    }
+
     if ok {
         println!("\ndoctor: lookin' good.");
         ExitCode::SUCCESS
@@ -150,34 +166,100 @@ fn check_cmd(bin: &str, args: &[&str]) -> bool {
 }
 
 // ---------------------------------------------------------------------------
-// new
+// new / init (shared engine: scaffold.rs)
 // ---------------------------------------------------------------------------
 
+/// Parse `--vst3` / `--lv2` / `--clap` / `--kind <k>` (or `--kind=<k>`).
+/// Returns extra formats (beyond the always-on CLAP), the kind, and the
+/// positional args.
+fn parse_scaffold_args(args: &[String]) -> Result<(Vec<String>, Kind, Vec<String>), String> {
+    let mut formats: Vec<String> = Vec::new();
+    let mut kind = Kind::Effect;
+    let mut positional: Vec<String> = Vec::new();
+    let mut i = 0;
+    while i < args.len() {
+        let a = &args[i];
+        match a.as_str() {
+            "--vst3" | "--lv2" => {
+                let f = &a[2..];
+                if !formats.iter().any(|x| x == f) {
+                    formats.push(f.to_string());
+                }
+            }
+            "--clap" => {} // default anyway
+            "--kind" => {
+                i += 1;
+                let Some(v) = args.get(i) else {
+                    return Err("--kind needs a value (supported: effect)".into());
+                };
+                kind = Kind::parse(v)?;
+            }
+            _ if a.starts_with("--kind=") => kind = Kind::parse(&a["--kind=".len()..])?,
+            _ if a.starts_with('-') => {
+                return Err(format!("unknown flag '{a}' (want --vst3 / --lv2 / --kind)"));
+            }
+            _ => positional.push(a.clone()),
+        }
+        i += 1;
+    }
+    Ok((formats, kind, positional))
+}
+
+fn make_spec(name: &str, formats: Vec<String>, kind: Kind) -> Result<ScaffoldSpec, String> {
+    if !scaffold::is_valid_crate_name(name) {
+        return Err(format!(
+            "'{name}' is not a valid Cargo package name (use snake_case / kebab-case letters)"
+        ));
+    }
+    // Prefer path deps with forward slashes for Cargo.toml portability.
+    // Windows canonicalize() may yield `\\?\C:\...` — Cargo path deps reject that.
+    let aura_root = strip_verbatim_prefix(&aura_root()?)
+        .to_string_lossy()
+        .replace('\\', "/");
+    Ok(ScaffoldSpec {
+        name: name.to_string(),
+        formats,
+        aura_root,
+        kind,
+    })
+}
+
+fn print_scaffold_success(verb: &str, dest: &Path, cd: Option<&str>, formats: &[String]) {
+    let mut all: Vec<&str> = vec!["clap"];
+    all.extend(formats.iter().map(String::as_str));
+    let flags = all
+        .iter()
+        .map(|f| format!("--{f}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    println!("{verb} {}", dest.display());
+    println!("  aura.toml  agal.toml  ui/main.slint  src/lib.rs");
+    println!();
+    println!("next:");
+    if let Some(dir) = cd {
+        println!("  cd {dir}");
+    }
+    println!("  cargo aura build {flags}");
+    println!("  cargo aura install {flags} --release   # into host plugin paths");
+}
+
 fn cmd_new(args: &[String]) -> ExitCode {
-    let Some(name) = args.iter().find(|a| !a.starts_with('-')) else {
-        eprintln!("usage: cargo aura new <name> [--vst3] [--lv2]");
+    let (formats, kind, positional) = match parse_scaffold_args(args) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    if positional.len() > 1 {
+        eprintln!("usage: cargo aura new <name> [--vst3] [--lv2] [--kind effect]");
+        return ExitCode::FAILURE;
+    }
+    let Some(name) = positional.first() else {
+        eprintln!("usage: cargo aura new <name> [--vst3] [--lv2] [--kind effect]");
         return ExitCode::FAILURE;
     };
-    let name = name.as_str();
-
-    // Extra formats beyond the always-on CLAP default.
-    let mut formats: Vec<&str> = Vec::new();
-    for a in args.iter().filter(|a| a.starts_with('-')) {
-        match a.as_str() {
-            "--vst3" => formats.push("vst3"),
-            "--lv2" => formats.push("lv2"),
-            "--clap" => {} // default anyway
-            other => {
-                eprintln!("error: unknown flag '{other}' (want --vst3 / --lv2)");
-                return ExitCode::FAILURE;
-            }
-        }
-    }
-
-    if !is_valid_crate_name(name) {
-        eprintln!("error: '{name}' is not a valid Cargo package name (use snake_case / kebab-case letters)");
-        return ExitCode::FAILURE;
-    }
 
     let dest = PathBuf::from(name);
     if dest.exists() {
@@ -185,347 +267,89 @@ fn cmd_new(args: &[String]) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    let root = match aura_root() {
-        Ok(r) => r,
+    let spec = match make_spec(name, formats, kind) {
+        Ok(s) => s,
         Err(e) => {
             eprintln!("error: {e}");
             return ExitCode::FAILURE;
         }
     };
 
-    // Prefer path deps with forward slashes for Cargo.toml portability.
-    // Windows canonicalize() may yield `\\?\C:\...` — Cargo path deps reject that.
-    let root_s = strip_verbatim_prefix(&root)
-        .to_string_lossy()
-        .replace('\\', "/");
-    let crate_name = name.replace('-', "_");
-    let display = title_case(name);
-
-    if let Err(e) = write_scaffold(&dest, name, &crate_name, &display, &root_s, &formats) {
+    if let Err(e) = scaffold::write_files(&dest, &scaffold::files(&spec)) {
         eprintln!("error: scaffold failed: {e}");
         let _ = fs::remove_dir_all(&dest);
         return ExitCode::FAILURE;
     }
 
-    let mut all: Vec<&str> = vec!["clap"];
-    all.extend_from_slice(&formats);
-    let flags = all
-        .iter()
-        .map(|f| format!("--{f}"))
-        .collect::<Vec<_>>()
-        .join(" ");
-
-    println!("created {}", dest.display());
-    println!("  aura.toml  agal.toml  ui/main.slint  src/lib.rs");
-    println!();
-    println!("next:");
-    println!("  cd {name}");
-    println!("  cargo aura build {flags}");
-    println!("  cargo aura install {flags} --release   # into host plugin paths");
+    print_scaffold_success("created", &dest, Some(name), &spec.formats);
     ExitCode::SUCCESS
 }
 
-// Template emission is long but linear — splitting it would only obscure it.
-#[allow(clippy::too_many_lines)]
-fn write_scaffold(
-    dest: &Path,
-    name: &str,
-    crate_name: &str,
-    display: &str,
-    aura_root: &str,
-    extra_formats: &[&str],
-) -> std::io::Result<()> {
-    fs::create_dir_all(dest.join("src"))?;
-    fs::create_dir_all(dest.join("ui"))?;
-
-    // Format features beyond the always-on CLAP.
-    let mut feature_lines = String::from("default = [\"clap\"]\nclap = [\"aura/clap\"]\n");
-    let mut human: Vec<&str> = vec!["CLAP"];
-    let mut flags = String::from("--clap");
-    for f in extra_formats {
-        let _ = writeln!(feature_lines, "{f} = [\"aura/{f}\"]");
-        human.push(match *f {
-            "vst3" => "VST3",
-            "lv2" => "LV2",
-            other => other,
-        });
-        let _ = write!(flags, " --{f}");
-    }
-    let formats_doc = human.join(" + ");
-
-    fs::write(
-        dest.join("Cargo.toml"),
-        format!(
-            r#"[package]
-name = "{name}"
-version = "0.1.0"
-edition = "2024"
-license = "GPL-3.0-or-later"
-description = "{display} — AURA plugin"
-publish = false
-
-# Standalone package (not a member of the AURA framework workspace).
-[workspace]
-
-[lib]
-crate-type = ["cdylib", "lib"]
-
-[features]
-{feature_lines}
-[dependencies]
-aura = {{ path = "{aura_root}/crates/aura" }}
-aura-editor = {{ path = "{aura_root}/crates/aura-editor", features = ["backend-femtovg"] }}
-slint = {{ version = "=1.17.1", default-features = false, features = ["std", "compat-1-2"] }}
-# Workaround: zune-core 0.5.2 ships empty log macros that break zune-jpeg 0.5.15
-# (pulled via slint-build). Pin until fixed upstream, then delete this line.
-zune-core = "=0.5.1"
-
-[build-dependencies]
-aura-build = {{ path = "{aura_root}/crates/aura-build" }}
-"#
-        ),
-    )?;
-
-    fs::write(
-        dest.join("build.rs"),
-        r#"fn main() {
-    aura_build::compile("ui/main.slint").expect("slint compile");
-}
-"#,
-    )?;
-
-    fs::write(
-        dest.join("aura.toml"),
-        format!(
-            r#"[vendor]
-name = "LX Audiolabs"
-id = "lx"
-url = "https://lx-audiolabs.com"
-
-[[plugin]]
-name = "{display}"
-bundle_id = "{name}"
-crate = "{name}"
-category = "effect"
-
-# Where `cargo aura install --clap|--vst3|--lv2` copies artifacts.
-# `dir` is the base; format subdirs CLAP / VST3 / LV2 are appended.
-# Env vars expand: %LOCALAPPDATA%, %COMMONPROGRAMFILES%, $HOME, …
-# Per-format full path: clap = "C:\\Program Files\\Common Files\\CLAP"
-# Env CLAPINS / VST3INS still override when set.
-[install]
-dir = "%LOCALAPPDATA%\\Programs\\Common"
-"#
-        ),
-    )?;
-
-    fs::write(
-        dest.join("agal.toml"),
-        format!(
-            r#"# agal orientation for this plugin workspace
-# https://github.com/LX-Audiolabs/agal
-
-[project]
-name = "{name}"
-"#
-        ),
-    )?;
-
-    fs::write(
-        dest.join(".gitignore"),
-        "/target\n*.clap\n*.vst3\n*.lv2\n.DS_Store\n",
-    )?;
-
-    fs::write(
-        dest.join("ui/main.slint"),
-        format!(
-            r#"// {display} — AURA + Slint (Material 3–aligned @aura tokens)
-import {{ Knob, AuraTheme }} from "@aura";
-
-// AURA standard fonts (bundled via aura-build): import registers them
-// compile-time, default-font-family makes text identical across OSes.
-import "NotoSans-Regular.ttf";
-import "NotoSans-Bold.ttf";
-
-export component AppWindow inherits Window {{
-    preferred-width: 320px;
-    preferred-height: 220px;
-    background: AuraTheme.surface;
-    default-font-family: "Noto Sans";
-
-    in-out property <float> gain: 0.0;
-    callback gain-changed(float);
-
-    VerticalLayout {{
-        padding: 16px;
-        spacing: 12px;
-
-        Rectangle {{
-            background: AuraTheme.surface-container;
-            border-radius: AuraTheme.radius-md;
-            border-width: 1px;
-            border-color: AuraTheme.outline-variant;
-            vertical-stretch: 1;
-
-            VerticalLayout {{
-                padding: 16px;
-                spacing: 12px;
-                alignment: center;
-
-                Text {{
-                    text: "{display}";
-                    color: AuraTheme.on-surface;
-                    font-size: AuraTheme.font-title;
-                    font-weight: 600;
-                    horizontal-alignment: center;
-                }}
-
-                HorizontalLayout {{
-                    alignment: center;
-                    Knob {{
-                        label: "Gain";
-                        minimum: -24.0;
-                        maximum: 24.0;
-                        value <=> root.gain;
-                        value-text: round(root.gain * 10) / 10 + " dB";
-                        changed(v) => {{ root.gain-changed(v); }}
-                    }}
-                }}
-            }}
-        }}
-    }}
-}}
-"#
-        ),
-    )?;
-
-    let struct_name = to_struct_name(crate_name);
-    let mut exports = format!("#[cfg(feature = \"clap\")]\naura::export!({struct_name});");
-    for f in extra_formats {
-        let _ = write!(
-            exports,
-            "\n\n#[cfg(feature = \"{f}\")]\naura::export_{f}!({struct_name});"
-        );
+/// `cargo aura init [path]` — same scaffold as `new`, but into an existing
+/// empty directory (default: cwd). Package name comes from the dir name.
+fn cmd_init(args: &[String]) -> ExitCode {
+    let (formats, kind, positional) = match parse_scaffold_args(args) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    if positional.len() > 1 {
+        eprintln!("usage: cargo aura init [path] [--vst3] [--lv2] [--kind effect]");
+        return ExitCode::FAILURE;
     }
 
-    fs::write(
-        dest.join("src/lib.rs"),
-        format!(
-            r#"//! {display} — AURA plugin ({formats_doc} via `aura-*` wrappers).
-//!
-//! ```bash
-//! cargo aura build {flags} --release
-//! cargo aura install {flags} --release
-//! ```
+    let (dest, cd): (PathBuf, Option<String>) = match positional.first() {
+        Some(p) => (PathBuf::from(p), Some(p.clone())),
+        None => (PathBuf::from("."), None),
+    };
 
-use std::sync::Arc;
+    // Package name from the target dir (canonicalize resolves "." → dir name).
+    let name_dir = if dest.exists() {
+        match dest.canonicalize() {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("error: cannot canonicalize {}: {e}", dest.display());
+                return ExitCode::FAILURE;
+            }
+        }
+    } else {
+        dest.clone()
+    };
+    let Some(name) = name_dir.file_name().map(|s| s.to_string_lossy().into_owned()) else {
+        eprintln!("error: cannot derive a package name from {}", dest.display());
+        return ExitCode::FAILURE;
+    };
 
-use aura::prelude::*;
+    let spec = match make_spec(&name, formats, kind) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
 
-slint::include_modules!();
+    // init never overwrites: every target path must be absent.
+    let files = scaffold::files(&spec);
+    for (rel, _) in &files {
+        let p = dest.join(rel);
+        if p.exists() {
+            eprintln!(
+                "error: {} already exists — init needs a directory without scaffold files",
+                p.display()
+            );
+            return ExitCode::FAILURE;
+        }
+    }
 
-// Generated by #[derive(Params)] — editor code never hardcodes raw IDs.
-use {params_name}ParamId as P;
+    if let Err(e) = scaffold::write_files(&dest, &files) {
+        eprintln!("error: scaffold failed: {e}");
+        return ExitCode::FAILURE;
+    }
 
-// ---------------------------------------------------------------------------
-// Params
-// ---------------------------------------------------------------------------
-
-#[derive(Params)]
-pub struct {params_name} {{
-    // Every param pins an explicit `id = N` (wire-stable; never renumber).
-    #[param(id = 1, name = "Gain", range = "linear(-24, 24)", default = 0.0, unit = "db")]
-    pub gain: FloatParam,
-}}
-
-// ---------------------------------------------------------------------------
-// Plugin
-// ---------------------------------------------------------------------------
-
-pub struct {struct_name};
-
-pub struct DspState;
-
-impl PluginLogic for {struct_name} {{
-    type Params = {params_name};
-    type DspState = DspState;
-
-    fn info() -> PluginInfo {{
-        let mut info = PluginInfo::new(
-            "{display}",
-            "LX Audiolabs",
-            env!("CARGO_PKG_VERSION"),
-            "{name}",
-        );
-        info.clap_id = "com.lx-audiolabs.{name}";
-        info.category = PluginCategory::Effect;
-        info
-    }}
-
-    fn init(_params: &Self::Params, _sample_rate: f64) -> Self::DspState {{
-        DspState
-    }}
-
-    fn reset(_state: &mut Self::DspState, _params: &Self::Params, _config: &AudioConfig) {{}}
-
-    fn process(
-        _state: &mut Self::DspState,
-        params: &Self::Params,
-        buffer: &mut AudioBuffer<'_, f32>,
-        _context: &mut ProcessContext,
-    ) -> ProcessStatus {{
-        let n = buffer.num_samples();
-        #[allow(clippy::cast_possible_truncation)]
-        let gain_db = params.gain.raw_target() as f32;
-        let lin = 10.0f32.powf(gain_db / 20.0);
-
-        let ch = buffer.num_outputs().min(buffer.num_inputs());
-        for c in 0..ch {{
-            // Copy input → output with gain (read first: in/out may alias).
-            let input: Vec<f32> = buffer.input(c).to_vec();
-            let out = buffer.output(c);
-            for i in 0..n {{
-                out[i] = input[i] * lin;
-            }}
-        }}
-        // Extra outs: silence
-        for c in ch..buffer.num_outputs() {{
-            buffer.output(c).fill(0.0);
-        }}
-        ProcessStatus::Continue
-    }}
-
-    fn editor(_params: Arc<Self::Params>) -> Option<Box<dyn Editor>> {{
-        Some(
-            aura_editor::AuraSlintEditor::new(
-                (320, 200),
-                |ctx| {{
-                    let ui = AppWindow::new().expect("slint component");
-                    let params = ctx.params.clone();
-                    ui.on_gain_changed(move |v| params.set_plain(P::Gain.id(), f64::from(v)));
-                    ui
-                }},
-                |ui, ctx| {{
-                    #[allow(clippy::cast_possible_truncation)]
-                    let v = ctx.params.get_plain(P::Gain.id()).unwrap_or(0.0) as f32;
-                    // Guard: don't fight an active drag with per-frame sync.
-                    if (v - ui.get_gain()).abs() > 1.0e-4 {{
-                        ui.set_gain(v);
-                    }}
-                }},
-            )
-            .into_editor(),
-        )
-    }}
-}}
-
-{exports}
-"#,
-            params_name = format!("{struct_name}Params"),
-        ),
-    )?;
-
-    Ok(())
+    print_scaffold_success("initialized", &dest, cd.as_deref(), &spec.formats);
+    ExitCode::SUCCESS
 }
 
 // ---------------------------------------------------------------------------
@@ -1346,43 +1170,6 @@ fn which(bin: &str) -> Option<PathBuf> {
         }
     }
     None
-}
-
-fn is_valid_crate_name(name: &str) -> bool {
-    let mut chars = name.chars();
-    match chars.next() {
-        Some(c) if c.is_ascii_alphabetic() => {}
-        _ => return false,
-    }
-    chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
-}
-
-fn title_case(name: &str) -> String {
-    name.split(['-', '_'])
-        .filter(|s| !s.is_empty())
-        .map(|s| {
-            let mut c = s.chars();
-            match c.next() {
-                None => String::new(),
-                Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-fn to_struct_name(crate_name: &str) -> String {
-    crate_name
-        .split('_')
-        .filter(|s| !s.is_empty())
-        .map(|s| {
-            let mut c = s.chars();
-            match c.next() {
-                None => String::new(),
-                Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
-            }
-        })
-        .collect()
 }
 
 /// Drop Windows extended-length prefix (`\\?\`) so path deps work in Cargo.toml.
