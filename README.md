@@ -4,6 +4,7 @@
 [![Rust](https://img.shields.io/badge/rust-1.96+-orange.svg)](rust-toolchain.toml)
 [![Slint](https://img.shields.io/badge/UI-Slint-2379F4.svg)](https://slint.dev)
 [![agal](https://img.shields.io/badge/powered%20by-agal-00ADD8.svg)](https://github.com/LX-Audiolabs/agal)
+[![AI](https://img.shields.io/badge/dev-AI--assisted-6E40C9.svg)](https://github.com/LX-Audiolabs/agal)
 
 **Audio Unified Rust Architecture**  
 *(DE-Gag: **AU**dio **RA**hmenwerk)*
