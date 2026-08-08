@@ -9,25 +9,65 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
-/// Plugin kind template. Only `effect` ships today; the flag surface exists
-/// so `new`/`init` stay stable when analyzer/instrument templates land.
+/// Plugin kind template (`--kind`).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Kind {
+    /// Stereo main I/O gain FX (default).
     Effect,
+    /// Mono main I/O gain FX (`BusLayout::mono`).
+    EffectMono,
+    /// Stereo pass-through with level meters (no FFT — product keeps analysis DSP).
+    Analyzer,
 }
 
 impl Kind {
+    pub const SUPPORTED: &'static str = "effect, effect-mono, analyzer";
+
     pub fn parse(s: &str) -> Result<Self, String> {
         match s {
             "effect" => Ok(Self::Effect),
-            other => Err(format!("unknown kind '{other}' (supported: effect)")),
+            "effect-mono" => Ok(Self::EffectMono),
+            "analyzer" => Ok(Self::Analyzer),
+            other => Err(format!(
+                "unknown kind '{other}' (supported: {})",
+                Self::SUPPORTED
+            )),
         }
     }
 
     /// `aura.toml` category string for the scaffolded plugin.
     pub fn category(self) -> &'static str {
         match self {
-            Self::Effect => "effect",
+            Self::Effect | Self::EffectMono => "effect",
+            Self::Analyzer => "analyzer",
+        }
+    }
+
+    /// Rust `PluginCategory::…` token for `PluginLogic::info`.
+    fn plugin_category_rs(self) -> &'static str {
+        match self {
+            Self::Effect | Self::EffectMono => "PluginCategory::Effect",
+            Self::Analyzer => "PluginCategory::Analyzer",
+        }
+    }
+
+    /// Optional `bus_layouts()` body inserted into `PluginLogic`.
+    fn bus_layouts_fn(self) -> &'static str {
+        match self {
+            Self::EffectMono => r"
+    fn bus_layouts() -> Vec<BusLayout> {
+        vec![BusLayout::mono()]
+    }
+",
+            Self::Effect | Self::Analyzer => "",
+        }
+    }
+
+    fn kind_doc(self) -> &'static str {
+        match self {
+            Self::Effect => "stereo effect",
+            Self::EffectMono => "mono effect",
+            Self::Analyzer => "analyzer (meter stub)",
         }
     }
 }
@@ -154,7 +194,55 @@ name = "{name}"
 
     let gitignore = "/target\n*.clap\n*.vst3\n*.lv2\n.DS_Store\n".to_string();
 
-    let main_slint = format!(
+    let main_slint = match spec.kind {
+        Kind::Effect | Kind::EffectMono => effect_main_slint(&display),
+        Kind::Analyzer => analyzer_main_slint(&display),
+    };
+
+    let mut exports = format!("#[cfg(feature = \"clap\")]\naura::export!({struct_name});");
+    for f in &spec.formats {
+        let _ = write!(
+            exports,
+            "\n\n#[cfg(feature = \"{f}\")]\naura::export_{f}!({struct_name});"
+        );
+    }
+
+    let lib_rs = match spec.kind {
+        Kind::Effect | Kind::EffectMono => effect_lib_rs(
+            &display,
+            name,
+            &struct_name,
+            &params_name,
+            &formats_doc,
+            &flags,
+            &exports,
+            spec.kind,
+        ),
+        Kind::Analyzer => analyzer_lib_rs(
+            &display,
+            name,
+            &struct_name,
+            &params_name,
+            &formats_doc,
+            &flags,
+            &exports,
+            spec.kind,
+        ),
+    };
+
+    vec![
+        ("Cargo.toml".to_string(), cargo_toml),
+        ("build.rs".to_string(), build_rs),
+        ("aura.toml".to_string(), aura_toml),
+        ("agal.toml".to_string(), agal_toml),
+        (".gitignore".to_string(), gitignore),
+        ("ui/main.slint".to_string(), main_slint),
+        ("src/lib.rs".to_string(), lib_rs),
+    ]
+}
+
+fn effect_main_slint(display: &str) -> String {
+    format!(
         r#"// {display} — AURA + Slint (Material 3–aligned @aura tokens)
 import {{ Knob, AuraTheme }} from "@aura";
 
@@ -212,18 +300,95 @@ export component AppWindow inherits Window {{
     }}
 }}
 "#
-    );
+    )
+}
 
-    let mut exports = format!("#[cfg(feature = \"clap\")]\naura::export!({struct_name});");
-    for f in &spec.formats {
-        let _ = write!(
-            exports,
-            "\n\n#[cfg(feature = \"{f}\")]\naura::export_{f}!({struct_name});"
-        );
-    }
+fn analyzer_main_slint(display: &str) -> String {
+    format!(
+        r#"// {display} — AURA analyzer stub (meters only; FFT stays product-side)
+import {{ Knob, Meter, AuraTheme }} from "@aura";
 
-    let lib_rs = format!(
-        r#"//! {display} — AURA plugin ({formats_doc} via `aura-*` wrappers).
+import "NotoSans-Regular.ttf";
+import "NotoSans-Bold.ttf";
+
+export component AppWindow inherits Window {{
+    preferred-width: 360px;
+    preferred-height: 240px;
+    background: AuraTheme.surface;
+    default-font-family: "Noto Sans";
+
+    in-out property <float> trim: 0.0;
+    in-out property <float> level-left: 0.0;
+    in-out property <float> level-right: 0.0;
+    callback trim-changed(float);
+
+    VerticalLayout {{
+        padding: 16px;
+        spacing: 12px;
+
+        Rectangle {{
+            background: AuraTheme.surface-container;
+            border-radius: AuraTheme.radius-md;
+            border-width: 1px;
+            border-color: AuraTheme.outline-variant;
+            vertical-stretch: 1;
+
+            VerticalLayout {{
+                padding: 16px;
+                spacing: 12px;
+                alignment: center;
+
+                Text {{
+                    text: "{display}";
+                    color: AuraTheme.on-surface;
+                    font-size: AuraTheme.font-title;
+                    font-weight: 600;
+                    horizontal-alignment: center;
+                }}
+
+                HorizontalLayout {{
+                    spacing: 20px;
+                    alignment: center;
+
+                    Knob {{
+                        label: "Trim";
+                        minimum: -24.0;
+                        maximum: 24.0;
+                        value <=> root.trim;
+                        value-text: round(root.trim * 10) / 10 + " dB";
+                        changed(v) => {{ root.trim-changed(v); }}
+                    }}
+
+                    Meter {{
+                        level-left: root.level-left;
+                        level-right: root.level-right;
+                        preferred-height: 120px;
+                    }}
+                }}
+            }}
+        }}
+    }}
+}}
+"#
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn effect_lib_rs(
+    display: &str,
+    name: &str,
+    struct_name: &str,
+    params_name: &str,
+    formats_doc: &str,
+    flags: &str,
+    exports: &str,
+    kind: Kind,
+) -> String {
+    let category = kind.plugin_category_rs();
+    let bus = kind.bus_layouts_fn();
+    let kind_doc = kind.kind_doc();
+    format!(
+        r#"//! {display} — AURA {kind_doc} ({formats_doc} via `aura-*` wrappers).
 //!
 //! ```bash
 //! cargo aura build {flags} --release
@@ -270,10 +435,10 @@ impl PluginLogic for {struct_name} {{
             "{name}",
         );
         info.clap_id = "com.lx-audiolabs.{name}";
-        info.category = PluginCategory::Effect;
+        info.category = {category};
         info
     }}
-
+{bus}
     fn init(_params: &Self::Params, _sample_rate: f64) -> Self::DspState {{
         DspState
     }}
@@ -291,6 +456,7 @@ impl PluginLogic for {struct_name} {{
         let gain_db = params.gain.raw_target() as f32;
         let lin = 10.0f32.powf(gain_db / 20.0);
 
+        // Channel-agnostic: works for mono and stereo layouts.
         let ch = buffer.num_outputs().min(buffer.num_inputs());
         for c in 0..ch {{
             // Copy input → output with gain (read first: in/out may alias).
@@ -333,17 +499,155 @@ impl PluginLogic for {struct_name} {{
 
 {exports}
 "#
-    );
+    )
+}
 
-    vec![
-        ("Cargo.toml".to_string(), cargo_toml),
-        ("build.rs".to_string(), build_rs),
-        ("aura.toml".to_string(), aura_toml),
-        ("agal.toml".to_string(), agal_toml),
-        (".gitignore".to_string(), gitignore),
-        ("ui/main.slint".to_string(), main_slint),
-        ("src/lib.rs".to_string(), lib_rs),
-    ]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+fn analyzer_lib_rs(
+    display: &str,
+    name: &str,
+    struct_name: &str,
+    params_name: &str,
+    formats_doc: &str,
+    flags: &str,
+    exports: &str,
+    kind: Kind,
+) -> String {
+    let category = kind.plugin_category_rs();
+    let kind_doc = kind.kind_doc();
+    format!(
+        r#"//! {display} — AURA {kind_doc} ({formats_doc} via `aura-*` wrappers).
+//!
+//! Peak meters only. FFT / spectrum DSP stays in product crates (`lx-analysis`).
+//!
+//! ```bash
+//! cargo aura build {flags} --release
+//! cargo aura install {flags} --release
+//! ```
+
+use std::sync::Arc;
+
+use aura::prelude::*;
+
+slint::include_modules!();
+
+use {params_name}ParamId as P;
+
+// ---------------------------------------------------------------------------
+// Params
+// ---------------------------------------------------------------------------
+
+#[derive(Params)]
+pub struct {params_name} {{
+    #[param(id = 1, name = "Trim", range = "linear(-24, 24)", default = 0.0, unit = "db")]
+    pub trim: FloatParam,
+    // Peak levels written from process; host-readonly display params.
+    #[param(id = 2, name = "Peak L", range = "linear(0, 1)", default = 0.0, flags = "readonly")]
+    pub peak_l: FloatParam,
+    #[param(id = 3, name = "Peak R", range = "linear(0, 1)", default = 0.0, flags = "readonly")]
+    pub peak_r: FloatParam,
+}}
+
+// ---------------------------------------------------------------------------
+// Plugin
+// ---------------------------------------------------------------------------
+
+pub struct {struct_name};
+
+pub struct DspState;
+
+impl PluginLogic for {struct_name} {{
+    type Params = {params_name};
+    type DspState = DspState;
+
+    fn info() -> PluginInfo {{
+        let mut info = PluginInfo::new(
+            "{display}",
+            "LX Audiolabs",
+            env!("CARGO_PKG_VERSION"),
+            "{name}",
+        );
+        info.clap_id = "com.lx-audiolabs.{name}";
+        info.category = {category};
+        info
+    }}
+
+    fn init(_params: &Self::Params, _sample_rate: f64) -> Self::DspState {{
+        DspState
+    }}
+
+    fn reset(_state: &mut Self::DspState, _params: &Self::Params, _config: &AudioConfig) {{}}
+
+    fn process(
+        _state: &mut Self::DspState,
+        params: &Self::Params,
+        buffer: &mut AudioBuffer<'_, f32>,
+        _context: &mut ProcessContext,
+    ) -> ProcessStatus {{
+        let n = buffer.num_samples();
+        #[allow(clippy::cast_possible_truncation)]
+        let trim_db = params.trim.raw_target() as f32;
+        let lin = 10.0f32.powf(trim_db / 20.0);
+
+        let ch = buffer.num_outputs().min(buffer.num_inputs());
+        let mut peak = [0.0f32; 2];
+        for c in 0..ch {{
+            let input: Vec<f32> = buffer.input(c).to_vec();
+            let out = buffer.output(c);
+            let mut ch_peak = 0.0f32;
+            for i in 0..n {{
+                let s = input[i] * lin;
+                out[i] = s;
+                ch_peak = ch_peak.max(s.abs());
+            }}
+            if c < 2 {{
+                peak[c] = ch_peak;
+            }}
+        }}
+        for c in ch..buffer.num_outputs() {{
+            buffer.output(c).fill(0.0);
+        }}
+        // Mono: mirror peak to both meters.
+        if ch == 1 {{
+            peak[1] = peak[0];
+        }}
+        params.set_plain(P::PeakL.id(), f64::from(peak[0].clamp(0.0, 1.0)));
+        params.set_plain(P::PeakR.id(), f64::from(peak[1].clamp(0.0, 1.0)));
+        ProcessStatus::Continue
+    }}
+
+    fn editor(_params: Arc<Self::Params>) -> Option<Box<dyn Editor>> {{
+        Some(
+            aura_editor::AuraSlintEditor::new(
+                (360, 220),
+                |ctx| {{
+                    let ui = AppWindow::new().expect("slint component");
+                    let params = ctx.params.clone();
+                    ui.on_trim_changed(move |v| params.set_plain(P::Trim.id(), f64::from(v)));
+                    ui
+                }},
+                |ui, ctx| {{
+                    #[allow(clippy::cast_possible_truncation)]
+                    let trim = ctx.params.get_plain(P::Trim.id()).unwrap_or(0.0) as f32;
+                    if (trim - ui.get_trim()).abs() > 1.0e-4 {{
+                        ui.set_trim(trim);
+                    }}
+                    #[allow(clippy::cast_possible_truncation)]
+                    let pl = ctx.params.get_plain(P::PeakL.id()).unwrap_or(0.0) as f32;
+                    #[allow(clippy::cast_possible_truncation)]
+                    let pr = ctx.params.get_plain(P::PeakR.id()).unwrap_or(0.0) as f32;
+                    ui.set_level_left(pl);
+                    ui.set_level_right(pr);
+                }},
+            )
+            .into_editor(),
+        )
+    }}
+}}
+
+{exports}
+"#
+    )
 }
 
 /// Write `files` under `dest`, creating parent dirs as needed.
@@ -468,6 +772,37 @@ mod tests {
     #[test]
     fn kind_parse() {
         assert_eq!(Kind::parse("effect"), Ok(Kind::Effect));
+        assert_eq!(Kind::parse("effect-mono"), Ok(Kind::EffectMono));
+        assert_eq!(Kind::parse("analyzer"), Ok(Kind::Analyzer));
         assert!(Kind::parse("instrument").is_err());
+    }
+
+    #[test]
+    fn effect_mono_declares_mono_bus() {
+        let mut s = spec("mono-gain", &[]);
+        s.kind = Kind::EffectMono;
+        let out = files(&s);
+        let lib = file(&out, "src/lib.rs");
+        let aura = file(&out, "aura.toml");
+        assert!(lib.contains("BusLayout::mono()"), "{lib}");
+        assert!(aura.contains("category = \"effect\""), "{aura}");
+        // Process must not hardcode stereo.
+        assert!(lib.contains("num_outputs().min(buffer.num_inputs())"), "{lib}");
+    }
+
+    #[test]
+    fn analyzer_template_meters_and_category() {
+        let mut s = spec("peak-view", &[]);
+        s.kind = Kind::Analyzer;
+        let files = files(&s);
+        let lib = file(&files, "src/lib.rs");
+        let slint = file(&files, "ui/main.slint");
+        let aura = file(&files, "aura.toml");
+        assert!(lib.contains("PluginCategory::Analyzer"), "{lib}");
+        assert!(lib.contains("PeakL"), "{lib}");
+        assert!(lib.contains("set_level_left"), "{lib}");
+        assert!(slint.contains("Meter"), "{slint}");
+        assert!(aura.contains("category = \"analyzer\""), "{aura}");
+        assert!(!lib.contains("BusLayout::mono()"), "{lib}");
     }
 }

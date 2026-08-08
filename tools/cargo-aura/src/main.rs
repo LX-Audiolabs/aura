@@ -55,11 +55,12 @@ Usage:
   cargo aura <command> [options]
 
 Commands:
-  new <name> [--vst3] [--lv2] [--kind effect]
+  new <name> [--vst3] [--lv2] [--kind <k>]
                           Scaffold a plugin project in ./<name>
                           (Slint + derive + aura.toml + agal)
                           CLAP is always on; flags add VST3 / LV2 feature + export
-  init [path] [--vst3] [--lv2] [--kind effect]
+                          kinds: effect (default) | effect-mono | analyzer
+  init [path] [--vst3] [--lv2] [--kind <k>]
                           Same scaffold, into an existing empty directory
                           (default: current dir; name comes from the dir name)
   build [--clap|--vst3|--lv2] [--release]
@@ -190,7 +191,10 @@ fn parse_scaffold_args(args: &[String]) -> Result<(Vec<String>, Kind, Vec<String
             "--kind" => {
                 i += 1;
                 let Some(v) = args.get(i) else {
-                    return Err("--kind needs a value (supported: effect)".into());
+                    return Err(format!(
+                        "--kind needs a value (supported: {})",
+                        Kind::SUPPORTED
+                    ));
                 };
                 kind = Kind::parse(v)?;
             }
