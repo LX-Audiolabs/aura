@@ -35,6 +35,7 @@ fn main() -> ExitCode {
         "build" => cmd_build(&args[1..]),
         "install" => cmd_install(&args[1..]),
         "preview" => cmd_preview(&args[1..]),
+        "gui" => cmd_gui(),
         "doctor" => cmd_doctor(),
         "help" | "--help" | "-h" => {
             print_help();
@@ -74,6 +75,7 @@ Commands:
                           build + copy artifact into host search path
   preview [path] [--component N] [--no-watch]
                           hot-reload the plugin .slint UI (default ui/main.slint)
+  gui                     Open the visual project console (aura-gui)
   doctor                  Check toolchain / AURA path / clap-validator
   help                    This message
 
@@ -458,6 +460,31 @@ fn cmd_add(args: &[String]) -> ExitCode {
 // ---------------------------------------------------------------------------
 // preview
 // ---------------------------------------------------------------------------
+
+/// `cargo aura gui` — launch the Slint project console (`aura-gui`).
+fn cmd_gui() -> ExitCode {
+    let root = match aura_root() {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let mut cmd = Command::new("cargo");
+    cmd.arg("run")
+        .arg("-p")
+        .arg("aura-gui")
+        .arg("--manifest-path")
+        .arg(root.join("Cargo.toml"));
+    match cmd.status() {
+        Ok(s) if s.success() => ExitCode::SUCCESS,
+        Ok(s) => ExitCode::from(u8::try_from(s.code().unwrap_or(1)).unwrap_or(1)),
+        Err(e) => {
+            eprintln!("failed to run cargo: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
 
 /// `cargo aura preview [path] [--component N] [--no-watch]` — hot-reload the
 /// plugin's `.slint` UI without compiling the plugin. Delegates to the

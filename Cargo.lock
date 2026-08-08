@@ -549,6 +549,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "aura-gui"
+version = "0.1.0"
+dependencies = [
+ "slint",
+ "slint-build",
+ "zune-core",
+]
+
+[[package]]
 name = "aura-lv2"
 version = "0.1.0"
 dependencies = [

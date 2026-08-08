@@ -13,6 +13,7 @@ members = [
     "crates/aura-build",
     "tools/cargo-aura",
     "tools/aura-preview",
+    "tools/aura-gui",
     "examples/smoke-gain",
     # Window-stack demos (aura-baseview)
     "crates/aura-baseview/examples/render_femtovg",
