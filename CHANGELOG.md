@@ -5,30 +5,65 @@ All notable changes to **AURA** (framework workspace) are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/versioning.md).
 
-## [Unreleased]
+## [0.5.0] - 2026-08-09
 
 ### Added
 
 - `cargo aura add-ui <name>`: scaffold a shared Slint UI crate under `crates/<name>/` — minimal theme + barrel, ready for custom components (like `lx-ui-slint`)
-- `cargo aura new <name> --vst3 --lv2`: scaffold emits format feature lines + `export_vst3!` / `export_lv2!` (CLAP stays default)
+- `cargo aura build|install -plug <crate> [<crate>...]`: multi-plugin selector — builds/installs each named workspace member in turn
+- `cargo aura install`: artifact now named after the plugin display name (from `aura.toml [[plugin]].name`) instead of the crate name
+
+## [0.4.0] - 2026-08-08
+
+### Added
+
+- `aura-shm`: shared-memory ring-buffer crate for IPC between audio and UI processes
+- `aura-editor`: typed `AuraSlintEditor` layer — plugins construct editors through a high-level builder instead of raw `aura-baseview`
+- `aura-dsp` expanded: delay, dynamics, envelope, oscillator (core/sub/sync/unison), reverb, smoothing, wavetable, synth modules (additive, drum, FM, formant, granular, physical, subtractive, vocoder), acoustics, analysis, modulation, noise, tuning
+- `aura-midi`: MIDI input routing to `ProcessContext` (CLAP, VST3, LV2)
+- `smoke-synth`: example polyphonic synthesizer plugin demonstrating `aura-midi` + `aura-dsp`
 - VST3 Bitwig host smoke green (smoke-gain) — recorded in roadmap status
 - LV2 host smoke green (smoke-gain, 2026-08-08) — no LV2 UI by design; roadmap P1 closed
-- `cargo aura init [path]`: scaffold into an existing empty directory (name from dir, refuses overwrite) — shares the new scaffold engine (`tools/cargo-aura/src/scaffold.rs`, pure `files()` + unit tests) with `new`
-- `new`/`init` accept `--kind <effect>` (template surface for future kinds)
 
-### Changed
+## [0.3.0] - 2026-08-08
 
-- `cargo aura doctor`: probes for `agal` on PATH (info only — builds never gate on orientation tooling)
+### Added
+
+- `aura-dsp`: new crate — oscillator, filter, EQ, dynamics, and effects primitives
+- `aura-midi`: new crate — MIDI event types and `ProcessContext.midi` channel
+- `aura-test`: new crate — state round-trip and process smoke-test helpers
+- `aura-gui`: Slint project console (`cargo aura gui` → `tools/aura-gui`)
+- `#[skip]` fields in `#[derive(Params)]` for product shared state (e.g. `Arc<SharedMeters>`)
+- Host-boundary panic fence across CLAP, VST3, and LV2 wrappers
+
 ### Fixed
 
-- `aura-clap`: `state.load` now requests `clap_host_params.rescan(CLAP_PARAM_RESCAN_VALUES)` after a successful restore — clap-validator's state-reproducibility tests failed without it ("parameter values changed without a rescan request")
-- `smoke-gain`: `lv2_uri` aligned with `cargo aura install`'s fallback TTL (`https://lx-audiolabs.com/lv2/smoke-gain`) — mismatched URI breaks LV2 host scanning until the build-time TTL sidecar exists
-- `cargo aura install`: resolve target dir via `cargo metadata` — workspace-member plugins (e.g. `examples/smoke-gain`) previously failed with "no build dir target\debug"
+- `aura-params`: parse kHz/ms/pan text for CLAP `text_to_value`
+
+## [0.2.0] - 2026-08-07
+
+### Added
+
+- `cargo aura new <name> --vst3 --lv2`: scaffold emits format feature lines + `export_vst3!` / `export_lv2!` (CLAP stays default)
+- `cargo aura init [path]`: scaffold into an existing empty directory (name from dir, refuses overwrite)
+- `cargo aura add <name>`: add a second plugin under `plugins/<name>/` and append `[[plugin]]` to `aura.toml`
+- `cargo aura doctor`: probes toolchain, AURA path, clap-validator, and `agal` (info only)
+- `new`/`init` accept `--kind <effect|effect-mono|analyzer>` — template surface for future kinds
+- Shared scaffold engine (`tools/cargo-aura/src/scaffold.rs`, pure `files()` + unit tests) shared by `new`, `init`, and `add`
+- `clap.remote-controls` populated from `ParamInfo.group`
+- Mono/stereo bus layouts across CLAP, VST3, and LV2 (`bus_layouts()`)
+- Plugin latency reporting for CLAP and VST3 PDC
+
+### Fixed
+
+- `aura-clap`: `state.load` now requests `clap_host_params.rescan(CLAP_PARAM_RESCAN_VALUES)` after a successful restore — clap-validator's state-reproducibility tests failed without it
+- `smoke-gain`: `lv2_uri` aligned with `cargo aura install`'s fallback TTL
+- `cargo aura install`: resolve target dir via `cargo metadata` — workspace-member plugins previously failed with "no build dir target\debug"
 - Scaffold builds broke on fresh lockfiles: zune-core 0.5.2 ships empty log macros incompatible with zune-jpeg 0.5.15 (via slint-build) — scaffold now pins `zune-core = "=0.5.1"` until fixed upstream
 
 ### Docs
 
-- `licensing-compliance.md` §3.3: VST3 checklist resolved — SDK is MIT since VST 3.8.0 (2025-10); path via `vst3-rs` (MIT/Apache); only Steinberg trademark rules remain
+- `licensing-compliance.md` §3.3: VST3 checklist resolved — SDK is MIT since VST 3.8.0 (2025-10)
 
 ## [0.1.0] - 2026-08-07
 
