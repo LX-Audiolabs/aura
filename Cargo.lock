@@ -476,7 +476,7 @@ dependencies = [
 
 [[package]]
 name = "aura"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "aura-clap",
  "aura-core",
@@ -490,7 +490,7 @@ dependencies = [
 
 [[package]]
 name = "aura-baseview"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "baseview",
  "copypasta",
@@ -504,7 +504,7 @@ dependencies = [
 
 [[package]]
 name = "aura-build"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "slint-build",
  "slint-interpreter",
@@ -513,7 +513,7 @@ dependencies = [
 
 [[package]]
 name = "aura-clap"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "aura-core",
  "aura-params",
@@ -522,7 +522,7 @@ dependencies = [
 
 [[package]]
 name = "aura-core"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "aura-midi",
  "aura-params",
@@ -530,7 +530,7 @@ dependencies = [
 
 [[package]]
 name = "aura-derive"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "aura-params",
  "proc-macro2",
@@ -540,7 +540,7 @@ dependencies = [
 
 [[package]]
 name = "aura-dsp"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "atomic_float",
  "criterion",
@@ -558,7 +558,7 @@ dependencies = [
 
 [[package]]
 name = "aura-editor"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "aura-baseview",
  "aura-core",
@@ -594,7 +594,7 @@ dependencies = [
 
 [[package]]
 name = "aura-gui"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "slint",
  "slint-build",
@@ -603,7 +603,7 @@ dependencies = [
 
 [[package]]
 name = "aura-lv2"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "aura-core",
  "aura-params",
@@ -612,18 +612,18 @@ dependencies = [
 
 [[package]]
 name = "aura-midi"
-version = "0.1.0"
+version = "0.5.0"
 
 [[package]]
 name = "aura-params"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "bitflags 2.13.1",
 ]
 
 [[package]]
 name = "aura-preview"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "aura-build",
  "notify",
@@ -633,14 +633,14 @@ dependencies = [
 
 [[package]]
 name = "aura-shm"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "shared_memory",
 ]
 
 [[package]]
 name = "aura-test"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "aura-core",
  "aura-params",
@@ -648,7 +648,7 @@ dependencies = [
 
 [[package]]
 name = "aura-vst3"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "aura-core",
  "aura-params",
@@ -967,7 +967,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-aura"
-version = "0.1.0"
+version = "0.5.0"
 
 [[package]]
 name = "cast"
@@ -5353,7 +5353,7 @@ dependencies = [
 
 [[package]]
 name = "smoke-gain"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "aura",
  "aura-build",
@@ -5363,7 +5363,7 @@ dependencies = [
 
 [[package]]
 name = "smoke-synth"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "aura",
 ]
