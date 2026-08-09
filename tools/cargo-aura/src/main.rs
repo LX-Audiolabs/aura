@@ -665,28 +665,15 @@ fn cmd_install(args: &[String]) -> ExitCode {
     let profile = if parsed.release { "release" } else { "debug" };
     let target_dir = project_target_dir();
 
-    if parsed.plugins.is_empty() {
-        // Legacy single-crate behaviour: build the current crate.
-        let mut build_args: Vec<String> = parsed.formats.iter().map(|f| format!("--{f}")).collect();
-        if parsed.release {
-            build_args.push("--release".into());
-        }
-        build_args.extend(parsed.rest.clone());
-        if cmd_build(&build_args) != ExitCode::SUCCESS {
-            return ExitCode::FAILURE;
-        }
-
-        let Some(pkg) = package_name() else {
-            eprintln!("error: could not read [package] name from ./Cargo.toml");
-            return ExitCode::FAILURE;
-        };
-        install_formats(&pkg, &target_dir, profile, &parsed.formats)
-    } else {
-        for plugin in &parsed.plugins {
-            let mut build_args = vec!["-plug".to_string(), plugin.clone()];
-            for f in &parsed.formats {
-                build_args.push(format!("--{f}"));
-            }
+    // If no `-plug` is given, install every plugin declared in aura.toml.
+    // Fall back to legacy single-crate behaviour only when there is no aura.toml
+    // or no [[plugin]] entries (e.g. inside a single plugin crate).
+    let plugins = if parsed.plugins.is_empty() {
+        let workspace_plugins = workspace_plugin_crates();
+        if workspace_plugins.is_empty() {
+            // Legacy single-crate behaviour: build the current crate.
+            let mut build_args: Vec<String> =
+                parsed.formats.iter().map(|f| format!("--{f}")).collect();
             if parsed.release {
                 build_args.push("--release".into());
             }
@@ -694,14 +681,36 @@ fn cmd_install(args: &[String]) -> ExitCode {
             if cmd_build(&build_args) != ExitCode::SUCCESS {
                 return ExitCode::FAILURE;
             }
-            if install_formats(plugin, &target_dir, profile, &parsed.formats)
-                != ExitCode::SUCCESS
-            {
+
+            let Some(pkg) = package_name() else {
+                eprintln!("error: could not read [package] name from ./Cargo.toml");
+                eprintln!("hint: run from a plugin crate, or use -plug <crate> [<crate>...]");
                 return ExitCode::FAILURE;
-            }
+            };
+            return install_formats(&pkg, &target_dir, profile, &parsed.formats);
         }
-        ExitCode::SUCCESS
+        workspace_plugins
+    } else {
+        parsed.plugins.clone()
+    };
+
+    for plugin in &plugins {
+        let mut build_args = vec!["-plug".to_string(), plugin.clone()];
+        for f in &parsed.formats {
+            build_args.push(format!("--{f}"));
+        }
+        if parsed.release {
+            build_args.push("--release".into());
+        }
+        build_args.extend(parsed.rest.clone());
+        if cmd_build(&build_args) != ExitCode::SUCCESS {
+            return ExitCode::FAILURE;
+        }
+        if install_formats(plugin, &target_dir, profile, &parsed.formats) != ExitCode::SUCCESS {
+            return ExitCode::FAILURE;
+        }
     }
+    ExitCode::SUCCESS
 }
 
 fn install_formats(pkg: &str, target_dir: &Path, profile: &str, features: &[String]) -> ExitCode {
@@ -1308,6 +1317,36 @@ fn plugin_display_name_from_text(text: &str, pkg: &str) -> String {
         return name;
     }
     pkg.to_string()
+}
+
+/// List the `crate = "..."` values from every `[[plugin]]` block in `./aura.toml`.
+/// Returns an empty vec when there is no aura.toml or no plugin entries.
+fn workspace_plugin_crates() -> Vec<String> {
+    let Ok(text) = fs::read_to_string("aura.toml") else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    let mut in_plugin = false;
+    for line in text.lines() {
+        let line = line.split('#').next().unwrap_or("").trim();
+        if line.starts_with("[[plugin]]") {
+            in_plugin = true;
+            continue;
+        }
+        if line.starts_with('[') && !line.starts_with("[[") {
+            in_plugin = false;
+            continue;
+        }
+        if !in_plugin {
+            continue;
+        }
+        if let Some((key, val)) = line.split_once('=') {
+            if key.trim() == "crate" {
+                out.push(val.trim().trim_matches('"').trim_matches('\'').to_string());
+            }
+        }
+    }
+    out
 }
 
 fn artifact_stem(path: &Path) -> Option<&str> {
