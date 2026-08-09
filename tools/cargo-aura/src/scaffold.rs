@@ -658,6 +658,118 @@ pub fn plugin_crate_files(spec: &ScaffoldSpec) -> Vec<(String, String)> {
         .collect()
 }
 
+// ---------------------------------------------------------------------------
+// add-ui: shared Slint UI crate scaffold
+// ---------------------------------------------------------------------------
+
+/// Scaffold files for `cargo aura add-ui <name>` — a shared Slint component
+/// library under `crates/<name>/`.
+///
+/// Emits a minimal theme + barrel; product widgets (knobs, meters, …) are
+/// added by the author.
+pub fn ui_crate_files(name: &str, aura_root: &str) -> Vec<(String, String)> {
+    let display = title_case(name);
+
+    let cargo_toml = format!(
+        r#"[package]
+name = "{name}"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+description = "{display} — shared Slint UI components"
+publish = false
+
+[dependencies]
+slint = {{ version = "=1.17.1", default-features = false, features = ["std", "compat-1-2"] }}
+
+[build-dependencies]
+aura-build = {{ path = "{aura_root}/crates/aura-build" }}
+"#
+    );
+
+    let build_rs = format!(
+        r#"fn main() {{
+    aura_build::compile("ui/{name}.slint").expect("slint compile");
+}}
+"#
+    );
+
+    let lib_rs = format!(
+        r#"//! {display} — shared Slint UI components.
+//!
+//! Plugin crates import the `.slint` files directly:
+//! ```text
+//! import {{ {struct_name} }} from "../../../crates/{name}/ui/{name}.slint";
+//! ```
+//!
+//! This crate compiles the barrel root so the module graph stays buildable
+//! in isolation and can host future Rust helpers.
+
+slint::include_modules!();
+"#,
+        struct_name = to_struct_name(&name.replace('-', "_"))
+    );
+
+    let barrel_slint = format!(
+        r#"// {display} — shared Slint component barrel.
+//
+// Import from a plugin (path relative to plugin ui/main.slint):
+//   import {{ {struct_name} }} from "../../../crates/{name}/ui/{name}.slint";
+//
+// Add your shared components below and re-export them here.
+
+import "NotoSans-Regular.ttf";
+import "NotoSans-Bold.ttf";
+
+import {{ {struct_name} }} from "{name}-theme.slint";
+
+export {{ {struct_name} }}
+"#,
+        struct_name = to_struct_name(&name.replace('-', "_"))
+    );
+
+    let theme_slint = format!(
+        r#"// {display} — design tokens and theme.
+//
+// Override these values to match your brand. Plugin UIs reference them via
+// `{struct_name}.surface`, `{struct_name}.radius-md`, etc.
+
+export struct {struct_name} {{
+    // ---- Palette ----
+    out property <color> surface: #1E1E2E;
+    out property <color> surface-container: #282840;
+    out property <color> on-surface: #E0E0F0;
+    out property <color> primary: #7C8AFF;
+    out property <color> on-primary: #FFFFFF;
+    out property <color> outline-variant: #3A3A50;
+
+    // ---- Radius ----
+    out property <length> radius-sm: 4px;
+    out property <length> radius-md: 8px;
+
+    // ---- Typography ----
+    out property <length> font-title: 14px;
+    out property <length> font-body: 12px;
+
+    // ---- Spacing ----
+    out property <length> spacing-xs: 4px;
+    out property <length> spacing-sm: 8px;
+    out property <length> spacing-md: 12px;
+    out property <length> spacing-lg: 16px;
+}}
+"#,
+        struct_name = to_struct_name(&name.replace('-', "_"))
+    );
+
+    vec![
+        ("Cargo.toml".to_string(), cargo_toml),
+        ("build.rs".to_string(), build_rs),
+        ("src/lib.rs".to_string(), lib_rs),
+        (format!("ui/{name}.slint"), barrel_slint),
+        (format!("ui/{name}-theme.slint"), theme_slint),
+    ]
+}
+
 /// `[[plugin]]` table to append to a workspace `aura.toml`.
 pub fn plugin_table_block(display: &str, name: &str, category: &str, crate_path: &str) -> String {
     format!(
@@ -858,6 +970,31 @@ mod tests {
         assert!(!paths.contains(&"agal.toml"));
         assert!(paths.contains(&"src/lib.rs"));
         assert!(paths.contains(&"Cargo.toml"));
+    }
+
+    #[test]
+    fn ui_crate_files_emits_minimal_scaffold() {
+        let out = ui_crate_files("my-ui", "L:/LX-Audiolabs/AURA");
+        let paths: Vec<&str> = out.iter().map(|(p, _)| p.as_str()).collect();
+        assert_eq!(
+            paths,
+            [
+                "Cargo.toml",
+                "build.rs",
+                "src/lib.rs",
+                "ui/my-ui.slint",
+                "ui/my-ui-theme.slint",
+            ]
+        );
+        let cargo = out.iter().find(|(p, _)| p == "Cargo.toml").unwrap().1.as_str();
+        assert!(cargo.contains("name = \"my-ui\""), "{cargo}");
+        assert!(cargo.contains("aura-build"), "{cargo}");
+        let barrel = out.iter().find(|(p, _)| p == "ui/my-ui.slint").unwrap().1.as_str();
+        assert!(barrel.contains("import { MyUi } from \"my-ui-theme.slint\""), "{barrel}");
+        assert!(barrel.contains("export { MyUi }"), "{barrel}");
+        let theme = out.iter().find(|(p, _)| p == "ui/my-ui-theme.slint").unwrap().1.as_str();
+        assert!(theme.contains("export struct MyUi"), "{theme}");
+        assert!(theme.contains("property <color> surface:"), "{theme}");
     }
 
     #[test]

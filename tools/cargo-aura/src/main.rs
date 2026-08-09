@@ -32,6 +32,7 @@ fn main() -> ExitCode {
         "new" => cmd_new(&args[1..]),
         "init" => cmd_init(&args[1..]),
         "add" => cmd_add(&args[1..]),
+        "add-ui" => cmd_add_ui(&args[1..]),
         "build" => cmd_build(&args[1..]),
         "install" => cmd_install(&args[1..]),
         "preview" => cmd_preview(&args[1..]),
@@ -69,6 +70,8 @@ Commands:
   add <name> [--vst3] [--lv2] [--kind <k>]
                           Add another plugin under plugins/<name>/ and append
                           [[plugin]] to the workspace aura.toml (re-open)
+  add-ui <name>           Scaffold a shared Slint UI crate under crates/<name>/
+                          (minimal theme + barrel; add your own components)
   build [--clap|--vst3|--lv2] [--release] [-plug <crate> [<crate>...]]
                           cargo build with format feature(s)
                           (-plug builds each selected workspace member in turn)
@@ -459,9 +462,62 @@ fn cmd_add(args: &[String]) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-// ---------------------------------------------------------------------------
-// preview
-// ---------------------------------------------------------------------------
+/// `cargo aura add-ui <name>` — scaffold a shared Slint UI crate under
+/// `crates/<name>/` with a minimal theme + barrel. Intended for multi-plugin
+/// workspaces that want a common design system (like `lx-ui-slint`).
+fn cmd_add_ui(args: &[String]) -> ExitCode {
+    if args.len() != 1 {
+        eprintln!("usage: cargo aura add-ui <name>");
+        return ExitCode::FAILURE;
+    }
+    let name = &args[0];
+
+    if !scaffold::is_valid_crate_name(name) {
+        eprintln!(
+            "'{name}' is not a valid Cargo package name (use snake_case / kebab-case letters)"
+        );
+        return ExitCode::FAILURE;
+    }
+
+    let aura_path = PathBuf::from("aura.toml");
+    if !aura_path.is_file() {
+        eprintln!(
+            "error: no aura.toml in current directory — run `cargo aura new` / `init` first, \
+             then `add-ui` from that project root"
+        );
+        return ExitCode::FAILURE;
+    }
+
+    let dest = PathBuf::from("crates").join(name);
+    if dest.exists() {
+        eprintln!("error: {} already exists", dest.display());
+        return ExitCode::FAILURE;
+    }
+
+    let aura_root = match aura_root() {
+        Ok(r) => strip_verbatim_prefix(&r).to_string_lossy().replace('\\', "/"),
+        Err(e) => {
+            eprintln!("error: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let files = scaffold::ui_crate_files(name, &aura_root);
+    if let Err(e) = scaffold::write_files(&dest, &files) {
+        eprintln!("error: scaffold failed: {e}");
+        let _ = fs::remove_dir_all(&dest);
+        return ExitCode::FAILURE;
+    }
+
+    println!("created {}", dest.display());
+    println!("  Cargo.toml  build.rs  src/lib.rs  ui/{name}.slint  ui/{name}-theme.slint");
+    println!();
+    println!("next:");
+    println!("  1. add \"crates/{name}\" to [workspace] members in ./Cargo.toml");
+    println!("  2. import from plugins: import {{ ... }} from \"../../../crates/{name}/ui/{name}.slint\";");
+    println!("  3. add your shared components to ui/{name}.slint");
+    ExitCode::SUCCESS
+}
 
 /// `cargo aura gui` — launch the Slint project console (`aura-gui`).
 fn cmd_gui() -> ExitCode {

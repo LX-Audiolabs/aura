@@ -9,6 +9,7 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ### Added
 
+- `cargo aura add-ui <name>`: scaffold a shared Slint UI crate under `crates/<name>/` — minimal theme + barrel, ready for custom components (like `lx-ui-slint`)
 - `cargo aura new <name> --vst3 --lv2`: scaffold emits format feature lines + `export_vst3!` / `export_lv2!` (CLAP stays default)
 - VST3 Bitwig host smoke green (smoke-gain) — recorded in roadmap status
 - LV2 host smoke green (smoke-gain, 2026-08-08) — no LV2 UI by design; roadmap P1 closed
