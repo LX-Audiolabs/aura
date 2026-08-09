@@ -46,7 +46,7 @@ aura-dsp/src/
 |-----------------|-----|
 | `lx-shm` | Multi-plugin relay / shared memory |
 | `lx-vault` | Presets, config paths, product profiles |
-| Per-plugin `*Shared` UI state (Aether/Aurum/…) | Product composition, not framework |
+| Per-plugin `*Shared` UI state (Aether/Mensor/…) | Product composition, not framework |
 | `lx-ui-slint` PeakMeter/FFT widgets | Product UI |
 
 Portable **algorithms** from `lx-dsp` / `lx-analysis` → modules under **`aura-dsp`**.  
