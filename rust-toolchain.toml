@@ -6,6 +6,6 @@
 # 2026-08-07: same crash resurfaced on 1.96.0 after dep rebuilds — resolved
 # by full target/ clean + toolchain reinstall. If it ever returns:
 # CARGO_PROFILE_DEV_BUILD_OVERRIDE_OPT_LEVEL=2.
-channel = "1.96.0"
+channel = "1.97.1"
 components = ["rustfmt", "clippy"]
 profile = "minimal"
