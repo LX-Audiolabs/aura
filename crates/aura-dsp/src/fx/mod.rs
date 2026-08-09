@@ -375,7 +375,7 @@ impl LR2Crossover {
 
 // =============================================================================
 // TOLERANCE TABLE — deterministic per-channel parameter micro-variations
-// Used by TMT (Tolerance Modeling Technology) in Meridian and Aurum.
+// Used by TMT (Tolerance Modeling Technology) in Meridian and Mensor.
 // Generated once at plugin init from a u64 seed via Xorshift64.
 // N = number of named parameter slots (use the tol:: module in each plugin).
 // =============================================================================

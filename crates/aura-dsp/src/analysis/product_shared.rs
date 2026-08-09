@@ -146,11 +146,11 @@ impl Default for EquilibriumShared {
     }
 }
 
-// ── Aurum ────────────────────────────────────────────────────────────────────
+// ── Mensor ────────────────────────────────────────────────────────────────────
 
-/// Aurum mastering meters — clip/wave, multi-GR, delivery loudness, scope.
+/// Mensor mastering meters — clip/wave, multi-GR, delivery loudness, scope.
 #[derive(Clone)]
-pub struct AurumShared {
+pub struct MensorShared {
     pub peaks: PeakMeters,
     pub scope: ScopeRing,
     pub input_peak: Arc<AtomicF32>,
@@ -177,7 +177,7 @@ pub struct AurumShared {
     pub snap_active: Arc<AtomicBool>,
 }
 
-impl Default for AurumShared {
+impl Default for MensorShared {
     fn default() -> Self {
         Self {
             peaks: PeakMeters::default(),

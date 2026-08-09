@@ -1,6 +1,6 @@
 //! Audio ↔ UI shared-state **building blocks** (not product plugin types).
 //!
-//! Product plugins compose these into `AetherShared` / `AurumShared` / … in
+//! Product plugins compose these into `AetherShared` / `MensorShared` / … in
 //! the plugins repo. Framework only owns the reusable field groups.
 
 use super::{
