@@ -8,7 +8,7 @@
 | kind | `crate` |
 | path | `crates/aura` |
 | description | AURA — Audio Unified Rust Architecture (umbrella crate) |
-| generated | `2026-08-07T17:52:10Z` |
+| generated | `2026-08-09T10:14:20Z` |
 
 ## Graph atoms (auto)
 
@@ -21,18 +21,22 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 [ATOM] type=fact | detail=depends_on=aura-core
 [ATOM] type=fact | detail=depends_on=aura-derive
 [ATOM] type=fact | detail=used_by=examples/smoke-gain via depends_on
+[ATOM] type=fact | detail=used_by=examples/smoke-synth via depends_on
 ```
 
 ## deps (workspace)
 - `aura-clap`
 - `aura-core`
 - `aura-derive`
+- `aura-dsp`
 - `aura-lv2`
+- `aura-midi`
 - `aura-params`
 - `aura-vst3`
 
 ## dependents (inbound)
 - `examples/smoke-gain` --depends_on--> `aura`
+- `examples/smoke-synth` --depends_on--> `aura`
 
 ## structure
 - params: CollidingParams (1 fields)

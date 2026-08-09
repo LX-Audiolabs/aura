@@ -9,7 +9,7 @@
 | path | `crates/aura-editor` |
 | description | AURA host Editor adapter (Slint on aura-baseview) for CLAP/VST3/LV2 GUI |
 | frameworks | baseview, raw-window-handle, slint |
-| generated | `2026-08-07T17:52:10Z` |
+| generated | `2026-08-09T10:14:20Z` |
 
 ## Graph atoms (auto)
 
@@ -21,18 +21,20 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 [ATOM] type=fact | detail=roles=entry+manifest+source
 [ATOM] type=fact | detail=depends_on=aura-baseview
 [ATOM] type=fact | detail=depends_on=aura-core
+[ATOM] type=fact | detail=depends_on=aura-params
 [ATOM] type=fact | detail=used_by=examples/smoke-gain via depends_on
 ```
 
 ## deps (workspace)
 - `aura-baseview`
 - `aura-core`
+- `aura-params`
 
 ## dependents (inbound)
 - `examples/smoke-gain` --depends_on--> `aura-editor`
 
 ## structure
-- public_api symbols: 1 (see json)
+- public_api symbols: 8 (see json)
 - roles: entry, manifest, source
 
 ## agent focus

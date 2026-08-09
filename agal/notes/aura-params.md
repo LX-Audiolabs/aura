@@ -8,7 +8,7 @@
 | kind | `crate` |
 | path | `crates/aura-params` |
 | description | AURA parameter system (ranges, smoothers, atomic params) |
-| generated | `2026-08-07T17:52:10Z` |
+| generated | `2026-08-09T10:14:20Z` |
 
 ## Graph atoms (auto)
 
@@ -27,11 +27,13 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 - `aura-clap` --depends_on--> `aura-params`
 - `aura-core` --depends_on--> `aura-params`
 - `aura-derive` --depends_on--> `aura-params`
+- `aura-editor` --depends_on--> `aura-params`
 - `aura-lv2` --depends_on--> `aura-params`
+- `aura-test` --depends_on--> `aura-params`
 - `aura-vst3` --depends_on--> `aura-params`
 
 ## structure
-- public_api symbols: 22 (see json)
+- public_api symbols: 23 (see json)
 - roles: entry, manifest, source
 
 ## agent focus

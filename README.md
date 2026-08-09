@@ -20,7 +20,7 @@ Partner tooling: **[agal](https://github.com/LX-Audiolabs/agal)** (agent orienta
 | Crates | **`aura-*`** |
 | Umbrella | **`aura`** → `use aura::*` |
 | CLI package | **`cargo-aura`** |
-| Invoke | **`cargo aura …`** (e.g. `cargo aura new`, `cargo aura build --clap`) |
+| Invoke | **`cargo aura …`** (e.g. `cargo aura new`, `cargo aura build --clap -plug <crate> [<crate>...]`) |
 | Config | **`aura.toml`** |
 
 ---

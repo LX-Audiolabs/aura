@@ -8,7 +8,7 @@
 | kind | `crate` |
 | path | `crates/aura-core` |
 | description | AURA core: process, editor, plugin info (minimal surface) |
-| generated | `2026-08-07T17:52:10Z` |
+| generated | `2026-08-09T10:14:20Z` |
 
 ## Graph atoms (auto)
 
@@ -17,6 +17,7 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 ```text
 [ATOM] type=fact | detail=kind=crate id=crates/aura-core
 [ATOM] type=fact | detail=roles=audio+entry+manifest+source+state+ui
+[ATOM] type=fact | detail=depends_on=aura-midi
 [ATOM] type=fact | detail=depends_on=aura-params
 [ATOM] type=fact | detail=used_by=aura via depends_on
 [ATOM] type=fact | detail=used_by=aura-clap via depends_on
@@ -24,6 +25,7 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 ```
 
 ## deps (workspace)
+- `aura-midi`
 - `aura-params`
 
 ## dependents (inbound)
@@ -31,11 +33,12 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 - `aura-clap` --depends_on--> `aura-core`
 - `aura-editor` --depends_on--> `aura-core`
 - `aura-lv2` --depends_on--> `aura-core`
+- `aura-test` --depends_on--> `aura-core`
 - `aura-vst3` --depends_on--> `aura-core`
 
 ## structure
 - params: TwoParams (0 fields)
-- public_api symbols: 19 (see json)
+- public_api symbols: 24 (see json)
 - roles: audio, entry, manifest, source, state, ui
 
 ## agent focus

@@ -1,14 +1,14 @@
 <!-- AGAL:AUTO-START -->
-# aura-example-render-femtovg
+# aura-gui
 
 > Auto-generated from workspace scan. Do not edit between AUTO markers.
 
 | | |
 |---|---|
-| kind | `crate` |
-| path | `crates/aura-baseview/examples/render_femtovg` |
-| version | 0.1.0 |
-| frameworks | baseview, slint |
+| kind | `member` |
+| path | `tools/aura-gui` |
+| description | Visual AURA project console — thin Slint shell over `cargo aura` CLI |
+| frameworks | slint |
 | generated | `2026-08-09T10:14:20Z` |
 
 ## Graph atoms (auto)
@@ -16,21 +16,17 @@
 _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 
 ```text
-[ATOM] type=fact | detail=kind=crate id=crates/aura-baseview/examples/render_femtovg
-[ATOM] type=fact | detail=frameworks=baseview+slint
-[ATOM] type=fact | detail=roles=build+entry+manifest+slint+source
-[ATOM] type=fact | detail=depends_on=aura-baseview
+[ATOM] type=fact | detail=kind=member id=tools/aura-gui
+[ATOM] type=fact | detail=frameworks=slint
+[ATOM] type=fact | detail=roles=build+entry+manifest+slint
 ```
 
-## deps (workspace)
-- `aura-baseview`
-
 ## structure
-- roles: build, entry, manifest, slint, source
+- roles: build, entry, manifest, slint
 
 ## agent focus
 **L1:** scan **Graph atoms** above first, then human body below HUMAN.  
-After `agal.agent.md` (L2). Escalate L0: `crates/aura-baseview/examples/render_femtovg` in json / `agal --plugin aura-example-render-femtovg .`
+After `agal.agent.md` (L2). Escalate L0: `tools/aura-gui` in json / `agal --plugin aura-gui .`
 
 <!-- AGAL:AUTO-END -->
 

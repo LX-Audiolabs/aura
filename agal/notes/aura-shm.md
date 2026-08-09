@@ -1,14 +1,13 @@
 <!-- AGAL:AUTO-START -->
-# aura-example-render-femtovg
+# aura-shm
 
 > Auto-generated from workspace scan. Do not edit between AUTO markers.
 
 | | |
 |---|---|
 | kind | `crate` |
-| path | `crates/aura-baseview/examples/render_femtovg` |
-| version | 0.1.0 |
-| frameworks | baseview, slint |
+| path | `crates/aura-shm` |
+| description | AURA shared memory — cross-plugin IPC hub with seqlock-protected slots and heartbeat liveness |
 | generated | `2026-08-09T10:14:20Z` |
 
 ## Graph atoms (auto)
@@ -16,21 +15,21 @@
 _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 
 ```text
-[ATOM] type=fact | detail=kind=crate id=crates/aura-baseview/examples/render_femtovg
-[ATOM] type=fact | detail=frameworks=baseview+slint
-[ATOM] type=fact | detail=roles=build+entry+manifest+slint+source
-[ATOM] type=fact | detail=depends_on=aura-baseview
+[ATOM] type=fact | detail=kind=crate id=crates/aura-shm
+[ATOM] type=fact | detail=roles=entry+ipc+manifest
 ```
 
-## deps (workspace)
-- `aura-baseview`
-
 ## structure
-- roles: build, entry, manifest, slint, source
+- ipc: relay, seqlock, shm
+- public_api symbols: 6 (see json)
+- roles: entry, ipc, manifest
+
+## findings
+- [info] **crate_no_dependents**: aura-shm has no inbound workspace edges — unused or only path-included? · `crates/aura-shm` · fix: wire `aura-shm` as a path dep from a plugin/crate, or remove from workspace
 
 ## agent focus
 **L1:** scan **Graph atoms** above first, then human body below HUMAN.  
-After `agal.agent.md` (L2). Escalate L0: `crates/aura-baseview/examples/render_femtovg` in json / `agal --plugin aura-example-render-femtovg .`
+After `agal.agent.md` (L2). Escalate L0: `crates/aura-shm` in json / `agal --plugin aura-shm .`
 
 <!-- AGAL:AUTO-END -->
 

@@ -1,14 +1,13 @@
 <!-- AGAL:AUTO-START -->
-# aura-vst3
+# aura-dsp
 
 > Auto-generated from workspace scan. Do not edit between AUTO markers.
 
 | | |
 |---|---|
 | kind | `crate` |
-| path | `crates/aura-vst3` |
-| description | AURA VST3 format wrapper (thin, over PluginLogic) |
-| frameworks | vst3 |
+| path | `crates/aura-dsp` |
+| description | AURA DSP — synthesis, effects, analysis, maths (JUCE juce_dsp analogue; naad fork + LX FX) |
 | generated | `2026-08-09T10:14:20Z` |
 
 ## Graph atoms (auto)
@@ -16,30 +15,27 @@
 _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 
 ```text
-[ATOM] type=fact | detail=kind=crate id=crates/aura-vst3
-[ATOM] type=fact | detail=frameworks=vst3
-[ATOM] type=fact | detail=roles=entry+manifest+source
+[ATOM] type=fact | detail=kind=crate id=crates/aura-dsp
+[ATOM] type=fact | detail=roles=entry+ipc+manifest+source+state
 [ATOM] type=fact | detail=has_process=true
-[ATOM] type=fact | detail=depends_on=aura-core
-[ATOM] type=fact | detail=depends_on=aura-params
 [ATOM] type=fact | detail=used_by=aura via depends_on
 ```
 
-## deps (workspace)
-- `aura-core`
-- `aura-params`
-
 ## dependents (inbound)
-- `aura` --depends_on--> `aura-vst3`
+- `aura` --depends_on--> `aura-dsp`
 
 ## structure
-- process methods (DSP): 1
-- public_api symbols: 2 (see json)
-- roles: entry, manifest, source
+- ipc: relay, shm
+- process methods (DSP): 15
+- public_api symbols: 80 (see json)
+- roles: entry, ipc, manifest, source, state
+
+## findings
+- [info] **dsp_process_methods**: aura-dsp has 15 methods named process (DSP units, not plugin hooks) · `crates/aura-dsp`
 
 ## agent focus
 **L1:** scan **Graph atoms** above first, then human body below HUMAN.  
-After `agal.agent.md` (L2). Escalate L0: `crates/aura-vst3` in json / `agal --plugin aura-vst3 .`
+After `agal.agent.md` (L2). Escalate L0: `crates/aura-dsp` in json / `agal --plugin aura-dsp .`
 
 <!-- AGAL:AUTO-END -->
 

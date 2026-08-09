@@ -13,6 +13,14 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 - `cargo aura build|install -plug <crate> [<crate>...]`: multi-plugin selector — builds/installs each named workspace member in turn
 - `cargo aura install`: artifact now named after the plugin display name (from `aura.toml [[plugin]].name`) instead of the crate name
 
+### Changed
+
+- Workspace version bumped to `0.5.0`; retroactive SemVer changelog entries added for `0.1.0`–`0.4.0` (see [docs/versioning.md](./docs/versioning.md)).
+
+### Product cutover
+
+- lx-audiolabs-plugins catalog fully migrated to AURA: aether, equilibrium, lucent, lucent-relay, mensor, and meridian build, install, and host-smoke via `cargo aura` (CLAP release). The parallel truce framework path is deprecated for LX products. (mensor was renamed from aurum to avoid confusion with AURA.)
+
 ## [0.4.0] - 2026-08-08
 
 ### Added

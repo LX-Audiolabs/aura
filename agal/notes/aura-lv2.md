@@ -9,7 +9,7 @@
 | path | `crates/aura-lv2` |
 | description | AURA LV2 format wrapper (thin, over PluginLogic) |
 | frameworks | lv2 |
-| generated | `2026-08-07T17:52:10Z` |
+| generated | `2026-08-09T10:14:20Z` |
 
 ## Graph atoms (auto)
 
@@ -32,7 +32,7 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 - `aura` --depends_on--> `aura-lv2`
 
 ## structure
-- public_api symbols: 6 (see json)
+- public_api symbols: 7 (see json)
 - roles: entry, manifest, source
 
 ## agent focus

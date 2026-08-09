@@ -8,7 +8,7 @@
 | kind | `member` |
 | path | `tools/cargo-aura` |
 | description | Build tool for AURA audio plugins — cargo aura new|build|install|doctor |
-| generated | `2026-08-07T17:52:10Z` |
+| generated | `2026-08-09T10:14:20Z` |
 
 ## Graph atoms (auto)
 
@@ -16,11 +16,11 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 
 ```text
 [ATOM] type=fact | detail=kind=member id=tools/cargo-aura
-[ATOM] type=fact | detail=roles=entry+manifest
+[ATOM] type=fact | detail=roles=entry+manifest+source
 ```
 
 ## structure
-- roles: entry, manifest
+- roles: entry, manifest, source
 
 ## agent focus
 **L1:** scan **Graph atoms** above first, then human body below HUMAN.  

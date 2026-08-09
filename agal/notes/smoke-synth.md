@@ -1,14 +1,13 @@
 <!-- AGAL:AUTO-START -->
-# aura-example-render-femtovg
+# smoke-synth
 
 > Auto-generated from workspace scan. Do not edit between AUTO markers.
 
 | | |
 |---|---|
-| kind | `crate` |
-| path | `crates/aura-baseview/examples/render_femtovg` |
-| version | 0.1.0 |
-| frameworks | baseview, slint |
+| kind | `member` |
+| path | `examples/smoke-synth` |
+| description | AURA in-tree CLAP smoke — monophonic synth (Oscillator + Adsr via context.midi) |
 | generated | `2026-08-09T10:14:20Z` |
 
 ## Graph atoms (auto)
@@ -16,21 +15,24 @@
 _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 
 ```text
-[ATOM] type=fact | detail=kind=crate id=crates/aura-baseview/examples/render_femtovg
-[ATOM] type=fact | detail=frameworks=baseview+slint
-[ATOM] type=fact | detail=roles=build+entry+manifest+slint+source
-[ATOM] type=fact | detail=depends_on=aura-baseview
+[ATOM] type=fact | detail=kind=member id=examples/smoke-synth
+[ATOM] type=fact | detail=roles=entry+manifest
+[ATOM] type=fact | detail=has_process=true
+[ATOM] type=fact | detail=depends_on=aura
 ```
 
 ## deps (workspace)
-- `aura-baseview`
+- `aura`
 
 ## structure
-- roles: build, entry, manifest, slint, source
+- logic: SmokeSynth
+- params: SynthParams (1 fields)
+- process: PluginLogic::process @ src/lib.rs
+- roles: entry, manifest
 
 ## agent focus
 **L1:** scan **Graph atoms** above first, then human body below HUMAN.  
-After `agal.agent.md` (L2). Escalate L0: `crates/aura-baseview/examples/render_femtovg` in json / `agal --plugin aura-example-render-femtovg .`
+After `agal.agent.md` (L2). Escalate L0: `examples/smoke-synth` in json / `agal --plugin smoke-synth .`
 
 <!-- AGAL:AUTO-END -->
 
