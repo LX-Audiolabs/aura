@@ -69,10 +69,12 @@ Commands:
   add <name> [--vst3] [--lv2] [--kind <k>]
                           Add another plugin under plugins/<name>/ and append
                           [[plugin]] to the workspace aura.toml (re-open)
-  build [--clap|--vst3|--lv2] [--release]
+  build [--clap|--vst3|--lv2] [--release] [-plug <crate> [<crate>...]]
                           cargo build with format feature(s)
-  install [--clap|--vst3|--lv2] [--release]
+                          (-plug builds each selected workspace member in turn)
+  install [--clap|--vst3|--lv2] [--release] [-plug <crate> [<crate>...]]
                           build + copy artifact into host search path
+                          (-plug installs each selected plugin in turn)
   preview [path] [--component N] [--no-watch]
                           hot-reload the plugin .slint UI (default ui/main.slint)
   gui                     Open the visual project console (aura-gui)
@@ -522,25 +524,59 @@ fn cmd_preview(args: &[String]) -> ExitCode {
 // ---------------------------------------------------------------------------
 
 fn cmd_build(args: &[String]) -> ExitCode {
-    let (features, release, rest) = parse_format_flags(args);
-    if !rest.is_empty() {
-        eprintln!("warning: ignoring extra args: {}", rest.join(" "));
-    }
+    let parsed = match parse_build_args(args) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("error: {e}");
+            eprintln!(
+                "usage: cargo aura build [--clap|--vst3|--lv2] [--release] [-plug <crate> [<crate>...]] [cargo options]"
+            );
+            return ExitCode::FAILURE;
+        }
+    };
 
-    if features.is_empty() {
+    if parsed.formats.is_empty() {
         eprintln!("note: no --clap/--vst3/--lv2; building default features");
     }
 
+    if parsed.plugins.is_empty() {
+        build_one(None, &parsed.formats, parsed.release, &parsed.rest)
+    } else {
+        for plugin in &parsed.plugins {
+            if build_one(Some(plugin), &parsed.formats, parsed.release, &parsed.rest)
+                != ExitCode::SUCCESS
+            {
+                return ExitCode::FAILURE;
+            }
+        }
+        ExitCode::SUCCESS
+    }
+}
+
+fn build_one(
+    plugin: Option<&str>,
+    features: &[String],
+    release: bool,
+    rest: &[String],
+) -> ExitCode {
     let mut cmd = Command::new("cargo");
     cmd.arg("build");
     if release {
         cmd.arg("--release");
     }
+    if let Some(p) = plugin {
+        cmd.arg("-p").arg(p);
+    }
     if !features.is_empty() {
         cmd.arg("--features");
         cmd.arg(features.join(","));
     }
+    cmd.args(rest);
 
+    eprintln!(
+        "--- cargo build {}---",
+        plugin.map_or(String::new(), |p| format!("-p {p} "))
+    );
     match cmd.status() {
         Ok(s) if s.success() => ExitCode::SUCCESS,
         Ok(s) => ExitCode::from(u8::try_from(s.code().unwrap_or(1)).unwrap_or(1)),
@@ -552,51 +588,83 @@ fn cmd_build(args: &[String]) -> ExitCode {
 }
 
 fn cmd_install(args: &[String]) -> ExitCode {
-    let (features, release, _) = parse_format_flags(args);
-    if features.is_empty() {
-        eprintln!("usage: cargo aura install --clap|--vst3|--lv2 [--release]");
+    let parsed = match parse_build_args(args) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("error: {e}");
+            eprintln!(
+                "usage: cargo aura install --clap|--vst3|--lv2 [--release] [-plug <crate> [<crate>...]]"
+            );
+            return ExitCode::FAILURE;
+        }
+    };
+
+    if parsed.formats.is_empty() {
+        eprintln!(
+            "usage: cargo aura install --clap|--vst3|--lv2 [--release] [-plug <crate> [<crate>...]]"
+        );
         return ExitCode::FAILURE;
     }
 
-    // Build first.
-    let mut build_args: Vec<String> = features.iter().map(|f| format!("--{f}")).collect();
-    if release {
-        build_args.push("--release".into());
-    }
-    if cmd_build(&build_args) != ExitCode::SUCCESS {
-        return ExitCode::FAILURE;
-    }
-
-    let profile = if release { "release" } else { "debug" };
+    let profile = if parsed.release { "release" } else { "debug" };
     let target_dir = project_target_dir();
 
-    for feat in &features {
-        match feat.as_str() {
-            "clap" => {
-                if let Err(e) = install_clap(&target_dir, profile) {
-                    eprintln!("install --clap: {e}");
-                    return ExitCode::FAILURE;
-                }
+    if parsed.plugins.is_empty() {
+        // Legacy single-crate behaviour: build the current crate.
+        let mut build_args: Vec<String> = parsed.formats.iter().map(|f| format!("--{f}")).collect();
+        if parsed.release {
+            build_args.push("--release".into());
+        }
+        build_args.extend(parsed.rest.clone());
+        if cmd_build(&build_args) != ExitCode::SUCCESS {
+            return ExitCode::FAILURE;
+        }
+
+        let Some(pkg) = package_name() else {
+            eprintln!("error: could not read [package] name from ./Cargo.toml");
+            return ExitCode::FAILURE;
+        };
+        install_formats(&pkg, &target_dir, profile, &parsed.formats)
+    } else {
+        for plugin in &parsed.plugins {
+            let mut build_args = vec!["-plug".to_string(), plugin.clone()];
+            for f in &parsed.formats {
+                build_args.push(format!("--{f}"));
             }
-            "vst3" => {
-                if let Err(e) = install_vst3(&target_dir, profile) {
-                    eprintln!("install --vst3: {e}");
-                    return ExitCode::FAILURE;
-                }
+            if parsed.release {
+                build_args.push("--release".into());
             }
-            "lv2" => {
-                if let Err(e) = install_lv2(&target_dir, profile) {
-                    eprintln!("install --lv2: {e}");
-                    return ExitCode::FAILURE;
-                }
+            build_args.extend(parsed.rest.clone());
+            if cmd_build(&build_args) != ExitCode::SUCCESS {
+                return ExitCode::FAILURE;
             }
-            _ => {}
+            if install_formats(plugin, &target_dir, profile, &parsed.formats)
+                != ExitCode::SUCCESS
+            {
+                return ExitCode::FAILURE;
+            }
+        }
+        ExitCode::SUCCESS
+    }
+}
+
+fn install_formats(pkg: &str, target_dir: &Path, profile: &str, features: &[String]) -> ExitCode {
+    for feat in features {
+        let res = match feat.as_str() {
+            "clap" => install_clap(pkg, target_dir, profile),
+            "vst3" => install_vst3(pkg, target_dir, profile),
+            "lv2" => install_lv2(pkg, target_dir, profile),
+            _ => Ok(()),
+        };
+        if let Err(e) = res {
+            eprintln!("install --{feat} for {pkg}: {e}");
+            return ExitCode::FAILURE;
         }
     }
     ExitCode::SUCCESS
 }
 
-fn install_clap(target_dir: &Path, profile: &str) -> Result<(), String> {
+fn install_clap(pkg: &str, target_dir: &Path, profile: &str) -> Result<(), String> {
     let dir = target_dir.join(profile);
     if !dir.is_dir() {
         return Err(format!("no build dir {}", dir.display()));
@@ -604,7 +672,6 @@ fn install_clap(target_dir: &Path, profile: &str) -> Result<(), String> {
 
     // Ship exactly this package's cdylib as `<package>.clap` — never a
     // random dependency artifact that happens to sit in the target dir.
-    let pkg = package_name().ok_or("could not read [package] name from ./Cargo.toml")?;
     let crate_name = pkg.replace('-', "_");
     let candidates = find_plugin_artifacts(&dir)?;
     let src = candidates
@@ -625,7 +692,8 @@ fn install_clap(target_dir: &Path, profile: &str) -> Result<(), String> {
         )
     })?;
 
-    let dest = dest_root.join(format!("{pkg}.clap"));
+    let display = plugin_display_name(pkg);
+    let dest = dest_root.join(format!("{display}.clap"));
     fs::copy(src, &dest).map_err(|e| format!("copy {} → {}: {e}", src.display(), dest.display()))?;
     println!("installed {}", dest.display());
     Ok(())
@@ -636,13 +704,12 @@ fn install_clap(target_dir: &Path, profile: &str) -> Result<(), String> {
 /// <name>.vst3/Contents/<arch>/<name>.vst3   # renamed cdylib
 /// ```
 /// Arch folder follows Steinberg: `x86_64-win`, `x86_64-linux`, `MacOS`, …
-fn install_vst3(target_dir: &Path, profile: &str) -> Result<(), String> {
+fn install_vst3(pkg: &str, target_dir: &Path, profile: &str) -> Result<(), String> {
     let dir = target_dir.join(profile);
     if !dir.is_dir() {
         return Err(format!("no build dir {}", dir.display()));
     }
 
-    let pkg = package_name().ok_or("could not read [package] name from ./Cargo.toml")?;
     let crate_name = pkg.replace('-', "_");
     let candidates = find_plugin_artifacts(&dir)?;
     let src = candidates
@@ -655,8 +722,9 @@ fn install_vst3(target_dir: &Path, profile: &str) -> Result<(), String> {
             )
         })?;
 
+    let display = plugin_display_name(pkg);
     let dest_root = resolve_install_dir(InstallFormat::Vst3)?;
-    let bundle = dest_root.join(format!("{pkg}.vst3"));
+    let bundle = dest_root.join(format!("{display}.vst3"));
     let arch_dir = bundle.join("Contents").join(vst3_arch_folder());
     fs::create_dir_all(&arch_dir).map_err(|e| {
         format!(
@@ -666,7 +734,7 @@ fn install_vst3(target_dir: &Path, profile: &str) -> Result<(), String> {
     })?;
 
     // Binary inside the bundle uses the `.vst3` extension (still a PE/ELF/Mach-O).
-    let dest = arch_dir.join(format!("{pkg}.vst3"));
+    let dest = arch_dir.join(format!("{display}.vst3"));
     fs::copy(src, &dest).map_err(|e| format!("copy {} → {}: {e}", src.display(), dest.display()))?;
     println!("installed {}", bundle.display());
     Ok(())
@@ -679,13 +747,12 @@ fn install_vst3(target_dir: &Path, profile: &str) -> Result<(), String> {
 ///   plugin.ttl
 ///   <binary>          # package stem, platform library name
 /// ```
-fn install_lv2(target_dir: &Path, profile: &str) -> Result<(), String> {
+fn install_lv2(pkg: &str, target_dir: &Path, profile: &str) -> Result<(), String> {
     let dir = target_dir.join(profile);
     if !dir.is_dir() {
         return Err(format!("no build dir {}", dir.display()));
     }
 
-    let pkg = package_name().ok_or("could not read [package] name from ./Cargo.toml")?;
     let crate_name = pkg.replace('-', "_");
     let candidates = find_plugin_artifacts(&dir)?;
     let src = candidates
@@ -714,8 +781,9 @@ fn install_lv2(target_dir: &Path, profile: &str) -> Result<(), String> {
     // Practical v1: regenerate via `aura_lv2` types by embedding a small
     // template. smoke-gain has gain id=1 -24..24. Multi-param plugins get
     // ports listed in aura.toml later.
+    let display = plugin_display_name(pkg);
     let dest_root = resolve_install_dir(InstallFormat::Lv2)?;
-    let bundle = dest_root.join(format!("{pkg}.lv2"));
+    let bundle = dest_root.join(format!("{display}.lv2"));
     fs::create_dir_all(&bundle).map_err(|e| e.to_string())?;
 
     let binary_name = src
@@ -735,7 +803,7 @@ fn install_lv2(target_dir: &Path, profile: &str) -> Result<(), String> {
         // Fallback template (stereo FX + optional gain control) — good enough
         // for smoke-gain; authors can place `{pkg}-lv2-ttl/` after a future
         // `cargo aura lv2-ttl` command.
-        lv2_fallback_ttl(&pkg, &binary_name)
+        lv2_fallback_ttl(pkg, &binary_name)
     };
 
     // Rewrite binary name in manifest if the fallback used a placeholder.
@@ -1135,7 +1203,57 @@ fn package_name() -> Option<String> {
     None
 }
 
-/// `libfoo.so` / `foo.dll` → `foo`.
+/// Display `name` for the `[[plugin]]` entry whose `crate` matches `pkg`.
+/// Falls back to `pkg` if no aura.toml or no matching entry is found.
+fn plugin_display_name(pkg: &str) -> String {
+    match fs::read_to_string("aura.toml") {
+        Ok(text) => plugin_display_name_from_text(&text, pkg),
+        Err(_) => pkg.to_string(),
+    }
+}
+
+fn plugin_display_name_from_text(text: &str, pkg: &str) -> String {
+    let mut in_plugin = false;
+    let mut current_crate: Option<String> = None;
+    let mut current_name: Option<String> = None;
+    for line in text.lines() {
+        let line = line.split('#').next().unwrap_or("").trim();
+        if line.starts_with("[[plugin]]") {
+            if current_crate.as_deref() == Some(pkg)
+                && let Some(name) = current_name
+            {
+                return name;
+            }
+            in_plugin = true;
+            current_crate = None;
+            current_name = None;
+            continue;
+        }
+        if line.starts_with('[') && !line.starts_with("[[") {
+            in_plugin = false;
+            continue;
+        }
+        if !in_plugin {
+            continue;
+        }
+        if let Some((key, val)) = line.split_once('=') {
+            let key = key.trim();
+            let val = val.trim().trim_matches('"').trim_matches('\'').to_string();
+            match key {
+                "crate" => current_crate = Some(val),
+                "name" => current_name = Some(val),
+                _ => {}
+            }
+        }
+    }
+    if current_crate.as_deref() == Some(pkg)
+        && let Some(name) = current_name
+    {
+        return name;
+    }
+    pkg.to_string()
+}
+
 fn artifact_stem(path: &Path) -> Option<&str> {
     let name = path.file_name()?.to_str()?;
     let stem = name.split('.').next()?;
@@ -1229,21 +1347,61 @@ fn metadata_target_dir() -> Option<PathBuf> {
     Some(PathBuf::from(rest[..end].replace("\\\\", "\\")))
 }
 
-fn parse_format_flags(args: &[String]) -> (Vec<String>, bool, Vec<String>) {
-    let mut features = Vec::new();
+/// Parsed `build` / `install` args.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct BuildArgs {
+    formats: Vec<String>,
+    release: bool,
+    /// Plugins selected via `-plug <name> [<name> ...]`. Empty means
+    /// "current crate" (legacy single-crate behaviour).
+    plugins: Vec<String>,
+    /// Anything else left over.
+    rest: Vec<String>,
+}
+
+/// Parse `build` / `install` flags plus the `-plug <crate> [<crate>...]`
+/// multi-plugin selector. `-plug` consumes every following positional arg
+/// until the next flag (`-` prefix). Use `--` to stop option parsing if a
+/// crate name starts with `-`.
+fn parse_build_args(args: &[String]) -> Result<BuildArgs, String> {
+    let mut formats = Vec::new();
     let mut release = false;
+    let mut plugins = Vec::new();
     let mut rest = Vec::new();
-    for a in args {
+
+    let mut i = 0;
+    while i < args.len() {
+        let a = &args[i];
         match a.as_str() {
-            "--clap" => features.push("clap".into()),
-            "--vst3" => features.push("vst3".into()),
-            "--lv2" => features.push("lv2".into()),
+            "--clap" => formats.push("clap".into()),
+            "--vst3" => formats.push("vst3".into()),
+            "--lv2" => formats.push("lv2".into()),
             "--release" => release = true,
+            "-plug" => {
+                i += 1;
+                let start = i;
+                while i < args.len() && !args[i].starts_with('-') {
+                    plugins.push(args[i].clone());
+                    i += 1;
+                }
+                if plugins.is_empty() || i == start {
+                    return Err("-plug needs at least one crate name".into());
+                }
+                continue;
+            }
             other => rest.push(other.to_string()),
         }
+        i += 1;
     }
-    (features, release, rest)
+
+    Ok(BuildArgs {
+        formats,
+        release,
+        plugins,
+        rest,
+    })
 }
+
 
 // ---------------------------------------------------------------------------
 // paths / utils
@@ -1360,5 +1518,99 @@ mod tests {
         let s = p.to_string_lossy();
         assert!(!s.contains('%'), "{s}");
         assert!(s.ends_with(r"Programs\Common") || s.ends_with("Programs/Common"), "{s}");
+    }
+
+    #[test]
+    fn parse_build_args_formats_and_release() {
+        let args = vec!["--clap".into(), "--vst3".into(), "--release".into()];
+        let p = parse_build_args(&args).unwrap();
+        assert_eq!(p.formats, vec!["clap", "vst3"]);
+        assert!(p.release);
+        assert!(p.plugins.is_empty());
+        assert!(p.rest.is_empty());
+    }
+
+    #[test]
+    fn parse_build_args_single_plug() {
+        let args = vec!["--clap".into(), "-plug".into(), "aether".into()];
+        let p = parse_build_args(&args).unwrap();
+        assert_eq!(p.formats, vec!["clap"]);
+        assert_eq!(p.plugins, vec!["aether"]);
+        assert!(!p.release);
+    }
+
+    #[test]
+    fn parse_build_args_multi_plug() {
+        let args = vec![
+            "--clap".into(),
+            "--vst3".into(),
+            "-plug".into(),
+            "aether".into(),
+            "meridian".into(),
+            "equilibrium".into(),
+            "--release".into(),
+        ];
+        let p = parse_build_args(&args).unwrap();
+        assert_eq!(p.formats, vec!["clap", "vst3"]);
+        assert!(p.release);
+        assert_eq!(p.plugins, vec!["aether", "meridian", "equilibrium"]);
+        assert!(p.rest.is_empty());
+    }
+
+    #[test]
+    fn parse_build_args_plug_stops_at_next_flag() {
+        let args = vec![
+            "-plug".into(),
+            "aether".into(),
+            "meridian".into(),
+            "--clap".into(),
+        ];
+        let p = parse_build_args(&args).unwrap();
+        assert_eq!(p.plugins, vec!["aether", "meridian"]);
+        assert_eq!(p.formats, vec!["clap"]);
+    }
+
+    #[test]
+    fn parse_build_args_plug_without_name_errors() {
+        let args = vec!["--clap".into(), "-plug".into()];
+        assert!(parse_build_args(&args).is_err());
+    }
+
+    #[test]
+    fn parse_build_args_passes_through_cargo_options() {
+        let args = vec![
+            "--clap".into(),
+            "-plug".into(),
+            "aether".into(),
+            "--target".into(),
+            "x86_64-unknown-linux-gnu".into(),
+        ];
+        let p = parse_build_args(&args).unwrap();
+        assert_eq!(p.formats, vec!["clap"]);
+        assert_eq!(p.plugins, vec!["aether"]);
+        assert_eq!(p.rest, vec!["--target", "x86_64-unknown-linux-gnu"]);
+    }
+
+    #[test]
+    fn plugin_display_name_from_aura_toml() {
+        let text = r#"
+[[plugin]]
+name = "Aether"
+bundle_id = "aether"
+crate = "aether"
+category = "effect"
+
+[[plugin]]
+name = "Lucent Relay"
+bundle_id = "lucentrelay"
+crate = "lucent-relay"
+category = "analyzer"
+"#;
+        assert_eq!(plugin_display_name_from_text(text, "aether"), "Aether");
+        assert_eq!(
+            plugin_display_name_from_text(text, "lucent-relay"),
+            "Lucent Relay"
+        );
+        assert_eq!(plugin_display_name_from_text(text, "unknown"), "unknown");
     }
 }
