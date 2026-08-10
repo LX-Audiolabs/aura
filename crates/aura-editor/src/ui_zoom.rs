@@ -1,4 +1,4 @@
-//! Product UI zoom (75% / 100% / 125%) — separate from host HiDPI scale.
+//! Product UI zoom (75% / 100% / 125%) — separate from host `HiDPI` scale.
 //!
 //! Layout stays at design logical size. Effective content scale is
 //! `host_scale × ui_zoom`. Host frame size is `design × ui_zoom`.
@@ -110,15 +110,18 @@ fn factor_from_percent(p: u32) -> f64 {
 }
 
 fn snap_percent(p: u32) -> u32 {
+    #[allow(clippy::cast_possible_wrap)]
+    let key = |&s: &u32| (s as i32 - p as i32).unsigned_abs();
     UI_ZOOM_STEPS
         .iter()
         .copied()
-        .min_by_key(|&s| (s as i32 - p as i32).unsigned_abs())
+        .min_by_key(key)
         .unwrap_or(UI_ZOOM_DEFAULT)
 }
 
 fn scale_dim(design: u32, percent: u32) -> u32 {
-    ((u64::from(design) * u64::from(percent)) / 100).max(1) as u32
+    let v = (u64::from(design) * u64::from(percent)) / 100;
+    u32::try_from(v).unwrap_or(u32::MAX).max(1)
 }
 
 fn config_path() -> Option<PathBuf> {

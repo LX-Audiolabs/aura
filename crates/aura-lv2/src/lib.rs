@@ -19,7 +19,8 @@
 //! When `PluginInfo::accepts_midi_in`, one `atom:Sequence` MIDI input port is
 //! appended last (audio/control indices unchanged).
 //! State: shared [`aura_core::encode_state`] blob when the host maps URIDs.
-//! No GUI in v1 (LV2 UI is a separate story).
+//! GUI: LV2 UI extension via the same [`aura_core::editor::Editor`] trait as
+//! CLAP/VST3, loaded through `lv2ui_descriptor` in the same binary.
 
 #![allow(clippy::missing_safety_doc)]
 #![allow(non_snake_case)]
@@ -42,8 +43,10 @@
 )]
 
 mod ttl;
+mod ui;
 
-pub use ttl::{BundleTtl, generate_ttl, generate_ttl_with_layout};
+pub use ttl::{BundleTtl, generate_ttl, generate_ttl_with_layout, generate_ttl_with_layout_and_ui};
+pub use ui::ui_descriptor;
 
 use std::ffi::{CStr, CString, c_char, c_void};
 use std::ptr;
@@ -72,7 +75,7 @@ use lv2_sys::{
 #[doc(hidden)]
 pub use lv2_sys as __lv2_sys;
 
-/// Export `$logic` as this cdylib's LV2 entry (`lv2_descriptor`).
+/// Export `$logic` as this cdylib's LV2 entry (`lv2_descriptor` + `lv2ui_descriptor`).
 #[macro_export]
 macro_rules! export_lv2 {
     ($logic:ty) => {
@@ -82,6 +85,14 @@ macro_rules! export_lv2 {
             index: u32,
         ) -> *const $crate::__lv2_sys::LV2_Descriptor {
             $crate::descriptor::<$logic>(index)
+        }
+
+        /// LV2 UI discovery entry — host calls with index 0 for the single UI.
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn lv2ui_descriptor(
+            index: u32,
+        ) -> *const $crate::__lv2_sys::LV2UI_Descriptor {
+            $crate::ui_descriptor::<$logic>(index)
         }
     };
 }
@@ -562,7 +573,8 @@ pub fn bundle_ttl_for<L: PluginLogic>(binary_stem: &str) -> BundleTtl {
     let uri = plugin_uri(&info);
     let params = param_list::<L>();
     let layout = static_layout::<L>();
-    generate_ttl_with_layout(&info, &uri, binary_stem, &params, layout)
+    let has_ui = L::editor(Arc::new(L::Params::default())).is_some();
+    generate_ttl_with_layout_and_ui(&info, &uri, binary_stem, &params, layout, has_ui)
 }
 
 /// Non-generic install helper: TTL from free functions + binary stem.

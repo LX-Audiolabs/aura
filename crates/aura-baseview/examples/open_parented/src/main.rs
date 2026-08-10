@@ -66,7 +66,7 @@ impl ParentWindowHandler {
         Self {
             surface: surface.into(),
             damaged: true.into(),
-            _child_window: Some(child_window),
+            _child_window: Some(child_window.window),
         }
     }
 }

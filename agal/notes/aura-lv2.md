@@ -9,7 +9,7 @@
 | path | `crates/aura-lv2` |
 | description | AURA LV2 format wrapper (thin, over PluginLogic) |
 | frameworks | aura, lv2 |
-| generated | `2026-08-10T06:38:20Z` |
+| generated | `2026-08-10T16:45:08Z` |
 
 ## Graph atoms (auto)
 
@@ -32,7 +32,7 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 - `aura` --depends_on--> `aura-lv2`
 
 ## structure
-- public_api symbols: 7 (see json)
+- public_api symbols: 9 (see json)
 - roles: entry, manifest, source
 
 ## agent focus
@@ -49,16 +49,18 @@ _Why this crate/plugin exists. Edit freely._
 
 ## Open
 
-- [ ] 
+- [x] LV2 UI extension — `lv2ui_descriptor` + `Editor` bridge + `ui:idleInterface`; done 2026-08-10. Host smoke pending a suitable LV2 host on the target platform.
 
 ## Decisions
 
-_Architecture choices worth remembering._
+- LV2 UI reuses the same `aura_core::Editor` trait as CLAP/VST3; the wrapper only adds host-bridge (`Lv2Bridge`) and platform widget hand-off.
+- UI triples are emitted in TTL only when `PluginLogic::editor()` returns `Some`.
 
 ## Atoms (human)
 
 _Graph atoms live **above** in AUTO. Add durable decisions/lessons here:_
 
 ```text
-[ATOM] type=decision|lesson|constraint | detail=…
+[ATOM] type=decision | detail=LV2 UI implemented via shared Editor trait; no separate UI crate needed
+[ATOM] type=lesson | detail=Windows REAPER does not ship LV2 support; real host smoke needs Carla/jalv on Linux or a dedicated LV2 host
 ```

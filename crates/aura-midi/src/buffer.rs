@@ -68,13 +68,11 @@ impl MidiBuffer {
         }
     }
 
-    #[must_use]
     pub fn iter(&self) -> impl Iterator<Item = MidiEvent> + '_ {
         self.events.iter().copied()
     }
 
     /// Events with `sample_offset` in `start..end` (half-open).
-    #[must_use]
     pub fn iter_range(&self, start: u32, end: u32) -> impl Iterator<Item = MidiEvent> + '_ {
         self.events
             .iter()

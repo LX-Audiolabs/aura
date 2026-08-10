@@ -100,6 +100,14 @@ pub trait Editor: Send {
     fn set_scale(&mut self, _scale: f64) {}
 
     fn state_changed(&mut self) {}
+
+    /// Native widget handle for hosts that require it (e.g. LV2 UI).
+    ///
+    /// `None` means the toolkit did not expose a handle, or the editor is
+    /// closed. The pointer is only valid while the editor is open.
+    fn native_handle(&self) -> Option<RawWindowHandle> {
+        None
+    }
 }
 
 /// Box a concrete editor into `Box<dyn Editor>`.

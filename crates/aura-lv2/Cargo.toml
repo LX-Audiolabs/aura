@@ -13,5 +13,9 @@ aura-core = { workspace = true }
 aura-params = { workspace = true }
 lv2-sys = "2.0"
 
+[dev-dependencies]
+aura-derive = { workspace = true }
+aura = { workspace = true }
+
 [lints]
 workspace = true

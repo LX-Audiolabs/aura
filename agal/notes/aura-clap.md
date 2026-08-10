@@ -9,7 +9,7 @@
 | path | `crates/aura-clap` |
 | description | CLAP format wrapper for AURA — free-audio/clap via clap-sys (minimal v1) |
 | frameworks | aura, clap |
-| generated | `2026-08-10T06:38:20Z` |
+| generated | `2026-08-10T16:45:08Z` |
 
 ## Graph atoms (auto)
 

@@ -20,11 +20,98 @@ use raw_window_handle::HasWindowHandle;
 use raw_window_handle::HasDisplayHandle;
 use slint::{platform::WindowEvent, ComponentHandle, LogicalPosition, LogicalSize, PhysicalSize};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
 };
+
+/// A portable, `Send`-able raw widget handle.
+///
+/// `raw_window_handle::RawWindowHandle` is not `Send` on all platforms (e.g.
+/// `UIKit` uses `NonNull`), but baseview's window builder closure must be `Send`.
+#[derive(Clone, Copy)]
+pub enum SlintRawHandle {
+    Win32(*mut std::ffi::c_void),
+    AppKit(*mut std::ffi::c_void),
+    X11(u64),
+    Unsupported,
+}
+
+// SAFETY: the contained pointers/handles are opaque values, not thread-local refs.
+unsafe impl Send for SlintRawHandle {}
+unsafe impl Sync for SlintRawHandle {}
+
+impl SlintRawHandle {
+    fn from_raw(handle: raw_window_handle::RawWindowHandle) -> Self {
+        use raw_window_handle::RawWindowHandle as Rwh;
+        match handle {
+            Rwh::Win32(h) => SlintRawHandle::Win32(h.hwnd.get() as *mut std::ffi::c_void),
+            Rwh::AppKit(h) => SlintRawHandle::AppKit(h.ns_view.as_ptr()),
+            Rwh::Xlib(h) => SlintRawHandle::X11(u64::from(h.window)),
+            _ => SlintRawHandle::Unsupported,
+        }
+    }
+
+    /// Convert back to the raw-window-handle enum, if supported.
+    #[must_use]
+    pub fn to_raw(self) -> Option<raw_window_handle::RawWindowHandle> {
+        match self {
+            SlintRawHandle::Win32(hwnd) => {
+                use raw_window_handle::Win32WindowHandle;
+                use std::num::NonZeroIsize;
+                NonZeroIsize::new(hwnd as isize)
+                    .map(|h| raw_window_handle::RawWindowHandle::Win32(Win32WindowHandle::new(h)))
+            }
+            SlintRawHandle::AppKit(view) => {
+                use raw_window_handle::AppKitWindowHandle;
+                std::ptr::NonNull::new(view)
+                    .map(|h| raw_window_handle::RawWindowHandle::AppKit(AppKitWindowHandle::new(h)))
+            }
+            SlintRawHandle::X11(id) => {
+                use raw_window_handle::XlibWindowHandle;
+                Some(raw_window_handle::RawWindowHandle::Xlib(
+                    XlibWindowHandle::new(std::os::raw::c_ulong::try_from(id).unwrap_or(0)),
+                ))
+            }
+            SlintRawHandle::Unsupported => None,
+        }
+    }
+}
+
+/// A parented Slint window together with its native widget handle.
+///
+/// Some plugin hosts (e.g. LV2 UI) need the concrete widget pointer that was
+/// created as a child of the host-provided parent.
+pub struct SlintParentedWindow {
+    pub window: Window,
+    raw_handle: SlintRawHandle,
+}
+
+impl SlintParentedWindow {
+    /// Forward to [`Window::close`].
+    pub fn close(self) {
+        self.window.close();
+    }
+
+    /// Native widget handle, if the platform is supported.
+    pub fn raw_handle(&self) -> Option<raw_window_handle::RawWindowHandle> {
+        self.raw_handle.to_raw()
+    }
+
+    /// Pump main-thread callbacks (X11 only; no-op on Windows/macOS).
+    pub fn host_main_thread_callback(&mut self) {
+        self.window.host_main_thread_callback();
+    }
+}
+
+impl std::ops::Deref for SlintParentedWindow {
+    type Target = Window;
+
+    fn deref(&self) -> &Self::Target {
+        &self.window
+    }
+}
 
 #[cfg(feature = "backend-wgpu")]
 use slint::platform::software_renderer::{MinimalSoftwareWindow, PremultipliedRgbaColor};
@@ -622,7 +709,7 @@ where
         state: S,
         build: B,
         update: U,
-    ) -> Result<Window, baseview::Error>
+    ) -> Result<SlintParentedWindow, baseview::Error>
     where
         B: FnOnce(&mut S) -> C,
         B: 'static + Send,
@@ -651,19 +738,29 @@ where
         update: U,
         policy: SizePolicy,
         request_resize: Option<RequestResizeFn>,
-    ) -> Result<Window, baseview::Error>
+    ) -> Result<SlintParentedWindow, baseview::Error>
     where
         B: FnOnce(&mut S) -> C,
         B: 'static + Send,
         P: HasWindowHandle,
     {
         let options = options.with_parent(Some(parent));
+        let raw_slot: Arc<Mutex<SlintRawHandle>> = Arc::new(Mutex::new(SlintRawHandle::Unsupported));
+        let raw_slot_clone = Arc::clone(&raw_slot);
         let window = Window::create(options, move |w| {
+            if let Ok(handle) = w.window_handle()
+                && let Ok(mut slot) = raw_slot_clone.lock()
+            {
+                *slot = SlintRawHandle::from_raw(handle.as_raw());
+            }
             // FemtoVG path: Result (soft-fail on GL). Other backends: always Ok.
             SlintWindow::new(&w, state, update, build, policy, request_resize)
         })?;
         window.show()?;
-        Ok(window)
+        let raw_handle = raw_slot
+            .lock()
+            .map_or(SlintRawHandle::Unsupported, |g| *g);
+        Ok(SlintParentedWindow { window, raw_handle })
     }
 
     /// Open a standalone window and run the event loop until it closes.

@@ -16,6 +16,8 @@ pub mod scale;
 pub mod slint_window;
 pub mod translate;
 
+pub use slint_window::SlintParentedWindow;
+
 pub use scale::{
     fit_size, pack_size, to_physical_px, unpack_size, EditorScale, RequestResizeFn, SizePolicy,
 };

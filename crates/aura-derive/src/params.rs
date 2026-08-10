@@ -9,7 +9,10 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::{Data, DeriveInput};
 
-use aura_params::METER_ID_BASE;
+// Mirrors `aura_params::METER_ID_BASE` so the derive does not depend on
+// `aura-params` at proc-macro build time (avoids linking the parameter crate
+// into the proc-macro DLL). Keep in sync with `aura_params::METER_ID_BASE`.
+const METER_ID_BASE: u32 = 1 << 24;
 
 use crate::codegen::{
     gen_field_constructor, gen_param_id_enum, gen_param_info_literal, gen_persist_read,

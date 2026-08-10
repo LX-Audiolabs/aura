@@ -8,8 +8,7 @@
 | kind | `crate` |
 | path | `crates/aura-derive` |
 | description | Proc macros for AURA plugins: #[derive(Params)] and #[derive(ParamEnum)] |
-| frameworks | aura |
-| generated | `2026-08-10T06:38:20Z` |
+| generated | `2026-08-10T16:45:08Z` |
 
 ## Graph atoms (auto)
 
@@ -17,21 +16,16 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 
 ```text
 [ATOM] type=fact | detail=kind=crate id=crates/aura-derive
-[ATOM] type=fact | detail=frameworks=aura
-[ATOM] type=fact | detail=roles=entry+manifest
-[ATOM] type=fact | detail=depends_on=aura-params
+[ATOM] type=fact | detail=roles=entry+manifest+source
 [ATOM] type=fact | detail=used_by=aura via depends_on
 ```
-
-## deps (workspace)
-- `aura-params`
 
 ## dependents (inbound)
 - `aura` --depends_on--> `aura-derive`
 
 ## structure
 - public_api symbols: 2 (see json)
-- roles: entry, manifest
+- roles: entry, manifest, source
 
 ## agent focus
 **L1:** scan **Graph atoms** above first, then human body below HUMAN.  

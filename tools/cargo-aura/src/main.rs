@@ -905,6 +905,7 @@ fn lv2_fallback_ttl(pkg: &str, binary_name: &str) -> (String, String) {
 @prefix lv2:   <http://lv2plug.in/ns/lv2core#> .
 @prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix state: <http://lv2plug.in/ns/ext/state#> .
+@prefix ui:    <http://lv2plug.in/ns/extensions/ui#> .
 
 <{uri}>
     a lv2:Plugin, lv2:AmplifierPlugin ;
@@ -912,6 +913,7 @@ fn lv2_fallback_ttl(pkg: &str, binary_name: &str) -> (String, String) {
     doap:license <https://spdx.org/licenses/GPL-3.0-or-later> ;
     lv2:optionalFeature lv2:hardRTCapable ;
     lv2:extensionData state:interface ;
+    ui:ui <{uri}#ui> ;
     lv2:port [
         a lv2:InputPort, lv2:AudioPort ;
         lv2:index 0 ;
@@ -941,6 +943,11 @@ fn lv2_fallback_ttl(pkg: &str, binary_name: &str) -> (String, String) {
         lv2:minimum -24.0 ;
         lv2:maximum 24.0 ;
     ] .
+
+<{uri}#ui>
+    a ui:X11UI, ui:WindowsUI, ui:CocoaUI ;
+    ui:binary <{binary_name}> ;
+    lv2:extensionData ui:idleInterface .
 "
     );
     (manifest, plugin)

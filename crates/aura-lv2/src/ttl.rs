@@ -44,6 +44,19 @@ pub fn generate_ttl_with_layout(
     params: &[ParamInfo],
     layout: BusLayout,
 ) -> BundleTtl {
+    generate_ttl_with_layout_and_ui(info, uri, binary_stem, params, layout, false)
+}
+
+/// Like [`generate_ttl_with_layout`] but optionally declares an LV2 UI.
+#[allow(clippy::too_many_lines)]
+pub fn generate_ttl_with_layout_and_ui(
+    info: &PluginInfo,
+    uri: &str,
+    binary_stem: &str,
+    params: &[ParamInfo],
+    layout: BusLayout,
+    has_ui: bool,
+) -> BundleTtl {
     let binary_name = {
         #[cfg(target_os = "windows")]
         {
@@ -105,6 +118,25 @@ pub fn generate_ttl_with_layout(
     }
 
     let io_note = layout.config_name();
+    let ui_block = if has_ui {
+        format!(
+            r#"
+<{uri}#ui>
+    a ui:X11UI, ui:WindowsUI, ui:CocoaUI ;
+    ui:binary <{binary}> ;
+    lv2:extensionData ui:idleInterface ."#,
+            uri = uri,
+            binary = binary_name,
+        )
+    } else {
+        String::new()
+    };
+    let ui_ref = if has_ui {
+        format!("\n    ui:ui <{uri}#ui> ;", uri = uri)
+    } else {
+        String::new()
+    };
+
     let plugin = format!(
         r#"@prefix doap:  <http://usefulinc.com/ns/doap#> .
 @prefix foaf:  <http://xmlns.com/foaf/0.1/> .
@@ -114,6 +146,7 @@ pub fn generate_ttl_with_layout(
 @prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix unit:  <http://lv2plug.in/ns/extensions/units#> .
 @prefix state: <http://lv2plug.in/ns/ext/state#> .
+@prefix ui:    <http://lv2plug.in/ns/extensions/ui#> .
 
 <{uri}>
     a {class} ;
@@ -121,16 +154,19 @@ pub fn generate_ttl_with_layout(
     doap:license <https://spdx.org/licenses/GPL-3.0-or-later> ;
     lv2:project <https://lx-audiolabs.com/> ;
     lv2:optionalFeature lv2:hardRTCapable, state:loadDefaultState ;
-    lv2:extensionData state:interface ;
+    lv2:extensionData state:interface ;{ui_ref}
     rdfs:comment "AURA LV2 wrapper — {io_note}, control ports for params." ;
 {ports}
     .
+{ui_block}
 "#,
         uri = uri,
         class = class,
         name = escape_ttl(info.name),
         io_note = escape_ttl(&io_note),
         ports = ports,
+        ui_ref = ui_ref,
+        ui_block = ui_block,
     );
 
     // Vendor as foaf:maker optional — keep TTL short.

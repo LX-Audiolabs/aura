@@ -37,10 +37,23 @@ pub mod ui_zoom;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use baseview::{Window, WindowSettings};
+use baseview::WindowSettings;
 use slint::ComponentHandle;
 
 use aura_core::editor::{Editor, PluginContext, RawWindowHandle};
+
+pub(crate) fn map_baseview_handle(raw: Option<raw_window_handle::RawWindowHandle>) -> Option<RawWindowHandle> {
+    use raw_window_handle::RawWindowHandle as Rwh;
+    raw.and_then(|h| match h {
+        #[cfg(target_os = "windows")]
+        Rwh::Win32(h) => Some(RawWindowHandle::Win32(h.hwnd.get() as *mut std::ffi::c_void)),
+        #[cfg(target_os = "macos")]
+        Rwh::AppKit(h) => Some(RawWindowHandle::AppKit(h.ns_view.as_ptr())),
+        #[cfg(target_os = "linux")]
+        Rwh::Xlib(h) => Some(RawWindowHandle::X11(h.window as u64)),
+        _ => None,
+    })
+}
 
 // Window stack (Slint + baseview + renderer backends) stays reachable
 // through this crate so plugin authors need one UI dependency. Also brings
@@ -67,7 +80,7 @@ where
     design_size: (u32, u32),
     build: BuildFn<C>,
     sync: SyncFn<C>,
-    window: Option<Window>,
+    window: Option<SlintParentedWindow>,
     can_resize: bool,
     min_size: (u32, u32),
     max_size: (u32, u32),
@@ -75,6 +88,8 @@ where
     scale: EditorScale,
     /// Packed design logical size for handler reconcile after host `set_size`.
     pending_size: Arc<AtomicU64>,
+    /// Native widget handle of the opened child window, if available.
+    native_handle: Option<RawWindowHandle>,
 }
 
 // SAFETY: baseview::Window holds raw native window pointers (HWND/NSView)
@@ -109,6 +124,7 @@ where
             max_size: size,
             scale: EditorScale::new(1.0),
             pending_size: Arc::new(AtomicU64::new(0)),
+            native_handle: None,
         }
     }
 
@@ -160,8 +176,9 @@ where
         // Drop previous window if host re-opens without close.
         self.close();
 
-        // Reset stale set_size from a previous open.
+        // Reset stale set_size / native handle from a previous open.
         self.pending_size.store(0, Ordering::Relaxed);
+        self.native_handle = None;
 
         let parent_window = parent::ParentedWindow::from_raw(parent);
 
@@ -208,6 +225,7 @@ where
                 let _ = w.resize(baseview::dpi::Size::Physical(
                     baseview::dpi::PhysicalSize::new(phys_w, phys_h),
                 ));
+                self.native_handle = map_baseview_handle(w.raw_handle());
                 self.window = Some(w);
             }
             // Soft-fail: editor stays closed; DSP continues. Typical on old
@@ -230,6 +248,7 @@ where
         if let Some(window) = self.window.take() {
             window.close();
         }
+        self.native_handle = None;
     }
 
     fn show(&mut self) {
@@ -258,6 +277,17 @@ where
 
     fn set_scale(&mut self, scale: f64) {
         self.scale.set(scale);
+    }
+
+    fn idle(&mut self) {
+        // X11 needs main-thread callbacks pumped; Windows/macOS are no-ops.
+        if let Some(window) = &mut self.window {
+            window.host_main_thread_callback();
+        }
+    }
+
+    fn native_handle(&self) -> Option<RawWindowHandle> {
+        self.native_handle
     }
 
     fn set_size(&mut self, width: u32, height: u32) -> bool {

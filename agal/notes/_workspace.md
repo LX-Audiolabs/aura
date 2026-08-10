@@ -16,6 +16,7 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 - [ ] G12 sidechain/multi-bus — only if pilot needs
 - [ ] G13 note-ports/MIDI in process — instrument/MIDI FX only
 - [ ] G14 tail/render/preset-load — CLAP polish
+- [x] LV2 UI extension — `lv2ui_descriptor` + `Editor` bridge + `ui:idleInterface`; done 2026-08-10 (host smoke pending suitable LV2 host)
 - [x] F1 split aura-derive lib.rs (~2.6k LOC) — parse/codegen/param_enum/params, 2026-08-10
 - [ ] Stage 6 optional: richer agal mesh / hot-reload / MIDI 2.0 stubs
 
@@ -25,6 +26,7 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 [ATOM] type=decision | detail=Rust toolchain moved nightly → stable 1.97.1 2026-08-10 (rust-toolchain.toml pin); stale incremental cache from the old nightly caused rustc ICEs (STATUS_ACCESS_VIOLATION on fontique/resvg) — `cargo clean` fixed it, not a real regression
 [ATOM] type=decision | detail=F1 done 2026-08-10 — aura-derive/src/lib.rs 2719→114 LOC; parse.rs (field/attr parsing), codegen.rs (token builders — `gen` is a reserved keyword), params.rs (Params derive orchestration), param_enum.rs (ParamEnum derive); #[proc_macro_derive] fns stay thin wrappers in lib.rs (crate-root requirement), logic moved to module::expand()
 [ATOM] type=decision | detail=CI matrix (six plugins) lives in lx-audiolabs-plugins repo, not AURA — build-linux.yml (GH Actions, workflow_dispatch) + build-local-zip.ps1 (local win+linux via zig cross) already exist there; keeping GH workflow as-is but not extending it (GH CI intentionally not the primary path — local script is); fixed stale `aurum`→`mensor` clapNames key in build-local-zip.ps1, mensor still excluded from its default plugin list on purpose
+[ATOM] type=decision | detail=LV2 UI extension done 2026-08-10 — aura-lv2/src/ui.rs exposes shared Editor as lv2ui_descriptor with Lv2Bridge + idleInterface; TTL UI triples emitted when plugin has an editor; host smoke blocked on Windows by lack of LV2 host (REAPER win64 has no LV2 support)
 [ATOM] type=decision | detail=G15 AudioTap landed 2026-08-10 — lock-free SPSC sample ring in aura-params; #[skip] declare, concrete Arc<Params> editor access, no core/derive change
 [ATOM] type=decision | detail=Stage 7 pilot + catalog migration done 2026-08-09 — all six plugins on AURA path deps
 [ATOM] type=decision | detail=Basis fertig 2026-08-08 — DoD green; cutover gate open

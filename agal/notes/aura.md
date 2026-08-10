@@ -9,7 +9,7 @@
 | path | `crates/aura` |
 | description | AURA — Audio Unified Rust Architecture (umbrella crate) |
 | frameworks | aura, clap, lv2, vst3 |
-| generated | `2026-08-10T06:38:20Z` |
+| generated | `2026-08-10T16:45:08Z` |
 
 ## Graph atoms (auto)
 
@@ -43,6 +43,7 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 ## structure
 - params: CollidingParams (1 fields)
 - params: SubParams (1 fields)
+- params: TapParams (1 fields)
 - params: TestParams (5 fields)
 - roles: entry, manifest
 

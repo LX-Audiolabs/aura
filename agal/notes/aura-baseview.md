@@ -9,7 +9,7 @@
 | path | `crates/aura-baseview` |
 | description | AURA Slint + baseview window stack (FemtoVG / Skia / software) — no plugin host API |
 | frameworks | aura-baseview, baseview, raw-window-handle, slint |
-| generated | `2026-08-10T06:38:20Z` |
+| generated | `2026-08-10T16:45:08Z` |
 
 ## Graph atoms (auto)
 
@@ -30,7 +30,7 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 - `aura-editor` --depends_on--> `aura-baseview`
 
 ## structure
-- public_api symbols: 19 (see json)
+- public_api symbols: 21 (see json)
 - roles: entry, manifest, slint, source
 
 ## agent focus

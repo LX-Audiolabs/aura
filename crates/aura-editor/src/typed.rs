@@ -11,11 +11,12 @@ use aura_baseview::slint_window::SlintWindow;
 use aura_baseview::{pack_size, to_physical_px, RequestResizeFn, SizePolicy};
 use aura_core::editor::{Editor, PluginContext, RawWindowHandle};
 use aura_params::Params;
-use baseview::{gl::GlConfig, Window, WindowSettings};
+use aura_baseview::SlintParentedWindow;
+use baseview::{gl::GlConfig, WindowSettings};
 use slint::ComponentHandle;
 
-use super::ui_zoom::{UiZoom};
-use super::parent;
+use super::ui_zoom::UiZoom;
+use super::{map_baseview_handle, parent};
 
 
 /// Typed product context: Arc params + host bridge helpers.
@@ -112,6 +113,7 @@ impl<P: Params + 'static> PluginContextReadF32 for LxPluginContext<P> {
 
 /// Discrete index 0..count-1 → normalized 0..1.
 #[must_use]
+#[allow(clippy::cast_precision_loss)]
 pub fn discrete_norm(index: usize, count: usize) -> f64 {
     if count <= 1 {
         0.0
@@ -122,6 +124,7 @@ pub fn discrete_norm(index: usize, count: usize) -> f64 {
 
 /// Normalized 0..1 → discrete index.
 #[must_use]
+#[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss, clippy::cast_sign_loss)]
 pub fn discrete_index(norm: f64, count: usize) -> usize {
     if count <= 1 {
         0
@@ -144,12 +147,13 @@ where
     design_size: (u32, u32),
     build: BuildFn<P, C>,
     sync: SyncFn<P, C>,
-    window: Option<Window>,
+    window: Option<SlintParentedWindow>,
     can_resize: bool,
     min_size: (u32, u32),
     max_size: (u32, u32),
     ui_zoom: UiZoom,
     pending_size: Arc<AtomicU64>,
+    native_handle: Option<RawWindowHandle>,
 }
 
 // SAFETY: baseview Window is GUI-thread only (host contract).
@@ -193,6 +197,7 @@ where
             max_size: zoomed,
             ui_zoom,
             pending_size: Arc::new(AtomicU64::new(0)),
+            native_handle: None,
         }
     }
 
@@ -299,6 +304,7 @@ where
                 let _ = w.resize(baseview::dpi::Size::Physical(
                     baseview::dpi::PhysicalSize::new(phys_w, phys_h),
                 ));
+                self.native_handle = map_baseview_handle(w.raw_handle());
                 self.window = Some(w);
             }
             Ok(Err(e)) => {
@@ -318,6 +324,7 @@ where
         if let Some(window) = self.window.take() {
             window.close();
         }
+        self.native_handle = None;
     }
 
     fn show(&mut self) {
@@ -361,6 +368,16 @@ where
             return false;
         }
         true
+    }
+
+    fn idle(&mut self) {
+        if let Some(window) = &mut self.window {
+            window.host_main_thread_callback();
+        }
+    }
+
+    fn native_handle(&self) -> Option<RawWindowHandle> {
+        self.native_handle
     }
 }
 
