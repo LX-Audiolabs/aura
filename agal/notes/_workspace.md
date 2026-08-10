@@ -12,12 +12,18 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 
 ## Open
 
-- [ ] Stage 7 pilot (simple stereo FX first)
-- [ ] Stage 6 optional: richer agal mesh / hot-reload
+- [ ] CI matrix for all six product plugins (post-cutover order #1)
+- [ ] G12 sidechain/multi-bus — only if pilot needs
+- [ ] G13 note-ports/MIDI in process — instrument/MIDI FX only
+- [ ] G14 tail/render/preset-load — CLAP polish
+- [ ] F1 split aura-derive lib.rs (~2.6k LOC) — parse/gen/param_enum
+- [ ] Stage 6 optional: richer agal mesh / hot-reload / MIDI 2.0 stubs
 
 ## Decisions
 
 ```text
+[ATOM] type=decision | detail=G15 AudioTap landed 2026-08-10 — lock-free SPSC sample ring in aura-params; #[skip] declare, concrete Arc<Params> editor access, no core/derive change
+[ATOM] type=decision | detail=Stage 7 pilot + catalog migration done 2026-08-09 — all six plugins on AURA path deps
 [ATOM] type=decision | detail=Basis fertig 2026-08-08 — DoD green; cutover gate open
 [ATOM] type=decision | detail=Stage 5b P1 done: G9 layouts, G10 remote-controls, G11 latency
 [ATOM] type=decision | detail=Stage 6 core tooling done: kinds, add, aura-gui (CLI parity)

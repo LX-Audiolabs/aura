@@ -11,8 +11,8 @@ pub use range::ParamRange;
 pub use sample::{Float, Sample};
 pub use smooth::{Smoother, SmoothingStyle};
 pub use types::{
-    BoolParam, EnumParam, FloatParam, FloatParamReadF32, FloatParamReadF64, IntParam, MeterSlot,
-    ParamEnum,
+    AudioTap, BoolParam, DEFAULT_TAP_CAPACITY, EnumParam, FloatParam, FloatParamReadF32,
+    FloatParamReadF64, IntParam, MeterSlot, ParamEnum,
 };
 
 /// Implementation detail - not part of the stable public API.

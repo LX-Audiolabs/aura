@@ -686,6 +686,121 @@ impl From<&MeterSlot> for u32 {
     }
 }
 
+// ---------------------------------------------------------------------------
+// AudioTap
+// ---------------------------------------------------------------------------
+
+use std::sync::atomic::AtomicUsize;
+
+/// Default ring capacity in samples for [`AudioTap::default`] - two
+/// typical 2048-point analyzer FFT windows' worth of headroom so a
+/// slightly late UI drain doesn't lose a whole frame.
+pub const DEFAULT_TAP_CAPACITY: usize = 4096;
+
+/// Lock-free single-producer/single-consumer sample tap for the audio
+/// → UI analyzer path (G15 in `docs/gaps-and-optimizations.md`).
+///
+/// The audio thread [`push`](Self::push)es raw samples every
+/// `process()` call; the UI/editor thread [`drain`](Self::drain)s them
+/// once per frame. Both sides use plain atomics only - no locks, no
+/// allocation on the producer side - so `push` is safe to call from a
+/// realtime audio callback (`agal/skills/00-core/audio-thread-boundary.md`).
+///
+/// Declare with `#[skip]` like any other DSP↔UI shared field the
+/// derive default-initializes:
+///
+/// ```ignore
+/// #[derive(Params)]
+/// pub struct AnalyzerParams {
+///     #[skip]
+///     pub spectrum_tap: AudioTap,
+/// }
+/// ```
+///
+/// The editor reaches it through the concrete `Arc<Self::Params>`
+/// `PluginLogic::editor()` already receives (capture it into the
+/// build/sync closures) - not through the `dyn Params` trait, since a
+/// raw sample ring isn't part of the host-automatable parameter
+/// surface. FFT / spectrum math stays product-side (`lx-analysis`,
+/// see G16); this type only moves raw samples across the thread
+/// boundary.
+///
+/// Single-producer / single-consumer is a caller contract, not
+/// enforced by the type: only the audio thread may call `push`, only
+/// the UI/editor thread may call `drain`.
+///
+/// On overflow (producer outruns the consumer), the oldest unread
+/// samples are silently overwritten - the tap never blocks and never
+/// grows, matching the audio thread's no-alloc/no-lock constraint.
+/// Need a non-default capacity? `#[skip]` fields only require
+/// `Default`, so wrap in a newtype with its own `Default` impl calling
+/// [`AudioTap::new`].
+pub struct AudioTap {
+    buf: Box<[AtomicU32]>,
+    /// Total samples ever pushed (monotonic; wraps at `usize::MAX`).
+    write: AtomicUsize,
+    /// Total samples ever drained (monotonic; wraps at `usize::MAX`).
+    read: AtomicUsize,
+}
+
+impl AudioTap {
+    /// New tap with the given capacity in samples. `0` is treated as
+    /// `1` - a zero-length ring can't hold a sample.
+    #[must_use]
+    pub fn new(capacity: usize) -> Self {
+        let capacity = capacity.max(1);
+        Self {
+            buf: (0..capacity).map(|_| AtomicU32::new(0)).collect(),
+            write: AtomicUsize::new(0),
+            read: AtomicUsize::new(0),
+        }
+    }
+
+    /// Ring capacity in samples.
+    #[must_use]
+    pub fn capacity(&self) -> usize {
+        self.buf.len()
+    }
+
+    /// Push samples from the audio thread. Never allocates, never
+    /// blocks; overwrites the oldest unread samples on overflow.
+    pub fn push(&self, samples: &[f32]) {
+        let cap = self.buf.len();
+        let mut write = self.write.load(Ordering::Relaxed);
+        for &s in samples {
+            self.buf[write % cap].store(s.to_bits(), Ordering::Relaxed);
+            write = write.wrapping_add(1);
+        }
+        self.write.store(write, Ordering::Release);
+    }
+
+    /// Drain every sample pushed since the last `drain`, oldest first.
+    /// Call from the UI/editor thread. Returns fewer samples than were
+    /// pushed since the last drain if the producer overflowed the ring
+    /// in the meantime - the overwritten samples are simply gone.
+    #[must_use]
+    pub fn drain(&self) -> Vec<f32> {
+        let cap = self.buf.len();
+        let write = self.write.load(Ordering::Acquire);
+        let read = self.read.load(Ordering::Relaxed);
+        let available = write.wrapping_sub(read).min(cap);
+        let start = write.wrapping_sub(available);
+        let mut out = Vec::with_capacity(available);
+        for i in 0..available {
+            let idx = start.wrapping_add(i) % cap;
+            out.push(f32::from_bits(self.buf[idx].load(Ordering::Relaxed)));
+        }
+        self.read.store(write, Ordering::Release);
+        out
+    }
+}
+
+impl Default for AudioTap {
+    fn default() -> Self {
+        Self::new(DEFAULT_TAP_CAPACITY)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -885,5 +1000,53 @@ mod tests {
             (-60.0..=6.0).contains(&v),
             "clamped to the normalized interval"
         );
+    }
+
+    #[test]
+    fn audio_tap_push_drain_round_trip() {
+        let tap = AudioTap::new(8);
+        tap.push(&[1.0, 2.0, 3.0]);
+        assert_eq!(tap.drain(), vec![1.0, 2.0, 3.0]);
+        // Fully drained: nothing left until the next push.
+        assert_eq!(tap.drain(), Vec::<f32>::new());
+    }
+
+    #[test]
+    fn audio_tap_multiple_pushes_before_drain() {
+        let tap = AudioTap::new(8);
+        tap.push(&[1.0, 2.0]);
+        tap.push(&[3.0, 4.0]);
+        assert_eq!(tap.drain(), vec![1.0, 2.0, 3.0, 4.0]);
+    }
+
+    #[test]
+    fn audio_tap_overflow_drops_oldest_never_blocks() {
+        let tap = AudioTap::new(4);
+        // Push more than capacity in one go: only the last 4 survive.
+        tap.push(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        assert_eq!(tap.drain(), vec![3.0, 4.0, 5.0, 6.0]);
+    }
+
+    #[test]
+    fn audio_tap_overflow_across_pushes_between_drains() {
+        let tap = AudioTap::new(4);
+        tap.push(&[1.0, 2.0, 3.0]);
+        // Consumer hasn't drained yet; producer keeps going and wraps.
+        tap.push(&[4.0, 5.0, 6.0]);
+        // Ring holds 4: the oldest 2 (1.0, 2.0) were overwritten.
+        assert_eq!(tap.drain(), vec![3.0, 4.0, 5.0, 6.0]);
+    }
+
+    #[test]
+    fn audio_tap_default_uses_default_capacity() {
+        assert_eq!(AudioTap::default().capacity(), DEFAULT_TAP_CAPACITY);
+    }
+
+    #[test]
+    fn audio_tap_zero_capacity_clamped_to_one() {
+        let tap = AudioTap::new(0);
+        assert_eq!(tap.capacity(), 1);
+        tap.push(&[7.0, 8.0]);
+        assert_eq!(tap.drain(), vec![8.0], "only the last sample survives a 1-slot ring");
     }
 }

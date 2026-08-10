@@ -48,9 +48,9 @@ pub use aura_core::{
 
 // --- params surface ---
 pub use aura_params::{
-    BoolParam, EnumParam, FloatParam, FloatParamReadF32, FloatParamReadF64, IntParam, MeterSlot,
-    MidiSource, ParamEnum, ParamFlags, ParamInfo, ParamRange, ParamUnit, ParamValueKind, Params,
-    Smoother, SmoothingStyle, format_param_value, parse_param_value,
+    AudioTap, BoolParam, EnumParam, FloatParam, FloatParamReadF32, FloatParamReadF64, IntParam,
+    MeterSlot, MidiSource, ParamEnum, ParamFlags, ParamInfo, ParamRange, ParamUnit,
+    ParamValueKind, Params, Smoother, SmoothingStyle, format_param_value, parse_param_value,
 };
 pub use aura_params::sample::{Float, Sample};
 
@@ -75,11 +75,11 @@ pub mod prelude {
     pub use std::sync::Arc;
 
     pub use crate::{
-        AudioBuffer, AudioConfig, BoolParam, BusLayout, ChannelConfig, Editor, EnumParam,
-        FloatParam, FloatParamReadF32, IntParam, IntoEditor, MeterSlot, MidiBuffer, MidiMessage,
-        ParamEnum, ParamInfo, ParamRange, ParamUnit, ParamValueKind, Params, PluginCategory,
-        PluginContext, PluginInfo, PluginLogic, ProcessContext, ProcessMode, ProcessStatus,
-        RawWindowHandle, SmoothingStyle,
+        AudioBuffer, AudioConfig, AudioTap, BoolParam, BusLayout, ChannelConfig, Editor,
+        EnumParam, FloatParam, FloatParamReadF32, IntParam, IntoEditor, MeterSlot, MidiBuffer,
+        MidiMessage, ParamEnum, ParamInfo, ParamRange, ParamUnit, ParamValueKind, Params,
+        PluginCategory, PluginContext, PluginInfo, PluginLogic, ProcessContext, ProcessMode,
+        ProcessStatus, RawWindowHandle, SmoothingStyle,
     };
     // FloatParamReadF64 available as `aura::FloatParamReadF64` — not in prelude
     // (same method name as F32 → E0034 if both imported).

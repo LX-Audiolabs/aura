@@ -245,6 +245,36 @@ fn parent_nested_id_collision_panics_at_construction() {
     let _ = CollidingParams::new();
 }
 
+/// G15: `AudioTap` declared via the existing `#[skip]` mechanism (no
+/// derive changes needed) - excluded from the automatable param
+/// surface, reached by the editor through the concrete struct rather
+/// than `dyn Params`.
+#[derive(Params)]
+struct TapParams {
+    #[param(id = 1, name = "Gain", range = "linear(-24, 24)", default = 0.0)]
+    gain: FloatParam,
+    #[skip]
+    spectrum_tap: AudioTap,
+}
+
+#[test]
+fn audio_tap_skip_field_excluded_from_param_surface() {
+    let p = TapParams::new();
+    assert_eq!(p.count(), 1, "AudioTap is not a parameter");
+    assert_eq!(p.param_infos().len(), 1);
+    assert!(p.meter_ids().is_empty(), "AudioTap is not a meter either");
+}
+
+#[test]
+fn audio_tap_concrete_field_access_round_trip() {
+    let p = TapParams::new();
+    // Audio-thread side: push raw samples every process() call.
+    p.spectrum_tap.push(&[0.1, 0.2, 0.3]);
+    // UI-thread side: the editor drains through the concrete
+    // `Arc<Self::Params>` PluginLogic::editor() receives, not `dyn Params`.
+    assert_eq!(p.spectrum_tap.drain(), vec![0.1, 0.2, 0.3]);
+}
+
 #[test]
 fn param_id_enum_maps_explicit_ids() {
     use TestParamsParamId as P;

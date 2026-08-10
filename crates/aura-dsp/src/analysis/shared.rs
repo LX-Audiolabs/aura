@@ -7,7 +7,8 @@ use super::{
     ClipWaveRing, DEFAULT_BAND_TOLERANCES, SCOPE_BUFFER_LEN, SPECTRUM_BINS,
 };
 use atomic_float::AtomicF32;
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicU8, AtomicUsize};
+use aura_params::AudioTap;
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicU8};
 use std::sync::{Arc, Mutex};
 
 #[inline]
@@ -43,11 +44,6 @@ fn spectrum_buf() -> Arc<Mutex<Vec<f32>>> {
     Arc::new(Mutex::new(vec![-90.0; SPECTRUM_BINS]))
 }
 
-#[inline]
-fn scope_buf() -> Arc<Mutex<Vec<[f32; 2]>>> {
-    Arc::new(Mutex::new(vec![[0.0, 0.0]; SCOPE_BUFFER_LEN]))
-}
-
 /// Output / correlation / balance meters (stereo + mono peak + holds).
 #[derive(Clone)]
 pub struct PeakMeters {
@@ -78,18 +74,43 @@ impl Default for PeakMeters {
     }
 }
 
-/// Goniometer / vectorscope ring.
+/// Goniometer / vectorscope tap — lock-free audio→UI stereo sample
+/// stream (G15). Audio thread [`push`](Self::push)es each block's
+/// (already visually-auto-gained) L/R samples; UI/editor thread
+/// [`drain`](Self::drain)s new pairs each tick and keeps its own
+/// bounded display window — this only moves raw samples across the
+/// thread boundary, same "never block" contract as [`AudioTap`].
 #[derive(Clone)]
 pub struct ScopeRing {
-    pub samples: Arc<Mutex<Vec<[f32; 2]>>>,
-    pub write_pos: Arc<AtomicUsize>,
+    left: Arc<AudioTap>,
+    right: Arc<AudioTap>,
+}
+
+impl ScopeRing {
+    /// Push one stereo sample from the audio thread.
+    pub fn push(&self, l: f32, r: f32) {
+        self.left.push(&[l]);
+        self.right.push(&[r]);
+    }
+
+    /// Drain every stereo pair pushed since the last call, oldest
+    /// first. UI/editor thread only. Empty when nothing new was
+    /// pushed (e.g. transport stopped) — callers keep their own
+    /// rolling display window rather than re-reading a persistent
+    /// buffer here.
+    #[must_use]
+    pub fn drain(&self) -> Vec<[f32; 2]> {
+        let l = self.left.drain();
+        let r = self.right.drain();
+        l.into_iter().zip(r).map(|(l, r)| [l, r]).collect()
+    }
 }
 
 impl Default for ScopeRing {
     fn default() -> Self {
         Self {
-            samples: scope_buf(),
-            write_pos: Arc::new(AtomicUsize::new(0)),
+            left: Arc::new(AudioTap::new(SCOPE_BUFFER_LEN)),
+            right: Arc::new(AudioTap::new(SCOPE_BUFFER_LEN)),
         }
     }
 }
@@ -186,4 +207,29 @@ pub fn new_clip_wave_shared() -> Arc<Mutex<ClipWaveRing>> {
 #[must_use]
 pub fn new_spectrum_buf() -> Arc<Mutex<Vec<f32>>> {
     spectrum_buf()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scope_ring_push_drain_round_trip() {
+        let scope = ScopeRing::default();
+        scope.push(0.1, -0.1);
+        scope.push(0.2, -0.2);
+        assert_eq!(scope.drain(), vec![[0.1, -0.1], [0.2, -0.2]]);
+        // Fully drained: nothing left until the next push.
+        assert!(scope.drain().is_empty());
+    }
+
+    #[test]
+    fn scope_ring_clone_shares_the_same_underlying_taps() {
+        // Product `*Shared` structs are `Clone`d into UI closures; both
+        // handles must observe the same stream, not independent copies.
+        let scope = ScopeRing::default();
+        let handle = scope.clone();
+        scope.push(0.5, -0.5);
+        assert_eq!(handle.drain(), vec![[0.5, -0.5]]);
+    }
 }

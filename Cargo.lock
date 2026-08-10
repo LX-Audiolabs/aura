@@ -543,6 +543,7 @@ name = "aura-dsp"
 version = "0.5.0"
 dependencies = [
  "atomic_float",
+ "aura-params",
  "criterion",
  "ebur128",
  "goonj",
