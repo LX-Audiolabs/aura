@@ -1,0 +1,5 @@
+# LSP config for Slint extension — resolves `@aura` imports at edit time.
+# At build time, aura_build::materialize_assets() does the same via CompilerConfiguration.
+
+[library_paths]
+aura = "crates/aura-build/ui/widgets.slint"

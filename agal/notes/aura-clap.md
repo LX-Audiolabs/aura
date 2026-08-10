@@ -8,8 +8,8 @@
 | kind | `crate` |
 | path | `crates/aura-clap` |
 | description | CLAP format wrapper for AURA — free-audio/clap via clap-sys (minimal v1) |
-| frameworks | clap |
-| generated | `2026-08-09T10:14:20Z` |
+| frameworks | aura, clap |
+| generated | `2026-08-10T06:38:20Z` |
 
 ## Graph atoms (auto)
 
@@ -17,7 +17,7 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 
 ```text
 [ATOM] type=fact | detail=kind=crate id=crates/aura-clap
-[ATOM] type=fact | detail=frameworks=clap
+[ATOM] type=fact | detail=frameworks=aura+clap
 [ATOM] type=fact | detail=roles=entry+manifest
 [ATOM] type=fact | detail=depends_on=aura-core
 [ATOM] type=fact | detail=depends_on=aura-params

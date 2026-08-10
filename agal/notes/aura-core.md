@@ -8,7 +8,8 @@
 | kind | `crate` |
 | path | `crates/aura-core` |
 | description | AURA core: process, editor, plugin info (minimal surface) |
-| generated | `2026-08-09T10:14:20Z` |
+| frameworks | aura |
+| generated | `2026-08-10T06:38:20Z` |
 
 ## Graph atoms (auto)
 
@@ -16,6 +17,7 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 
 ```text
 [ATOM] type=fact | detail=kind=crate id=crates/aura-core
+[ATOM] type=fact | detail=frameworks=aura
 [ATOM] type=fact | detail=roles=audio+entry+manifest+source+state+ui
 [ATOM] type=fact | detail=depends_on=aura-midi
 [ATOM] type=fact | detail=depends_on=aura-params

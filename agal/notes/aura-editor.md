@@ -8,8 +8,8 @@
 | kind | `crate` |
 | path | `crates/aura-editor` |
 | description | AURA host Editor adapter (Slint on aura-baseview) for CLAP/VST3/LV2 GUI |
-| frameworks | baseview, raw-window-handle, slint |
-| generated | `2026-08-09T10:14:20Z` |
+| frameworks | aura, aura-baseview, aura-editor, baseview, raw-window-handle, slint |
+| generated | `2026-08-10T06:38:20Z` |
 
 ## Graph atoms (auto)
 
@@ -17,7 +17,7 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 
 ```text
 [ATOM] type=fact | detail=kind=crate id=crates/aura-editor
-[ATOM] type=fact | detail=frameworks=baseview+raw-window-handle+slint
+[ATOM] type=fact | detail=frameworks=aura+aura-baseview+aura-editor+baseview+raw-window-handle+slint
 [ATOM] type=fact | detail=roles=entry+manifest+source
 [ATOM] type=fact | detail=depends_on=aura-baseview
 [ATOM] type=fact | detail=depends_on=aura-core

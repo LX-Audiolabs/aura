@@ -8,7 +8,8 @@
 | kind | `crate` |
 | path | `crates/aura` |
 | description | AURA — Audio Unified Rust Architecture (umbrella crate) |
-| generated | `2026-08-09T10:14:20Z` |
+| frameworks | aura, clap, lv2, vst3 |
+| generated | `2026-08-10T06:38:20Z` |
 
 ## Graph atoms (auto)
 
@@ -16,6 +17,7 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 
 ```text
 [ATOM] type=fact | detail=kind=crate id=crates/aura
+[ATOM] type=fact | detail=frameworks=aura+clap+lv2+vst3
 [ATOM] type=fact | detail=roles=entry+manifest
 [ATOM] type=fact | detail=depends_on=aura-clap
 [ATOM] type=fact | detail=depends_on=aura-core

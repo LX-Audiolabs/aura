@@ -8,7 +8,8 @@
 | kind | `member` |
 | path | `tools/aura-preview` |
 | description | Hot-reload preview for AURA plugin .slint UIs (@aura widgets + bundled fonts) |
-| generated | `2026-08-09T10:14:20Z` |
+| frameworks | aura |
+| generated | `2026-08-10T06:38:20Z` |
 
 ## Graph atoms (auto)
 
@@ -16,6 +17,7 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 
 ```text
 [ATOM] type=fact | detail=kind=member id=tools/aura-preview
+[ATOM] type=fact | detail=frameworks=aura
 [ATOM] type=fact | detail=roles=entry+manifest
 [ATOM] type=fact | detail=depends_on=aura-build
 ```

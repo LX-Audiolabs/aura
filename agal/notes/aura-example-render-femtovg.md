@@ -8,8 +8,8 @@
 | kind | `crate` |
 | path | `crates/aura-baseview/examples/render_femtovg` |
 | version | 0.1.0 |
-| frameworks | baseview, slint |
-| generated | `2026-08-09T10:14:20Z` |
+| frameworks | aura-baseview, baseview, slint |
+| generated | `2026-08-10T06:38:20Z` |
 
 ## Graph atoms (auto)
 
@@ -17,7 +17,7 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 
 ```text
 [ATOM] type=fact | detail=kind=crate id=crates/aura-baseview/examples/render_femtovg
-[ATOM] type=fact | detail=frameworks=baseview+slint
+[ATOM] type=fact | detail=frameworks=aura-baseview+baseview+slint
 [ATOM] type=fact | detail=roles=build+entry+manifest+slint+source
 [ATOM] type=fact | detail=depends_on=aura-baseview
 ```

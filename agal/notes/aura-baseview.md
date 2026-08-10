@@ -8,8 +8,8 @@
 | kind | `crate` |
 | path | `crates/aura-baseview` |
 | description | AURA Slint + baseview window stack (FemtoVG / Skia / software) — no plugin host API |
-| frameworks | baseview, raw-window-handle, slint |
-| generated | `2026-08-09T10:14:20Z` |
+| frameworks | aura-baseview, baseview, raw-window-handle, slint |
+| generated | `2026-08-10T06:38:20Z` |
 
 ## Graph atoms (auto)
 
@@ -17,7 +17,7 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 
 ```text
 [ATOM] type=fact | detail=kind=crate id=crates/aura-baseview
-[ATOM] type=fact | detail=frameworks=baseview+raw-window-handle+slint
+[ATOM] type=fact | detail=frameworks=aura-baseview+baseview+raw-window-handle+slint
 [ATOM] type=fact | detail=roles=entry+manifest+slint+source
 [ATOM] type=fact | detail=used_by=aura-baseview/examples/open_parented via depends_on
 [ATOM] type=fact | detail=used_by=aura-baseview/examples/render_femtovg via depends_on

@@ -8,8 +8,8 @@
 | kind | `crate` |
 | path | `crates/aura-vst3` |
 | description | AURA VST3 format wrapper (thin, over PluginLogic) |
-| frameworks | vst3 |
-| generated | `2026-08-09T10:14:20Z` |
+| frameworks | aura, vst3 |
+| generated | `2026-08-10T06:38:20Z` |
 
 ## Graph atoms (auto)
 
@@ -17,7 +17,7 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 
 ```text
 [ATOM] type=fact | detail=kind=crate id=crates/aura-vst3
-[ATOM] type=fact | detail=frameworks=vst3
+[ATOM] type=fact | detail=frameworks=aura+vst3
 [ATOM] type=fact | detail=roles=entry+manifest+source
 [ATOM] type=fact | detail=has_process=true
 [ATOM] type=fact | detail=depends_on=aura-core

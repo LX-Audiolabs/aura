@@ -8,7 +8,7 @@
 | kind | `member` |
 | path | `tools/cargo-aura` |
 | description | Build tool for AURA audio plugins — cargo aura new|build|install|doctor |
-| generated | `2026-08-09T10:14:20Z` |
+| generated | `2026-08-10T06:38:20Z` |
 
 ## Graph atoms (auto)
 

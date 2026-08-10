@@ -8,8 +8,8 @@
 | kind | `member` |
 | path | `examples/smoke-gain` |
 | description | AURA in-tree CLAP smoke — stereo gain |
-| frameworks | slint |
-| generated | `2026-08-09T10:14:20Z` |
+| frameworks | aura, aura-editor, slint |
+| generated | `2026-08-10T06:38:20Z` |
 
 ## Graph atoms (auto)
 
@@ -17,7 +17,7 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 
 ```text
 [ATOM] type=fact | detail=kind=member id=examples/smoke-gain
-[ATOM] type=fact | detail=frameworks=slint
+[ATOM] type=fact | detail=frameworks=aura+aura-editor+slint
 [ATOM] type=fact | detail=roles=build+entry+manifest+slint
 [ATOM] type=fact | detail=has_process=true
 [ATOM] type=fact | detail=has_editor=true

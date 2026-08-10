@@ -8,7 +8,8 @@
 | kind | `crate` |
 | path | `crates/aura-test` |
 | description | Test helpers for AURA plugins (state round-trip, process smoke) |
-| generated | `2026-08-09T10:14:20Z` |
+| frameworks | aura |
+| generated | `2026-08-10T06:38:20Z` |
 
 ## Graph atoms (auto)
 
@@ -16,6 +17,7 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 
 ```text
 [ATOM] type=fact | detail=kind=crate id=crates/aura-test
+[ATOM] type=fact | detail=frameworks=aura
 [ATOM] type=fact | detail=roles=entry+manifest
 [ATOM] type=fact | detail=has_process=true
 [ATOM] type=fact | detail=has_editor=true
