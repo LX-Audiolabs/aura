@@ -37,7 +37,7 @@ use aura_core::{
     AudioBuffer, AudioConfig, BusLayout, ChannelConfig, PluginLogic, ProcessContext, ProcessMode,
     ProcessStatus, host_callback, host_callback_with, layout_at,
 };
-use aura_core::{MidiBuffer, MidiMessage};
+use aura_core::{MidiBuffer, MidiMessage, MidiStatus};
 use aura_params::{ParamFlags, ParamInfo, ParamRange, Params};
 use clap_sys::events::{
     CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_IS_LIVE, CLAP_EVENT_MIDI, CLAP_EVENT_NOTE_CHOKE,
@@ -61,6 +61,10 @@ use clap_sys::ext::gui::{
     clap_plugin_gui, clap_window,
 };
 use clap_sys::ext::latency::{CLAP_EXT_LATENCY, clap_host_latency, clap_plugin_latency};
+use clap_sys::ext::note_ports::{
+    CLAP_EXT_NOTE_PORTS, CLAP_NOTE_DIALECT_MIDI, CLAP_NOTE_DIALECT_MIDI2,
+    clap_note_port_info, clap_plugin_note_ports,
+};
 use clap_sys::ext::params::{
     CLAP_EXT_PARAMS, CLAP_PARAM_IS_AUTOMATABLE, CLAP_PARAM_IS_BYPASS, CLAP_PARAM_IS_HIDDEN,
     CLAP_PARAM_IS_READONLY, CLAP_PARAM_IS_STEPPED, CLAP_PARAM_RESCAN_VALUES, clap_host_params,
@@ -402,7 +406,8 @@ unsafe extern "C" fn plugin_activate<L: PluginLogic>(
         inst.max_frames = max_frames;
         let layout = inst.selected_layout();
         let config = AudioConfig::new(sample_rate, max_frames as usize)
-            .with_channels(layout.main_input_channels(), layout.main_output_channels());
+            .with_channels(layout.main_input_channels(), layout.main_output_channels())
+            .with_sidechain_channels(layout.sidechain_input_channels());
         let mut state = L::init(&inst.params, sample_rate);
         L::reset(&mut state, &inst.params, &config);
         inst.params.set_sample_rate(sample_rate);
@@ -439,7 +444,8 @@ unsafe extern "C" fn plugin_reset<L: PluginLogic>(plugin: *const clap_plugin) {
         };
         let layout = inst.selected_layout();
         let config = AudioConfig::new(inst.sample_rate, inst.max_frames as usize)
-            .with_channels(layout.main_input_channels(), layout.main_output_channels());
+            .with_channels(layout.main_input_channels(), layout.main_output_channels())
+            .with_sidechain_channels(layout.sidechain_input_channels());
         if let Some(state) = inst.state.as_mut() {
             L::reset(state, &inst.params, &config);
             inst.params.snap_smoothers();
@@ -482,71 +488,84 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
             Some(map_transport(unsafe { &*process.transport }))
         };
 
+        let layout = inst.selected_layout();
+
         let Some(state) = inst.state.as_mut() else {
             return CLAP_PROCESS_ERROR;
         };
-
-        let out_port = if process.audio_outputs_count > 0 && !process.audio_outputs.is_null() {
-            unsafe { &*process.audio_outputs }
-        } else {
-            return CLAP_PROCESS_ERROR;
-        };
-        let in_port = if process.audio_inputs_count > 0 && !process.audio_inputs.is_null() {
-            Some(unsafe { &*process.audio_inputs })
-        } else {
-            None
-        };
-
-        let ch_out = out_port.channel_count as usize;
-        if ch_out == 0 || out_port.data32.is_null() {
+        let main_in_ch = layout.main_input_channels() as usize;
+        let sidechain_in_ch = layout.sidechain_input_channels() as usize;
+        let total_in_ch = main_in_ch + sidechain_in_ch;
+        let out_ch = layout.main_output_channels() as usize;
+        if out_ch == 0 {
             return CLAP_PROCESS_ERROR;
         }
 
-        // Own channel buffers for the block (safe AudioBuffer construction).
-        let mut owned_in: Vec<Vec<f32>> = Vec::with_capacity(ch_out);
-        let mut owned_out: Vec<Vec<f32>> = Vec::with_capacity(ch_out);
-        let mut host_out: Vec<*mut f32> = Vec::with_capacity(ch_out);
-
-        for c in 0..ch_out {
-            let op = unsafe { *out_port.data32.add(c) };
-            if op.is_null() {
-                return CLAP_PROCESS_ERROR;
-            }
-            host_out.push(op);
-
-            let in_data = in_port
-                .filter(|p| !p.data32.is_null() && (c as u32) < p.channel_count)
-                .and_then(|p| {
-                    let ip = unsafe { *p.data32.add(c) };
+        // Own input channels from all host input ports (main + optional sidechain).
+        let mut owned_in: Vec<Vec<f32>> = Vec::with_capacity(total_in_ch.max(out_ch));
+        if !process.audio_inputs.is_null() {
+            for port_i in 0..process.audio_inputs_count as usize {
+                let port = unsafe { &*process.audio_inputs.add(port_i) };
+                if port.data32.is_null() {
+                    continue;
+                }
+                for c in 0..port.channel_count as usize {
+                    let ip = unsafe { *port.data32.add(c) };
                     if ip.is_null() {
-                        None
+                        owned_in.push(vec![0.0; frames]);
                     } else {
-                        Some(unsafe { std::slice::from_raw_parts(ip, frames) })
+                        owned_in
+                            .push(unsafe { std::slice::from_raw_parts(ip, frames) }.to_vec());
                     }
-                });
-
-            if let Some(s) = in_data {
-                owned_in.push(s.to_vec());
-                owned_out.push(s.to_vec());
-            } else {
-                owned_in.push(vec![0.0; frames]);
-                owned_out.push(vec![0.0; frames]);
+                }
             }
+        }
+        while owned_in.len() < total_in_ch {
+            owned_in.push(vec![0.0; frames]);
+        }
+
+        // Own output channels.
+        let mut owned_out: Vec<Vec<f32>> = Vec::with_capacity(out_ch);
+        let mut host_out: Vec<*mut f32> = Vec::with_capacity(out_ch);
+        if process.audio_outputs_count > 0 && !process.audio_outputs.is_null() {
+            let out_port = unsafe { &*process.audio_outputs };
+            if !out_port.data32.is_null() {
+                for c in 0..out_ch.min(out_port.channel_count as usize) {
+                    let op = unsafe { *out_port.data32.add(c) };
+                    host_out.push(op);
+                    owned_out.push(vec![0.0; frames]);
+                }
+            }
+        }
+        if owned_out.len() != out_ch {
+            return CLAP_PROCESS_ERROR;
         }
 
         let in_refs: Vec<&[f32]> = owned_in.iter().map(Vec::as_slice).collect();
         let mut out_refs: Vec<&mut [f32]> = owned_out.iter_mut().map(Vec::as_mut_slice).collect();
 
-        let status = {
-            let mut buffer = AudioBuffer::from_slices_checked(&in_refs, &mut out_refs, frames);
+        let (status, midi_out) = {
+            let mut buffer = AudioBuffer::from_slices_checked_with_sidechain(
+                &in_refs,
+                &mut out_refs,
+                frames,
+                main_in_ch,
+                sidechain_in_ch,
+            );
             let mut ctx = ProcessContext::new(inst.sample_rate, frames)
                 .with_process_mode(ProcessMode::Realtime)
                 .with_midi(midi);
             ctx.transport = transport;
-            L::process(state, &inst.params, &mut buffer, &mut ctx)
+            let status = L::process(state, &inst.params, &mut buffer, &mut ctx);
+            (status, std::mem::take(&mut ctx.midi_out))
         };
 
+        unsafe { emit_midi_events(process.out_events, &midi_out) };
+
         for (c, host_ptr) in host_out.iter().enumerate() {
+            if host_ptr.is_null() {
+                continue;
+            }
             let dst = unsafe { std::slice::from_raw_parts_mut(*host_ptr, frames) };
             dst.copy_from_slice(&owned_out[c]);
         }
@@ -685,6 +704,52 @@ unsafe fn emit_param_events(queue: &ParamEventQueue, out: *const clap_output_eve
     }
 }
 
+/// Push plugin-generated MIDI events from [`ProcessContext::midi_out`] to the host.
+unsafe fn emit_midi_events(out: *const clap_output_events, midi: &MidiBuffer) {
+    if out.is_null() || midi.is_empty() {
+        return;
+    }
+    let Some(try_push) = (unsafe { &*out }).try_push else {
+        return;
+    };
+    for ev in midi.iter() {
+        match ev.message.status {
+            MidiStatus::NoteOn | MidiStatus::NoteOff => {
+                let type_ = if ev.message.is_note_on() {
+                    CLAP_EVENT_NOTE_ON
+                } else {
+                    CLAP_EVENT_NOTE_OFF
+                };
+                let e = clap_event_note {
+                    header: event_header(type_, size_of::<clap_event_note>() as u32),
+                    note_id: -1,
+                    port_index: 0,
+                    channel: i16::from(ev.message.channel),
+                    key: i16::from(ev.message.data1),
+                    velocity: f64::from(ev.message.data2) / 127.0,
+                };
+                let mut header = e.header;
+                header.time = ev.sample_offset;
+                unsafe { try_push(out, &header) };
+            }
+            _ => {
+                let e = clap_event_midi {
+                    header: event_header(CLAP_EVENT_MIDI, size_of::<clap_event_midi>() as u32),
+                    port_index: 0,
+                    data: [
+                        ev.message.status_byte(),
+                        ev.message.data1,
+                        ev.message.data2,
+                    ],
+                };
+                let mut header = e.header;
+                header.time = ev.sample_offset;
+                unsafe { try_push(out, &header) };
+            }
+        }
+    }
+}
+
 fn map_transport(t: &clap_event_transport) -> Transport {
     use clap_sys::fixedpoint::{CLAP_BEATTIME_FACTOR, CLAP_SECTIME_FACTOR};
     // CLAP beat/sec times are i64 fixed point (factor 2^31).
@@ -731,6 +796,13 @@ unsafe extern "C" fn plugin_get_extension<L: PluginLogic>(
     }
     if id == CLAP_EXT_LATENCY {
         return latency_ext::<L>() as *const _ as *const c_void;
+    }
+    if id == CLAP_EXT_NOTE_PORTS {
+        let info = L::info();
+        if info.accepts_midi_in || info.emits_midi {
+            return note_ports_ext::<L>() as *const _ as *const c_void;
+        }
+        return ptr::null();
     }
     if id == CLAP_EXT_STATE {
         return state_ext::<L>() as *const _ as *const c_void;
@@ -780,6 +852,60 @@ unsafe extern "C" fn latency_get<L: PluginLogic>(plugin: *const clap_plugin) -> 
 }
 
 // ---------------------------------------------------------------------------
+// note-ports (MIDI / note input + output)
+// ---------------------------------------------------------------------------
+
+fn note_ports_ext<L: PluginLogic>() -> &'static clap_plugin_note_ports {
+    static CELL: OnceLock<clap_plugin_note_ports> = OnceLock::new();
+    CELL.get_or_init(|| clap_plugin_note_ports {
+        count: Some(note_ports_count::<L>),
+        get: Some(note_ports_get::<L>),
+    })
+}
+
+unsafe extern "C" fn note_ports_count<L: PluginLogic>(
+    _plugin: *const clap_plugin,
+    is_input: bool,
+) -> u32 {
+    let info = L::info();
+    if is_input {
+        u32::from(info.accepts_midi_in)
+    } else {
+        u32::from(info.emits_midi)
+    }
+}
+
+unsafe extern "C" fn note_ports_get<L: PluginLogic>(
+    _plugin: *const clap_plugin,
+    index: u32,
+    is_input: bool,
+    info: *mut clap_note_port_info,
+) -> bool {
+    if index != 0 || info.is_null() {
+        return false;
+    }
+    let meta = L::info();
+    let dialect = if is_input {
+        meta.midi_input_dialect
+    } else {
+        meta.midi_output_dialect
+    };
+    let dialects = match dialect {
+        aura_core::info::MidiDialect::Midi2 => CLAP_NOTE_DIALECT_MIDI | CLAP_NOTE_DIALECT_MIDI2,
+        _ => CLAP_NOTE_DIALECT_MIDI,
+    };
+    let out = unsafe { &mut *info };
+    out.id = if is_input { 0 } else { 1 };
+    out.supported_dialects = dialects;
+    out.preferred_dialect = CLAP_NOTE_DIALECT_MIDI;
+    write_name(
+        &mut out.name,
+        if is_input { "Note In" } else { "Note Out" },
+    );
+    true
+}
+
+// ---------------------------------------------------------------------------
 // audio-ports (main in/out from selected BusLayout)
 // ---------------------------------------------------------------------------
 
@@ -807,7 +933,7 @@ unsafe extern "C" fn audio_ports_count<L: PluginLogic>(
     };
     let layout = inst.selected_layout();
     if is_input {
-        u32::from(layout.main_in.is_some())
+        u32::from(layout.main_in.is_some()) + layout.sidechain_input_channels()
     } else {
         1
     }
@@ -819,25 +945,37 @@ unsafe extern "C" fn audio_ports_get<L: PluginLogic>(
     is_input: bool,
     info: *mut clap_audio_port_info,
 ) -> bool {
-    if index != 0 || info.is_null() {
+    if info.is_null() {
         return false;
     }
     let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
         return false;
     };
     let layout = inst.selected_layout();
-    let (channels, name) = if is_input {
-        let Some(ch) = layout.main_in else {
+    let (channels, name, is_main, id) = if is_input {
+        let main_count = u32::from(layout.main_in.is_some());
+        if index == 0 && main_count == 1 {
+            let Some(ch) = layout.main_in else {
+                return false;
+            };
+            (ch, "Input", true, 0)
+        } else if index < main_count + layout.sidechain_input_channels() {
+            let Some(ch) = layout.sidechain_in else {
+                return false;
+            };
+            (ch, "Sidechain", false, 1)
+        } else {
             return false;
-        };
-        (ch, "Input")
+        }
+    } else if index == 0 {
+        (layout.main_out, "Output", true, 0)
     } else {
-        (layout.main_out, "Output")
+        return false;
     };
     let info = unsafe { &mut *info };
-    info.id = u32::from(!is_input);
+    info.id = id;
     write_name(&mut info.name, name);
-    info.flags = CLAP_AUDIO_PORT_IS_MAIN;
+    info.flags = if is_main { CLAP_AUDIO_PORT_IS_MAIN } else { 0 };
     info.channel_count = channels.channel_count();
     info.port_type = clap_port_type(channels);
     info.in_place_pair = CLAP_INVALID_ID;
@@ -876,7 +1014,7 @@ unsafe extern "C" fn audio_ports_config_get<L: PluginLogic>(
     let out = unsafe { &mut *config };
     out.id = index;
     write_name(&mut out.name, &layout.config_name());
-    out.input_port_count = u32::from(layout.main_in.is_some());
+    out.input_port_count = u32::from(layout.main_in.is_some()) + layout.sidechain_input_channels();
     out.output_port_count = 1;
     out.has_main_input = layout.main_in.is_some();
     out.main_input_channel_count = layout.main_input_channels();

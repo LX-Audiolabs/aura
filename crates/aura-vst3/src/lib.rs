@@ -45,14 +45,14 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 use aura_core::info::PluginCategory;
 use aura_core::transport::Transport;
 use aura_core::{
-    AudioBuffer, AudioConfig, BusLayout, MidiBuffer, MidiMessage, PluginLogic, ProcessContext,
-    ProcessMode, decode_state, encode_state, host_callback_with, layout_at,
+    AudioBuffer, AudioConfig, BusLayout, MidiBuffer, MidiMessage, MidiStatus, PluginLogic,
+    ProcessContext, ProcessMode, decode_state, encode_state, host_callback_with, layout_at,
 };
 use aura_params::{ParamFlags, ParamInfo, ParamValueKind, Params};
 use gui::GuiState;
 use vst3::Steinberg::Vst::BusDirections_::{kInput, kOutput};
 use vst3::Steinberg::Vst::BusInfo_::BusFlags_::kDefaultActive;
-use vst3::Steinberg::Vst::BusTypes_::kMain;
+use vst3::Steinberg::Vst::BusTypes_::{kAux, kMain};
 use vst3::Steinberg::Vst::Event_::EventTypes_;
 use vst3::Steinberg::Vst::MediaTypes_::{kAudio, kEvent};
 use vst3::Steinberg::Vst::ParameterInfo_::ParameterFlags_::{
@@ -68,9 +68,9 @@ use vst3::Steinberg::Vst::{
     BusDirection, BusInfo, BusType, Event, IAudioProcessor, IAudioProcessor_iid,
     IAudioProcessorTrait, IComponent, IComponent_iid, IComponentHandler, IComponentTrait,
     IEditController, IEditController_iid, IEditControllerTrait, IEventList, IEventListTrait,
-    IParamValueQueueTrait, IParameterChanges, IParameterChangesTrait, IoMode, MediaType, ParamID,
-    ParamValue, ParameterInfo, ProcessData, ProcessSetup, RoutingInfo, SpeakerArrangement,
-    String128, TChar, kRootUnitId,
+    IParamValueQueueTrait, IParameterChanges, IParameterChangesTrait, IoMode, MediaType, NoteOffEvent,
+    NoteOnEvent, ParamID, ParamValue, ParameterInfo, ProcessData, ProcessSetup, RoutingInfo,
+    SpeakerArrangement, String128, TChar, kRootUnitId,
 };
 // IPlugView / TBool live in Steinberg root, not Steinberg::Vst.
 use vst3::Steinberg::{
@@ -435,6 +435,18 @@ impl<L: PluginLogic> Component<L> {
         n as i32
     }
 
+    /// Max sidechain-bus channel count across all declared layouts.
+    fn max_sidechain_channels() -> i32 {
+        let layouts = L::bus_layouts();
+        let n = layouts
+            .iter()
+            .map(|l| l.sidechain_input_channels())
+            .max()
+            .unwrap_or(0);
+        n as i32
+    }
+
+
     fn lock(&self) -> MutexGuard<'_, Inner<L>> {
         self.inner.lock().unwrap_or_else(PoisonError::into_inner)
     }
@@ -504,9 +516,18 @@ impl<L: PluginLogic> Component<L> {
             }
             let sample_rate = inner.sample_rate;
             let process_mode = inner.process_mode;
+            let layout = layout_at(&L::bus_layouts(), inner.layout_index);
+            let main_in_ch = layout.main_input_channels() as usize;
+            let sidechain_in_ch = layout.sidechain_input_channels() as usize;
+            let total_in_ch = main_in_ch + sidechain_in_ch;
+            let out_ch = layout.main_output_channels() as usize;
             let Some(state) = inner.state.as_mut() else {
                 return kResultOk;
             };
+
+            if out_ch == 0 {
+                return kResultOk;
+            }
 
             let out_bus = if data.numOutputs > 0 && !data.outputs.is_null() {
                 // SAFETY: non-null; host-owned bus array, valid for this call.
@@ -514,56 +535,46 @@ impl<L: PluginLogic> Component<L> {
             } else {
                 return kResultOk;
             };
-            let ch_out = out_bus.numChannels.max(0) as usize;
-            if ch_out == 0 {
-                return kResultOk;
-            }
             // SAFETY: union field valid because symbolicSampleSize == kSample32.
             let out_ptrs = unsafe { out_bus.__field0.channelBuffers32 };
             if out_ptrs.is_null() {
                 return kResultOk;
             }
-            let in_bus = if data.numInputs > 0 && !data.inputs.is_null() {
-                // SAFETY: non-null; host-owned bus array, valid for this call.
-                Some(unsafe { &*data.inputs })
-            } else {
-                None
-            };
 
-            // Own channel buffers for the block (safe AudioBuffer construction).
-            let mut owned_in: Vec<Vec<f32>> = Vec::with_capacity(ch_out);
-            let mut owned_out: Vec<Vec<f32>> = Vec::with_capacity(ch_out);
-            let mut host_out: Vec<*mut f32> = Vec::with_capacity(ch_out);
-
-            for c in 0..ch_out {
-                // SAFETY: `c < ch_out` channels, per AudioBusBuffers contract.
-                let op = unsafe { *out_ptrs.add(c) };
-                if op.is_null() {
-                    return kResultFalse;
-                }
-                host_out.push(op);
-
-                let in_data = in_bus
-                    .filter(|b| (c as int32) < b.numChannels)
-                    .and_then(|b| {
-                        // SAFETY: union field valid for kSample32.
-                        let ptrs = unsafe { b.__field0.channelBuffers32 };
-                        if ptrs.is_null() {
-                            return None;
-                        }
-                        // SAFETY: `c < numChannels` per the filter above.
+            // Own input channels from all host input buses (main + optional sidechain).
+            let mut owned_in: Vec<Vec<f32>> = Vec::with_capacity(total_in_ch.max(out_ch));
+            if data.numInputs > 0 && !data.inputs.is_null() {
+                for bus_i in 0..data.numInputs as usize {
+                    let bus = unsafe { &*data.inputs.add(bus_i) };
+                    // SAFETY: union field valid for kSample32.
+                    let ptrs = unsafe { bus.__field0.channelBuffers32 };
+                    if ptrs.is_null() {
+                        continue;
+                    }
+                    for c in 0..bus.numChannels.max(0) as usize {
                         let ip = unsafe { *ptrs.add(c) };
-                        // SAFETY: host channel buffers hold at least `frames`.
-                        (!ip.is_null()).then(|| unsafe { std::slice::from_raw_parts(ip, frames) })
-                    });
-
-                if let Some(s) = in_data {
-                    owned_in.push(s.to_vec());
-                    owned_out.push(s.to_vec());
-                } else {
-                    owned_in.push(vec![0.0; frames]);
-                    owned_out.push(vec![0.0; frames]);
+                        if ip.is_null() {
+                            owned_in.push(vec![0.0; frames]);
+                        } else {
+                            owned_in.push(
+                                unsafe { std::slice::from_raw_parts(ip, frames) }.to_vec(),
+                            );
+                        }
+                    }
                 }
+            }
+            while owned_in.len() < total_in_ch {
+                owned_in.push(vec![0.0; frames]);
+            }
+
+            // Own output channels.
+            let mut owned_out: Vec<Vec<f32>> = Vec::with_capacity(out_ch);
+            let mut host_out: Vec<*mut f32> = Vec::with_capacity(out_ch);
+            for c in 0..out_ch {
+                // SAFETY: `c < out_ch` channels, per AudioBusBuffers contract.
+                let op = unsafe { *out_ptrs.add(c) };
+                host_out.push(op);
+                owned_out.push(vec![0.0; frames]);
             }
 
             let in_refs: Vec<&[f32]> = owned_in.iter().map(Vec::as_slice).collect();
@@ -571,7 +582,13 @@ impl<L: PluginLogic> Component<L> {
                 owned_out.iter_mut().map(Vec::as_mut_slice).collect();
 
             {
-                let mut buffer = AudioBuffer::from_slices_checked(&in_refs, &mut out_refs, frames);
+                let mut buffer = AudioBuffer::from_slices_checked_with_sidechain(
+                    &in_refs,
+                    &mut out_refs,
+                    frames,
+                    main_in_ch,
+                    sidechain_in_ch,
+                );
                 let mut ctx =
                     ProcessContext::new(sample_rate, frames).with_process_mode(process_mode);
                 if L::info().accepts_midi_in && !data.inputEvents.is_null() {
@@ -583,9 +600,16 @@ impl<L: PluginLogic> Component<L> {
                 ctx.transport = transport;
                 // ProcessStatus has no VST3 per-block equivalent; drop it.
                 let _ = L::process(state, &self.params, &mut buffer, &mut ctx);
+                let midi_out = std::mem::take(&mut ctx.midi_out);
+                if L::info().emits_midi && !midi_out.is_empty() && !data.outputEvents.is_null() {
+                    unsafe { emit_output_events(data.outputEvents, &midi_out) };
+                }
             }
 
             for (c, host_ptr) in host_out.iter().enumerate() {
+                if host_ptr.is_null() {
+                    continue;
+                }
                 // SAFETY: host channel buffers hold at least `frames`.
                 let dst = unsafe { std::slice::from_raw_parts_mut(*host_ptr, frames) };
                 dst.copy_from_slice(&owned_out[c]);
@@ -658,8 +682,11 @@ impl<L: PluginLogic> IComponentTrait for Component<L> {
 
     unsafe fn getBusCount(&self, r#type: MediaType, dir: BusDirection) -> int32 {
         if r#type == kEvent as MediaType {
-            // One event input bus so hosts route MIDI to us.
-            return int32::from(dir == kInput as BusDirection && L::info().accepts_midi_in);
+            let info = L::info();
+            if dir == kInput as BusDirection {
+                return int32::from(info.accepts_midi_in);
+            }
+            return int32::from(info.emits_midi);
         }
         if r#type != kAudio as MediaType {
             return 0;
@@ -684,7 +711,13 @@ impl<L: PluginLogic> IComponentTrait for Component<L> {
             return kInvalidArgument;
         }
         if r#type == kEvent as MediaType {
-            if !L::info().accepts_midi_in || dir != kInput as BusDirection || index != 0 {
+            let info = L::info();
+            let valid = if dir == kInput as BusDirection {
+                info.accepts_midi_in
+            } else {
+                info.emits_midi
+            };
+            if !valid || index != 0 {
                 return kInvalidArgument;
             }
             // SAFETY: non-null, host-owned out struct per spec.
@@ -692,34 +725,52 @@ impl<L: PluginLogic> IComponentTrait for Component<L> {
             bus.mediaType = kEvent as MediaType;
             bus.direction = dir;
             bus.channelCount = 1;
-            write_string128(&mut bus.name, "MIDI In");
+            write_string128(
+                &mut bus.name,
+                if dir == kInput as BusDirection {
+                    "MIDI In"
+                } else {
+                    "MIDI Out"
+                },
+            );
             bus.busType = kMain as BusType;
             bus.flags = kDefaultActive as uint32;
             return kResultOk;
         }
         if r#type != kAudio as MediaType
-            || index != 0
             || (dir != kInput as BusDirection && dir != kOutput as BusDirection)
         {
             return kInvalidArgument;
         }
-        if dir == kInput as BusDirection && Self::max_main_channels(true) == 0 {
+        if dir == kInput as BusDirection && index < 0 {
             return kInvalidArgument;
         }
+
+        let is_input = dir == kInput as BusDirection;
+        let (channels, name, bus_type) = if is_input {
+            match index {
+                0 if Self::max_main_channels(true) > 0 => {
+                    (Self::max_main_channels(true), "Input", kMain)
+                }
+                1 if Self::max_sidechain_channels() > 0 => {
+                    (Self::max_sidechain_channels(), "Sidechain", kAux)
+                }
+                _ => return kInvalidArgument,
+            }
+        } else {
+            match index {
+                0 => (Self::max_main_channels(false), "Output", kMain),
+                _ => return kInvalidArgument,
+            }
+        };
+
         // SAFETY: non-null, host-owned out struct per spec.
         let bus = unsafe { &mut *bus };
         bus.mediaType = kAudio as MediaType;
         bus.direction = dir;
-        bus.channelCount = Self::max_main_channels(dir == kInput as BusDirection);
-        write_string128(
-            &mut bus.name,
-            if dir == kInput as BusDirection {
-                "Input"
-            } else {
-                "Output"
-            },
-        );
-        bus.busType = kMain as BusType;
+        bus.channelCount = channels as int32;
+        write_string128(&mut bus.name, name);
+        bus.busType = bus_type as BusType;
         bus.flags = kDefaultActive as uint32;
         kResultOk
     }
@@ -751,7 +802,8 @@ impl<L: PluginLogic> IComponentTrait for Component<L> {
             let layout = layout_at(&L::bus_layouts(), inner.layout_index);
             let config = AudioConfig::new(inner.sample_rate, inner.max_samples)
                 .with_process_mode(inner.process_mode)
-                .with_channels(layout.main_input_channels(), layout.main_output_channels());
+                .with_channels(layout.main_input_channels(), layout.main_output_channels())
+                .with_sidechain_channels(layout.sidechain_input_channels());
             let mut dsp = L::init(&self.params, inner.sample_rate);
             self.params.set_sample_rate(inner.sample_rate);
             L::reset(&mut dsp, &self.params, &config);
@@ -788,19 +840,26 @@ impl<L: PluginLogic> IAudioProcessorTrait for Component<L> {
         // SAFETY: host arrays sized by numIns/numOuts.
         let out_arr = unsafe { *outputs };
         let out_ch = speaker_channel_count(out_arr);
+        if numIns < 0 || inputs.is_null() && numIns > 0 {
+            return kResultFalse;
+        }
         let in_ch = if numIns == 0 {
             0
-        } else if numIns == 1 && !inputs.is_null() {
-            speaker_channel_count(unsafe { *inputs })
         } else {
-            return kResultFalse;
+            speaker_channel_count(unsafe { *inputs })
+        };
+        let sidechain_ch = if numIns >= 2 {
+            speaker_channel_count(unsafe { *inputs.add(1) })
+        } else {
+            0
         };
 
         let layouts = L::bus_layouts();
-        let Some(idx) = layouts
-            .iter()
-            .position(|l| l.main_input_channels() == in_ch && l.main_output_channels() == out_ch)
-        else {
+        let Some(idx) = layouts.iter().position(|l| {
+            l.main_input_channels() == in_ch
+                && l.sidechain_input_channels() == sidechain_ch
+                && l.main_output_channels() == out_ch
+        }) else {
             return kResultFalse;
         };
         self.lock().layout_index = idx;
@@ -813,13 +872,21 @@ impl<L: PluginLogic> IAudioProcessorTrait for Component<L> {
         index: int32,
         arr: *mut SpeakerArrangement,
     ) -> tresult {
-        if index != 0 || arr.is_null() {
+        if arr.is_null() {
             return kInvalidArgument;
         }
         let layout = self.selected_layout();
-        let channels = if dir == kInput as BusDirection {
-            layout.main_input_channels()
+        let is_input = dir == kInput as BusDirection;
+        let channels = if is_input {
+            match index {
+                0 => layout.main_input_channels(),
+                1 => layout.sidechain_input_channels(),
+                _ => return kInvalidArgument,
+            }
         } else {
+            if index != 0 {
+                return kInvalidArgument;
+            }
             layout.main_output_channels()
         };
         let Some(sa) = arrangement_for_channels(channels) else {
@@ -1062,6 +1129,48 @@ fn note_to_midi(is_on: bool, channel: i16, pitch: i16, velocity: f32) -> Option<
         Some(MidiMessage::note_on(channel, pitch as u8, velocity.max(1)))
     } else {
         Some(MidiMessage::note_off(channel, pitch as u8, velocity))
+    }
+}
+
+/// Push plugin-generated MIDI events to the host's VST3 output event list.
+unsafe fn emit_output_events(events: *mut IEventList, midi: &MidiBuffer) {
+    let Some(events) = (unsafe { ComRef::from_raw(events) }) else {
+        return;
+    };
+    for ev in midi.iter() {
+        let mut vst_ev: Event = unsafe { std::mem::zeroed() };
+        vst_ev.busIndex = 0;
+        vst_ev.sampleOffset = ev.sample_offset as int32;
+        vst_ev.flags = 0;
+        match ev.message.status {
+            MidiStatus::NoteOn if ev.message.data2 > 0 => {
+                vst_ev.r#type = EventTypes_::kNoteOnEvent as u16;
+                vst_ev.__field0.noteOn = NoteOnEvent {
+                    channel: i16::from(ev.message.channel),
+                    pitch: i16::from(ev.message.data1),
+                    tuning: 0.0,
+                    velocity: f32::from(ev.message.data2) / 127.0,
+                    length: 0,
+                    noteId: -1,
+                };
+                unsafe { events.addEvent(&mut vst_ev) };
+            }
+            MidiStatus::NoteOn | MidiStatus::NoteOff => {
+                vst_ev.r#type = EventTypes_::kNoteOffEvent as u16;
+                vst_ev.__field0.noteOff = NoteOffEvent {
+                    channel: i16::from(ev.message.channel),
+                    pitch: i16::from(ev.message.data1),
+                    velocity: f32::from(ev.message.data2) / 127.0,
+                    noteId: -1,
+                    tuning: 0.0,
+                };
+                unsafe { events.addEvent(&mut vst_ev) };
+            }
+            _ => {
+                // Non-note messages are not emitted by the VST3 wrapper yet
+                // (would need LegacyMIDICCOutEvent or DataEvent support).
+            }
+        }
     }
 }
 

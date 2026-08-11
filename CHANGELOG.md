@@ -5,6 +5,22 @@ All notable changes to **AURA** (framework workspace) are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/versioning.md).
 
+## [Unreleased]
+
+### Added
+
+- `ProcessContext::midi_out` + `with_midi_out()` / `clear_midi()` — plugins can generate MIDI events.
+- MIDI output flushed to the host by `aura-clap` (note-ports), `aura-vst3` (event output bus), and `aura-lv2` (MIDI atom output port).
+- `BusLayout::sidechain_in` + `with_sidechain()` — one optional mono/stereo sidechain input bus per layout.
+- `AudioBuffer` channel ordering `[main_in…] [sidechain_in…] [main_out…]` with `main_input()`, `sidechain_input()`, `num_main_inputs()`, `num_sidechain_inputs()`.
+- `AudioConfig::sidechain_input_channels` + `with_sidechain_channels()`.
+- `examples/smoke-midi-fx`: MIDI thru + transpose; clap-validator green (33 passed, 0 failed).
+- `examples/smoke-sidechain`: stereo main + mono sidechain mix; clap-validator green (31 passed, 0 failed).
+
+### Changed
+
+- Workspace version bumped to `0.6.0` (public `BusLayout`/`AudioConfig` fields extended).
+
 ## [0.5.0] - 2026-08-09
 
 ### Added
@@ -95,5 +111,6 @@ this release records what `main` contains after the multi-format + UI pass.
 - Still open for “Basis fertig”: VST3/LV2 real-host smoke; optional LV2 UI; product cutover later
 - Crates not published to crates.io (`publish = false`)
 
-[Unreleased]: https://github.com/LX-Audiolabs/aura/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/LX-Audiolabs/aura/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/LX-Audiolabs/aura/releases/tag/v0.5.0
 [0.1.0]: https://github.com/LX-Audiolabs/aura/releases/tag/v0.1.0

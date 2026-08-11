@@ -2,7 +2,7 @@
 //!
 //! Plugins declare supported layouts via [`PluginLogic::bus_layouts`](crate::PluginLogic::bus_layouts).
 //! Default is stereo in/out. Mono-only or dual mono+stereo is opt-in.
-//! Sidechain / multi-bus is out of scope here (add later when a pilot needs it).
+//! One optional sidechain input bus can be declared per layout.
 
 /// Channel width of a main audio bus.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -29,16 +29,19 @@ impl ChannelConfig {
     }
 }
 
-/// One complete main-bus I/O layout (single main in + main out).
+/// One complete main-bus I/O layout (single main in + main out + optional sidechain).
 ///
 /// Instruments can use [`Self::output_only`]. Effects use [`Self::mono`] /
-/// [`Self::stereo`] / [`Self::stereo_and_mono`].
+/// [`Self::stereo`] / [`Self::stereo_and_mono`]. A single optional sidechain
+/// input bus can be added via [`Self::with_sidechain`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BusLayout {
     /// Main input width. `None` = no audio input (generator / instrument).
     pub main_in: Option<ChannelConfig>,
     /// Main output width.
     pub main_out: ChannelConfig,
+    /// Optional sidechain input bus. `None` = no sidechain.
+    pub sidechain_in: Option<ChannelConfig>,
 }
 
 impl BusLayout {
@@ -47,6 +50,7 @@ impl BusLayout {
         Self {
             main_in: Some(ChannelConfig::Mono),
             main_out: ChannelConfig::Mono,
+            sidechain_in: None,
         }
     }
 
@@ -55,6 +59,7 @@ impl BusLayout {
         Self {
             main_in: Some(ChannelConfig::Stereo),
             main_out: ChannelConfig::Stereo,
+            sidechain_in: None,
         }
     }
 
@@ -64,6 +69,16 @@ impl BusLayout {
         Self {
             main_in: None,
             main_out: out,
+            sidechain_in: None,
+        }
+    }
+
+    /// Return a copy of this layout with the given sidechain input bus.
+    #[must_use]
+    pub const fn with_sidechain(self, sidechain: ChannelConfig) -> Self {
+        Self {
+            sidechain_in: Some(sidechain),
+            ..self
         }
     }
 
@@ -82,6 +97,21 @@ impl BusLayout {
     }
 
     #[must_use]
+    pub const fn sidechain_input_channels(self) -> u32 {
+        match self.sidechain_in {
+            Some(c) => c.channel_count(),
+            None => 0,
+        }
+    }
+
+    /// Total audio input channels passed to [`AudioBuffer`](crate::AudioBuffer):
+    /// main inputs followed by sidechain inputs.
+    #[must_use]
+    pub const fn total_input_channels(self) -> u32 {
+        self.main_input_channels() + self.sidechain_input_channels()
+    }
+
+    #[must_use]
     pub const fn main_output_channels(self) -> u32 {
         self.main_out.channel_count()
     }
@@ -89,10 +119,14 @@ impl BusLayout {
     /// Human-readable config name for host menus (`clap.audio-ports-config`).
     #[must_use]
     pub fn config_name(self) -> String {
-        match self.main_in {
+        let base = match self.main_in {
             Some(inn) if inn == self.main_out => inn.name().to_string(),
             Some(inn) => format!("{} in / {} out", inn.name(), self.main_out.name()),
             None => format!("{} out", self.main_out.name()),
+        };
+        match self.sidechain_in {
+            Some(sc) => format!("{base} + {} sidechain", sc.name()),
+            None => base,
         }
     }
 }
@@ -135,5 +169,15 @@ mod tests {
         let v = BusLayout::stereo_and_mono();
         assert_eq!(layout_at(&v, 1), BusLayout::mono());
         assert_eq!(layout_at(&v, 99), BusLayout::stereo());
+    }
+
+    #[test]
+    fn sidechain_input_counts() {
+        let sc = BusLayout::stereo().with_sidechain(ChannelConfig::Mono);
+        assert_eq!(sc.main_input_channels(), 2);
+        assert_eq!(sc.sidechain_input_channels(), 1);
+        assert_eq!(sc.total_input_channels(), 3);
+        assert_eq!(sc.main_output_channels(), 2);
+        assert!(sc.config_name().contains("Mono sidechain"));
     }
 }

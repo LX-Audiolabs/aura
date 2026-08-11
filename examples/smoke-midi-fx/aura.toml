@@ -1,0 +1,17 @@
+[vendor]
+name = "LX Audiolabs"
+id = "lx"
+url = "https://lx-audiolabs.com"
+
+[[plugin]]
+name = "AURA Smoke MIDI FX"
+bundle_id = "smoke-midi-fx"
+crate = "smoke-midi-fx"
+category = "note-effect"
+
+# `cargo aura install --clap|--vst3|--lv2` base dir (appends CLAP / VST3 / LV2).
+# No admin needed; point at system Common Files if you prefer.
+# Per-format: clap = "C:\\Program Files\\Common Files\\CLAP"
+# Env CLAPINS / VST3INS override when set.
+[install]
+dir = "%LOCALAPPDATA%\\Programs\\Common"

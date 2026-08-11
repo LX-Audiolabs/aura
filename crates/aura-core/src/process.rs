@@ -20,6 +20,9 @@ pub enum ProcessStatus {
 ///
 /// Format wrappers fill [`Self::midi`] from host note/MIDI events (CLAP first;
 /// VST3/LV2 empty until wired). Plugins read sample-accurate messages there.
+///
+/// Plugins that generate or pass through MIDI events push them into
+/// [`Self::midi_out`]; wrappers flush them to the host after `process`.
 #[non_exhaustive]
 pub struct ProcessContext {
     pub sample_rate: f64,
@@ -29,6 +32,8 @@ pub struct ProcessContext {
     pub transport: Option<crate::transport::Transport>,
     /// Host → plugin MIDI / note events for this block (sorted by sample offset).
     pub midi: MidiBuffer,
+    /// Plugin → host MIDI / note events for this block (sorted by sample offset).
+    pub midi_out: MidiBuffer,
 }
 
 impl ProcessContext {
@@ -40,6 +45,7 @@ impl ProcessContext {
             process_mode: ProcessMode::Realtime,
             transport: None,
             midi: MidiBuffer::new(),
+            midi_out: MidiBuffer::new(),
         }
     }
 
@@ -59,5 +65,17 @@ impl ProcessContext {
     pub fn with_midi(mut self, midi: MidiBuffer) -> Self {
         self.midi = midi;
         self
+    }
+
+    #[must_use]
+    pub fn with_midi_out(mut self, midi_out: MidiBuffer) -> Self {
+        self.midi_out = midi_out;
+        self
+    }
+
+    /// Clear both MIDI buffers so the context can be reused across blocks.
+    pub fn clear_midi(&mut self) {
+        self.midi.clear();
+        self.midi_out.clear();
     }
 }

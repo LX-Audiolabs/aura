@@ -17,7 +17,8 @@
 //! Port map follows the plugin's first `bus_layouts()` entry (LV2 is static):
 //! mono → 0 in · 1 out · 2+ controls; stereo → 0/1 in · 2/3 out · 4+ controls.
 //! When `PluginInfo::accepts_midi_in`, one `atom:Sequence` MIDI input port is
-//! appended last (audio/control indices unchanged).
+//! appended after controls; when `PluginInfo::emits_midi`, a matching output
+//! port follows (audio/control indices unchanged).
 //! State: shared [`aura_core::encode_state`] blob when the host maps URIDs.
 //! GUI: LV2 UI extension via the same [`aura_core::editor::Editor`] trait as
 //! CLAP/VST3, loaded through `lv2ui_descriptor` in the same binary.
@@ -54,8 +55,9 @@ use std::sync::{Arc, OnceLock};
 
 use aura_core::info::PluginInfo;
 use aura_core::{
-    AudioBuffer, AudioConfig, BusLayout, MidiBuffer, MidiMessage, PluginLogic, ProcessContext,
-    ProcessMode, decode_state, encode_state, host_callback, host_callback_with, layout_at,
+    AudioBuffer, AudioConfig, BusLayout, MidiBuffer, MidiMessage, MidiStatus, PluginLogic,
+    ProcessContext, ProcessMode, decode_state, encode_state, host_callback, host_callback_with,
+    layout_at,
 };
 use aura_params::Params;
 use lv2_sys::{
@@ -138,7 +140,7 @@ fn static_layout<L: PluginLogic>() -> BusLayout {
 }
 
 fn audio_port_count(layout: BusLayout) -> usize {
-    layout.main_input_channels() as usize + layout.main_output_channels() as usize
+    layout.total_input_channels() as usize + layout.main_output_channels() as usize
 }
 
 struct Instance<L: PluginLogic> {
@@ -152,8 +154,10 @@ struct Instance<L: PluginLogic> {
     layout: BusLayout,
     /// First control-port index (= audio port count).
     ctrl0: u32,
-    /// Atom-sequence MIDI input port index (last port) when the plugin accepts MIDI.
-    midi_port: Option<u32>,
+    /// Atom-sequence MIDI input port index when the plugin accepts MIDI.
+    midi_in_port: Option<u32>,
+    /// Atom-sequence MIDI output port index when the plugin emits MIDI.
+    midi_out_port: Option<u32>,
     /// URID for `midi:MidiEvent` (0 when unmapped / no MIDI port).
     midi_event_type: u32,
     /// URID for `atom:Sequence` (0 when unmapped / no MIDI port).
@@ -172,6 +176,7 @@ impl<L: PluginLogic> Instance<L> {
         audio_port_count(static_layout::<L>())
             + param_list::<L>().len()
             + usize::from(L::info().accepts_midi_in)
+            + usize::from(L::info().emits_midi)
     }
 }
 
@@ -238,11 +243,19 @@ unsafe extern "C" fn instantiate<L: PluginLogic>(
         .and_then(|m| unsafe { map_state_urids(m, &L::info()) })
         .unwrap_or((0, 0));
 
-    // MIDI atom port sits last (after controls) — audio/control indices unchanged.
-    let midi_port = L::info()
-        .accepts_midi_in
-        .then_some(n.saturating_sub(1) as u32);
-    let (midi_event_type, sequence_type) = match (midi_port, map_ptr) {
+    let info = L::info();
+    // MIDI atom ports sit after controls — audio/control indices unchanged.
+    let mut midi_in_port = None;
+    let mut midi_out_port = None;
+    let mut next_midi = audio_port_count(layout) + param_list::<L>().len();
+    if info.accepts_midi_in {
+        midi_in_port = Some(next_midi as u32);
+        next_midi += 1;
+    }
+    if info.emits_midi {
+        midi_out_port = Some(next_midi as u32);
+    }
+    let (midi_event_type, sequence_type) = match (midi_in_port.or(midi_out_port), map_ptr) {
         (Some(_), Some(m)) => unsafe {
             (
                 map_urid(m, LV2_MIDI__MidiEvent),
@@ -261,7 +274,8 @@ unsafe extern "C" fn instantiate<L: PluginLogic>(
         chunk_type,
         layout,
         ctrl0,
-        midi_port,
+        midi_in_port,
+        midi_out_port,
         midi_event_type,
         sequence_type,
     });
@@ -312,7 +326,8 @@ unsafe extern "C" fn activate<L: PluginLogic>(instance: LV2_Handle) {
         .with_channels(
             inst.layout.main_input_channels(),
             inst.layout.main_output_channels(),
-        );
+        )
+        .with_sidechain_channels(inst.layout.sidechain_input_channels());
     let mut dsp = L::init(&inst.params, inst.sample_rate);
     L::reset(&mut dsp, &inst.params, &config);
     inst.state = Some(dsp);
@@ -364,43 +379,53 @@ unsafe extern "C" fn run<L: PluginLogic>(instance: LV2_Handle, sample_count: u32
         };
 
         let in_ch = inst.layout.main_input_channels() as usize;
+        let sidechain_ch = inst.layout.sidechain_input_channels() as usize;
+        let total_in_ch = in_ch + sidechain_ch;
         let out_ch = inst.layout.main_output_channels() as usize;
         if out_ch == 0 {
             return;
         }
 
         // Copy host inputs (or silence) into owned buffers.
-        let mut owned_in: Vec<Vec<f32>> = Vec::with_capacity(out_ch);
-        for c in 0..out_ch {
-            if c < in_ch {
-                if let Some(s) = port_audio(inst.ports.get(c).copied(), n) {
-                    owned_in.push(s.to_vec());
-                } else {
-                    owned_in.push(vec![0.0; n]);
-                }
+        let mut owned_in: Vec<Vec<f32>> = Vec::with_capacity(total_in_ch.max(out_ch));
+        for c in 0..total_in_ch {
+            if let Some(s) = port_audio(inst.ports.get(c).copied(), n) {
+                owned_in.push(s.to_vec());
             } else {
                 owned_in.push(vec![0.0; n]);
             }
         }
 
-        let mut owned_out = owned_in.clone();
-        {
+        let mut owned_out: Vec<Vec<f32>> = Vec::with_capacity(out_ch);
+        for _ in 0..out_ch {
+            owned_out.push(vec![0.0; n]);
+        }
+        let midi_out = {
             let in_refs: Vec<&[f32]> = owned_in.iter().map(Vec::as_slice).collect();
             let mut out_refs: Vec<&mut [f32]> =
                 owned_out.iter_mut().map(Vec::as_mut_slice).collect();
-            let mut buffer = AudioBuffer::from_slices_checked(&in_refs, &mut out_refs, n);
+            let mut buffer = AudioBuffer::from_slices_checked_with_sidechain(
+                &in_refs,
+                &mut out_refs,
+                n,
+                in_ch,
+                sidechain_ch,
+            );
             let mut ctx = ProcessContext::new(inst.sample_rate, n)
                 .with_process_mode(ProcessMode::Realtime)
                 .with_midi(midi);
             let _ = L::process(dsp, &inst.params, &mut buffer, &mut ctx);
-        }
+            ctx.midi_out.clone()
+        };
 
         for (c, out_ch_buf) in owned_out.iter().enumerate() {
-            let port_i = in_ch + c;
+            let port_i = total_in_ch + c;
             if let Some(s) = port_audio_mut(inst.ports.get(port_i).copied(), n) {
                 s.copy_from_slice(out_ch_buf);
             }
         }
+
+        write_midi(inst, n, &midi_out);
     });
 }
 
@@ -414,13 +439,97 @@ fn port_audio_mut<'a>(ptr: Option<*mut c_void>, n: usize) -> Option<&'a mut [f32
     Some(unsafe { std::slice::from_raw_parts_mut(p as *mut f32, n) })
 }
 
+/// Encode [`MidiBuffer`] events into the MIDI atom-sequence output port.
+///
+/// Writes raw MIDI bytes (status + up to two data bytes) as `midi:MidiEvent`
+/// atoms into the host-provided output sequence buffer. Silently drops events
+/// when the host buffer is too small or unmapped.
+fn write_midi<L: PluginLogic>(inst: &Instance<L>, n: usize, midi: &MidiBuffer) {
+    let Some(port) = inst.midi_out_port else {
+        return;
+    };
+    if inst.midi_event_type == 0 || inst.sequence_type == 0 {
+        return;
+    }
+    let ptr = inst
+        .ports
+        .get(port as usize)
+        .copied()
+        .unwrap_or(ptr::null_mut());
+    if ptr.is_null() {
+        return;
+    }
+    if midi.is_empty() {
+        unsafe {
+            let seq = &mut *(ptr as *mut LV2_Atom_Sequence);
+            seq.atom.type_ = inst.sequence_type;
+            seq.atom.size = (size_of::<LV2_Atom_Sequence>() - size_of::<LV2_Atom>()) as u32;
+            seq.body.unit = 0;
+            seq.body.pad = 0;
+        }
+        return;
+    }
+
+    unsafe {
+        let seq = &mut *(ptr as *mut LV2_Atom_Sequence);
+        let base = ptr as *mut u8;
+        // Use the host-provided size as capacity when non-zero; otherwise fall
+        // back to a conservative default (hosts typically reserve ≥ 4 KiB).
+        let capacity = if seq.atom.size > 0 {
+            size_of::<LV2_Atom>() + seq.atom.size as usize
+        } else {
+            4096
+        };
+
+        seq.atom.type_ = inst.sequence_type;
+        seq.body.unit = 0;
+        seq.body.pad = 0;
+
+        let header_size = size_of::<LV2_Atom_Sequence>();
+        let mut off = header_size;
+        for ev in midi.iter() {
+            let (bytes, len) = message_bytes(ev.message);
+            let event_size = size_of::<LV2_Atom_Event>() + len;
+            let padded = (event_size + 7) & !7;
+            if off + padded > capacity {
+                break; // host buffer full
+            }
+
+            let atom_ev = base.add(off) as *mut LV2_Atom_Event;
+            (*atom_ev).time.frames = ev.sample_offset.min(n as u32 - 1) as i64;
+            (*atom_ev).body.type_ = inst.midi_event_type;
+            (*atom_ev).body.size = len as u32;
+            let data_ptr = base.add(off + size_of::<LV2_Atom_Event>());
+            std::ptr::copy_nonoverlapping(bytes.as_ptr(), data_ptr, len);
+
+            off += padded;
+        }
+        seq.atom.size = (off - size_of::<LV2_Atom>()) as u32;
+    }
+}
+
+/// Number of raw bytes this message occupies on the wire.
+fn message_len(msg: MidiMessage) -> usize {
+    match msg.status {
+        MidiStatus::ProgramChange | MidiStatus::ChannelPressure => 2,
+        MidiStatus::System => 1,
+        _ => 3,
+    }
+}
+
+/// Raw MIDI bytes for a message. Only the first [`message_len`] bytes are valid.
+fn message_bytes(msg: MidiMessage) -> ([u8; 3], usize) {
+    let len = message_len(msg);
+    ([msg.status_byte(), msg.data1, msg.data2], len)
+}
+
 /// Parse the MIDI atom-sequence input port into a [`MidiBuffer`].
 ///
 /// Empty when the plugin has no MIDI port, the host left it unconnected,
 /// URID mapping failed, or the buffer is not an `atom:Sequence`.
 fn read_midi<L: PluginLogic>(inst: &Instance<L>, n: usize) -> MidiBuffer {
     let mut midi = MidiBuffer::new();
-    let Some(port) = inst.midi_port else {
+    let Some(port) = inst.midi_in_port else {
         return midi;
     };
     if inst.midi_event_type == 0 {

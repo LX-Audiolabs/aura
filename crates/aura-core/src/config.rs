@@ -30,6 +30,8 @@ pub struct AudioConfig {
     pub main_input_channels: u32,
     /// Main output channel count for the selected bus layout.
     pub main_output_channels: u32,
+    /// Optional sidechain input channel count for the selected bus layout (`0` = none).
+    pub sidechain_input_channels: u32,
 }
 
 impl AudioConfig {
@@ -42,6 +44,7 @@ impl AudioConfig {
             process_mode: ProcessMode::Realtime,
             main_input_channels: 2,
             main_output_channels: 2,
+            sidechain_input_channels: 0,
         }
     }
 
@@ -55,6 +58,12 @@ impl AudioConfig {
     pub fn with_channels(mut self, main_in: u32, main_out: u32) -> Self {
         self.main_input_channels = main_in;
         self.main_output_channels = main_out;
+        self
+    }
+
+    #[must_use]
+    pub fn with_sidechain_channels(mut self, sidechain_in: u32) -> Self {
+        self.sidechain_input_channels = sidechain_in;
         self
     }
 }

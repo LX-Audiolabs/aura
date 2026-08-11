@@ -24,6 +24,7 @@ pub struct BundleTtl {
 /// - 0/1: audio in L/R · 2/3: audio out L/R · 4..: controls
 ///
 /// For **mono**: 0 in · 1 out · 2..: controls.
+/// Sidechain inputs (if any) sit between main inputs and main outputs.
 ///
 /// LV2 has no runtime layout switch — `layout` is the static declaration
 /// (typically the plugin's first / only `bus_layouts()` entry).
@@ -94,6 +95,19 @@ pub fn generate_ttl_with_layout_and_ui(
         }
         None => {}
     }
+    match layout.sidechain_in {
+        Some(ChannelConfig::Mono) => {
+            ports.push_str(&audio_port(idx, "sidechain", "Sidechain", true));
+            idx += 1;
+        }
+        Some(ChannelConfig::Stereo) => {
+            ports.push_str(&audio_port(idx, "sidechain_l", "Sidechain L", true));
+            idx += 1;
+            ports.push_str(&audio_port(idx, "sidechain_r", "Sidechain R", true));
+            idx += 1;
+        }
+        None => {}
+    }
     match layout.main_out {
         ChannelConfig::Mono => {
             ports.push_str(&audio_port(idx, "out", "Output", false));
@@ -113,8 +127,13 @@ pub fn generate_ttl_with_layout_and_ui(
         ports.push_str(&control_port(port_idx, &sym, p));
     }
     if info.accepts_midi_in {
-        // MIDI atom input goes last — must match the runtime wrapper's port map.
+        // MIDI atom input goes after controls — must match the runtime wrapper's port map.
         ports.push_str(&midi_in_port(ctrl0 + params.len()));
+    }
+    if info.emits_midi {
+        // MIDI atom output goes after MIDI input (if present) — must match runtime.
+        let idx = ctrl0 + params.len() + usize::from(info.accepts_midi_in);
+        ports.push_str(&midi_out_port(idx));
     }
 
     let io_note = layout.config_name();
@@ -296,6 +315,20 @@ fn midi_in_port(index: usize) -> String {
     )
 }
 
+fn midi_out_port(index: usize) -> String {
+    format!(
+        r#"
+    lv2:port [
+        a lv2:OutputPort, lv2:AtomPort ;
+        lv2:index {index} ;
+        lv2:symbol "midi_out" ;
+        lv2:name "MIDI Out" ;
+        atom:bufferType atom:Sequence ;
+        atom:supports midi:MidiEvent ;
+    ] ;"#
+    )
+}
+
 fn escape_ttl(s: &str) -> String {
     s.replace('\\', "\\\\").replace('"', "\\\"")
 }
@@ -382,5 +415,27 @@ mod tests {
             &one_param(),
         );
         assert!(!ttl.plugin.contains("lv2:AtomPort"));
+    }
+
+    #[test]
+    fn midi_out_port_appended_after_input() {
+        let mut info = PluginInfo::new("Test", "LX", "0.1.0", "test");
+        info.accepts_midi_in = true;
+        info.emits_midi = true;
+        // stereo: 0/1 in, 2/3 out, 4 control → midi in 5, midi out 6
+        let ttl = generate_ttl(
+            &info,
+            "https://example.com/lv2/test",
+            "test_plug",
+            &one_param(),
+        );
+        assert!(ttl.plugin.contains("lv2:symbol \"midi_in\""));
+        assert!(ttl.plugin.contains("lv2:symbol \"midi_out\""));
+        assert!(ttl.plugin.contains("lv2:index 5"));
+        assert!(ttl.plugin.contains("lv2:index 6"));
+        // Output port must be declared as OutputPort.
+        let out_pos = ttl.plugin.find("midi_out").unwrap();
+        let preceding = &ttl.plugin[..out_pos];
+        assert!(preceding.contains("lv2:OutputPort"));
     }
 }

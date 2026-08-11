@@ -19,6 +19,8 @@ members = [
     "tools/aura-preview",
     "tools/aura-gui",
     "examples/smoke-gain",
+    "examples/smoke-midi-fx",
+    "examples/smoke-sidechain",
     "examples/smoke-synth",
     # Window-stack demos (aura-baseview)
     "crates/aura-baseview/examples/render_femtovg",
@@ -26,7 +28,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.5.0"
+version = "0.6.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
 rust-version = "1.92"
