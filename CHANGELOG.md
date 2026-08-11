@@ -7,9 +7,23 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-08-11
+
+### Added
+
+- `aura-dsp` oscillator ports (fundsp MIT/Apache, in-tree): `DsfSaw` / `DsfSquare`, `SoftSaw` (`1/n²` table), `Pluck` (Karplus–Strong).
+- `aura-dsp` filter ports: `filter::MoogLadder` (fundsp), `filter::PredictiveLadder` (InfiniteDSP ZDF).
+
 ### Fixed
 
 - macOS: `cargo aura install --clap` ships a CFBundle (`Contents/MacOS/` + `Info.plist`) so clap-validator and hosts can load the plugin (was a flat Mach-O → "Could not open bundle").
+- DSF matches fundsp `Dsf::tick` (spacing `d`, Nyquist-limited `n`, no bogus `(1−r)` gain).
+- Pluck `set_frequency` recomputes gain from stored `gain_per_second`; delay uses `sr/freq − 1`.
+
+### Changed
+
+- One Moog only: dropped RK4 ladder from `synth::physical` (use `filter::MoogLadder` / `PredictiveLadder`).
+- `physical` module is Karplus–Strong + waveguide only.
 
 ## [0.6.1] - 2026-08-11
 
@@ -142,7 +156,8 @@ this release records what `main` contains after the multi-format + UI pass.
 - Still open for “Basis fertig”: VST3/LV2 real-host smoke; optional LV2 UI; product cutover later
 - Crates not published to crates.io (`publish = false`)
 
-[Unreleased]: https://github.com/LX-Audiolabs/aura/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/LX-Audiolabs/aura/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/LX-Audiolabs/aura/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/LX-Audiolabs/aura/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/LX-Audiolabs/aura/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/LX-Audiolabs/aura/releases/tag/v0.5.0

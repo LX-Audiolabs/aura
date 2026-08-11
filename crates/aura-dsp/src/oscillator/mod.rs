@@ -3,10 +3,14 @@
 //! Provides PolyBLEP anti-aliased saw, square, and pulse waveforms,
 //! along with basic sine, triangle, and noise generators. Layered
 //! variants (unison, sub-oscillator, hard sync) build on the base
-//! [`Oscillator`].
+//! [`Oscillator`]. Extra ports from fundsp (MIT/Apache): DSF, soft saw,
+//! Karplus–Strong pluck.
 //!
-//! Submodule layout (1.1.0):
+//! Submodule layout:
 //! - [`core`] — [`Waveform`], [`Oscillator`], [`polyblep`]
+//! - [`dsf`] — [`DsfSaw`], [`DsfSquare`] (Moorer DSF, fundsp port)
+//! - [`soft_saw`] — [`SoftSaw`] (`1/n²` wavetable, fundsp soft-saw)
+//! - [`pluck`] — [`Pluck`] (Karplus–Strong, fundsp port)
 //! - [`unison`] — [`UnisonOscillator`] (1–8 voice detune + stereo spread)
 //! - [`sub`] — [`SubOscillator`], [`SubOctave`] (octave-divided layer)
 //! - [`sync`] — [`HardSync`] (master/slave phase-reset pair)

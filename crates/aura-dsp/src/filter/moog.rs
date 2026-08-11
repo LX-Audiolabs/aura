@@ -3,8 +3,9 @@
 //! Ported from fundsp `src/moog.rs` (MIT / Apache-2.0).
 //! Original authors: Sami Perttu and contributors.
 //!
-//! The Moog ladder is a nonlinear 4-stage cascade with feedback,
-//! producing the classic warm, saturated lowpass sound.
+//! Nonlinear 4-stage cascade with feedback for the classic warm Moog LPF.
+//! For a different ladder topology (ZDF + linear prediction), see
+//! [`super::PredictiveLadder`].
 
 use crate::error::{DspError, Result};
 

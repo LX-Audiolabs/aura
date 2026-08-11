@@ -1,8 +1,11 @@
-//! Biquad and state variable filters.
+//! Biquad, state-variable, and ladder filters.
 //!
-//! Implements the Audio EQ Cookbook (Robert Bristow-Johnson) formulas
-//! for biquad filter coefficient computation, and a state variable filter
-//! with simultaneous LP/HP/BP/Notch outputs.
+//! - Audio EQ Cookbook biquads (Robert Bristow-Johnson)
+//! - Cytomic/Simper SVF (simultaneous LP/HP/BP/Notch)
+//! - [`MoogLadder`] — classic discrete Moog (fundsp port)
+//! - [`PredictiveLadder`] — ZDF linear-prediction ladder (InfiniteDSP)
+//!
+//! One Moog model only — no parallel RK4 / Huovilainen copies.
 
 pub mod moog;
 pub mod predictive;

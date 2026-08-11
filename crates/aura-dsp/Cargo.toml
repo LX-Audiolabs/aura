@@ -14,8 +14,10 @@ categories = ["multimedia::audio"]
 # Core primitives forked from naad v1.2.5 (GPL-3.0-only) by Robert MacCracken.
 # https://github.com/MacCracken/naad/tree/main/rust-old
 # Upstream rewritten in Cyrius; this Rust version maintained as part of AURA.
-# Layout target (JUCE-style): oscillators/filters/fx/analysis under this crate;
-# MIDI messages live in `aura-midi`.
+# Selective algorithm ports (in-tree, not Cargo deps — flat API only):
+#   fundsp (MIT/Apache-2.0) — DSF, soft-saw table, Karplus-Strong, Moog ladder
+#   InfiniteDSP (MIT) — PredictiveLadder ZDF
+# Layout: oscillators/filters/fx/analysis under this crate; MIDI in `aura-midi`.
 
 [dependencies]
 # AudioTap (lock-free sample ring) backs `analysis::ScopeRing` — G15.
