@@ -15,11 +15,17 @@
 //! callers continue to use `aura_dsp::oscillator::Oscillator` etc.
 
 pub mod core;
+pub mod dsf;
+pub mod pluck;
+pub mod soft_saw;
 pub mod sub;
 pub mod sync;
 pub mod unison;
 
 pub use core::{Oscillator, Waveform, polyblep};
+pub use dsf::{DsfSaw, DsfSquare};
+pub use pluck::Pluck;
+pub use soft_saw::SoftSaw;
 pub use sub::{SubOctave, SubOscillator};
 pub use sync::HardSync;
 pub use unison::UnisonOscillator;

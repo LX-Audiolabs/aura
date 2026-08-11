@@ -818,6 +818,7 @@ fn install_clap(pkg: &str, target_dir: &Path, profile: &str) -> Result<(), Strin
 /// `CFBundleExecutable` must match the binary name under `Contents/MacOS/`.
 /// Built on all hosts so unit tests cover the template; only `install_clap`
 /// on macOS writes it to disk.
+#[cfg(any(target_os = "macos", test))]
 fn clap_macos_info_plist(display_name: &str) -> String {
     // Escape XML special chars in the display name (plugins are usually
     // [A-Za-z0-9._-], but don't corrupt plist on odd names).

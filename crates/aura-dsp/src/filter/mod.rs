@@ -4,6 +4,12 @@
 //! for biquad filter coefficient computation, and a state variable filter
 //! with simultaneous LP/HP/BP/Notch outputs.
 
+pub mod moog;
+pub mod predictive;
+
+pub use moog::MoogLadder;
+pub use predictive::PredictiveLadder;
+
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
