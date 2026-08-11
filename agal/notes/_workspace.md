@@ -12,12 +12,19 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 
 ## Open
 
-- [ ] CI matrix for all six product plugins (post-cutover order #1)
-- [ ] G12 sidechain/multi-bus — only if pilot needs
-- [ ] G13 note-ports/MIDI in process — instrument/MIDI FX only
-- [ ] G14 tail/render/preset-load — CLAP polish
-- [x] LV2 UI extension — `lv2ui_descriptor` + `Editor` bridge + `ui:idleInterface`; done 2026-08-10 (host smoke pending suitable LV2 host)
-- [x] F1 split aura-derive lib.rs (~2.6k LOC) — parse/codegen/param_enum/params, 2026-08-10
+- [ ] CI matrix for all six product plugins (lives in lx-audiolabs-plugins)
+- [x] G12 sidechain (one optional SC) — done 2026-08-11
+- [x] G13 note-ports/MIDI I/O — done 2026-08-11
+- [x] G14 tail + render — done 2026-08-11; **preset-load still open**
+- [x] G17 sample-accurate + G18 mono mod — done 2026-08-11 (CLAP first-class)
+- [ ] **CLAP outstanding (product-driven)** — full list: `crates/aura-clap/README.md` + `docs/gaps-and-optimizations.md`
+  - [ ] `clap.preset-load` when factory presets need host browser
+  - [ ] poly mod (`PER_NOTE_ID`) / note expression — instrument pilot
+  - [ ] multi-out / >1 sidechain — only if plugin needs
+  - [ ] G5 rich state hooks — if host blob > flat params
+  - [ ] optional Bitwig host proofs (pages, latency, automation, mod, offline)
+- [x] LV2 UI extension — done 2026-08-10 (host smoke pending suitable LV2 host)
+- [x] F1 split aura-derive — done 2026-08-10
 - [ ] Stage 6 optional: richer agal mesh / hot-reload / MIDI 2.0 stubs
 
 ## Decisions
@@ -30,6 +37,7 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 [ATOM] type=decision | detail=G15 AudioTap landed 2026-08-10 — lock-free SPSC sample ring in aura-params; #[skip] declare, concrete Arc<Params> editor access, no core/derive change
 [ATOM] type=decision | detail=Stage 7 pilot + catalog migration done 2026-08-09 — all six plugins on AURA path deps
 [ATOM] type=decision | detail=Basis fertig 2026-08-08 — DoD green; cutover gate open
+[ATOM] type=decision | detail=CLAP first-class 2026-08-11: G17 sample-accurate, G18 mono mod, G14 tail+render, G12 SC, G13 MIDI; validator 0-fail smokes; outstanding = preset-load / poly-mod / note-expr / multi-out / G5 — see aura-clap README + gaps CLAP outstanding
 [ATOM] type=decision | detail=Stage 5b P1 done: G9 layouts, G10 remote-controls, G11 latency
 [ATOM] type=decision | detail=Stage 6 core tooling done: kinds, add, aura-gui (CLI parity)
 [ATOM] type=decision | detail=Host panic fence in aura-core + CLAP/VST3/LV2 process+state (cutover blocker 1)

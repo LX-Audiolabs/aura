@@ -57,4 +57,39 @@ Entry, factory, audio-ports (mono/stereo + optional sidechain), audio-ports-conf
 
 **Remote-controls:** pages of ≤8 params from `ParamInfo.group`. Empty group = no device page. `"Section/Page"` splits on the first `/`. Hidden/readonly never take a hardware slot.
 
-Later (product-driven): poly mod routing, note expression, preset-load.
+**Validator:** in-tree smokes (`smoke-gain`, `smoke-midi-fx`, `smoke-sidechain`, `smoke-synth`) — clap-validator **0 failed** (2026-08-11).
+
+---
+
+## Outstanding (CLAP) — do not forget
+
+Ship-capable CLAP core is **done**. Remaining work is **product-driven** or optional host proof — not basis holes.
+
+### Product-driven (implement only when a plugin needs it)
+
+| Item | Gap / notes | Trigger |
+|------|-------------|---------|
+| **`clap.preset-load`** (+ compat id if needed) | G14 rest | Factory presets in host browser / vault ship |
+| **Poly param modulation** (`CLAP_PARAM_IS_MODULATABLE_PER_NOTE_ID`) | G18 poly — flag maps to CLAP; process drops `PARAM_MOD` with `note_id ≥ 0` until voice routing | Instrument with per-voice params |
+| **Note expression** (CLAP note expression events) | Not wired to `ProcessContext` | MPE / Bitwig expression pilot |
+| **Multi-out / >1 sidechain** | G12 extension — one optional sidechain only today | Aux buses beyond single SC |
+| **Rich state hooks** (host blob > flat params) | G5 | Presets that need non-param bytes in host state |
+| **SysEx** typed path | — | Rare / hardware bridge |
+
+### Host proof (framework landed; DAW re-check recommended)
+
+- [ ] Bitwig: multi-page `remote-controls`, non-zero `latency`, mid-block automation, modulator → `modulatable` param
+- [ ] Mono / dual-layout host switch (`audio-ports-config`)
+- [ ] Offline bounce sees `ProcessMode::Offline` (`clap.render`)
+
+### Spec / bindings (not a ship blocker)
+
+- `clap-sys` may lag free-audio 1.2.x revision — bump only when a **new** extension is needed (see version snapshot above).
+- Do **not** claim “full CLAP zoo” (thread-pool, surround/ambisonic ports, context-menu, track-info, …) unless product requires it.
+
+### Explicit non-goals (AURA)
+
+- AU / AAX / VST2  
+- Multi-UI toolkits  
+
+Living gap ledger (internal): `docs/gaps-and-optimizations.md` · roadmap: `docs/migration-steps.md`.
