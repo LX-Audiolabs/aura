@@ -206,7 +206,11 @@ fn param_symbol(p: &ParamInfo) -> String {
                 }
             })
             .collect();
-        if cleaned.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) {
+        if cleaned
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic())
+        {
             s = cleaned;
         }
     }
@@ -323,7 +327,12 @@ mod tests {
     #[test]
     fn ttl_mentions_uri_and_ports() {
         let info = PluginInfo::new("Test", "LX", "0.1.0", "test");
-        let ttl = generate_ttl(&info, "https://example.com/lv2/test", "test_plug", &one_param());
+        let ttl = generate_ttl(
+            &info,
+            "https://example.com/lv2/test",
+            "test_plug",
+            &one_param(),
+        );
         assert!(ttl.manifest.contains("https://example.com/lv2/test"));
         assert!(ttl.plugin.contains("lv2:AudioPort"));
         assert!(ttl.plugin.contains("in_l"));
@@ -353,7 +362,12 @@ mod tests {
         let mut info = PluginInfo::new("Test", "LX", "0.1.0", "test");
         info.accepts_midi_in = true;
         // stereo: 0/1 in, 2/3 out, 4 control → midi at 5
-        let ttl = generate_ttl(&info, "https://example.com/lv2/test", "test_plug", &one_param());
+        let ttl = generate_ttl(
+            &info,
+            "https://example.com/lv2/test",
+            "test_plug",
+            &one_param(),
+        );
         assert!(ttl.plugin.contains("lv2:AtomPort"));
         assert!(ttl.plugin.contains("atom:bufferType atom:Sequence"));
         assert!(ttl.plugin.contains("atom:supports midi:MidiEvent"));
@@ -361,7 +375,12 @@ mod tests {
         assert!(ttl.plugin.contains("lv2:symbol \"midi_in\""));
 
         info.accepts_midi_in = false;
-        let ttl = generate_ttl(&info, "https://example.com/lv2/test", "test_plug", &one_param());
+        let ttl = generate_ttl(
+            &info,
+            "https://example.com/lv2/test",
+            "test_plug",
+            &one_param(),
+        );
         assert!(!ttl.plugin.contains("lv2:AtomPort"));
     }
 }

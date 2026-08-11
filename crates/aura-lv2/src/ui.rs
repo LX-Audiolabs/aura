@@ -27,14 +27,15 @@ use std::ptr;
 use std::sync::{Arc, OnceLock};
 
 use aura_core::{
-    PluginLogic, editor::{Editor, EditorBridge, PluginContext, RawWindowHandle}, host_callback,
-    host_callback_with,
+    PluginLogic,
+    editor::{Editor, EditorBridge, PluginContext, RawWindowHandle},
+    host_callback, host_callback_with,
 };
 use aura_params::Params;
 use lv2_sys::{
-    LV2UI_Controller, LV2UI_Descriptor, LV2UI_Handle, LV2UI_Idle_Interface, LV2UI_Resize,
-    LV2UI_Widget, LV2UI_Write_Function, LV2_Feature, LV2_UI__idleInterface, LV2_UI__parent,
-    LV2_UI__resize,
+    LV2_Feature, LV2_UI__idleInterface, LV2_UI__parent, LV2_UI__resize, LV2UI_Controller,
+    LV2UI_Descriptor, LV2UI_Handle, LV2UI_Idle_Interface, LV2UI_Resize, LV2UI_Widget,
+    LV2UI_Write_Function,
 };
 
 use crate::{param_list, plugin_uri, uri_cstring};
@@ -174,7 +175,11 @@ impl EditorBridge for Lv2Bridge {
             return false;
         };
         unsafe {
-            ui_resize(resize.handle, w as std::os::raw::c_int, h as std::os::raw::c_int) == 0
+            ui_resize(
+                resize.handle,
+                w as std::os::raw::c_int,
+                h as std::os::raw::c_int,
+            ) == 0
         }
     }
 }
@@ -251,8 +256,8 @@ unsafe extern "C" fn ui_instantiate<L: PluginLogic>(
             port_by_id,
             resize,
         });
-        let ctx = PluginContext::new(Arc::clone(&params) as Arc<dyn Params>)
-            .with_bridge(bridge.clone());
+        let ctx =
+            PluginContext::new(Arc::clone(&params) as Arc<dyn Params>).with_bridge(bridge.clone());
 
         editor.open(parent_handle, ctx);
         editor.show();
@@ -347,9 +352,7 @@ unsafe extern "C" fn ui_port_event<L: PluginLogic>(
 // Extension data (idle interface)
 // ---------------------------------------------------------------------------
 
-unsafe extern "C" fn ui_extension_data<L: PluginLogic>(
-    uri: *const c_char,
-) -> *const c_void {
+unsafe extern "C" fn ui_extension_data<L: PluginLogic>(uri: *const c_char) -> *const c_void {
     if uri.is_null() {
         return ptr::null();
     }
@@ -410,9 +413,9 @@ mod tests {
     use std::sync::Arc;
 
     use aura_core::{
+        AudioBuffer, AudioConfig, PluginLogic, ProcessContext, ProcessStatus,
         editor::{Editor, PluginContext, RawWindowHandle},
         info::PluginInfo,
-        AudioBuffer, AudioConfig, PluginLogic, ProcessContext, ProcessStatus,
     };
     use aura_params::FloatParam;
 
@@ -531,4 +534,3 @@ mod tests {
         assert!(unsafe { ui_extension_data::<TestLogic>(std::ptr::null()) }.is_null());
     }
 }
-

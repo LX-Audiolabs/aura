@@ -88,7 +88,10 @@ pub fn assert_corrupt_state_no_crash<L: PluginLogic>() {
         &[10, 0, 0, 0, 1, 0, 0, 0][..],
     ] {
         let ok = decode_state(&params, blob);
-        assert!(!ok || blob.is_empty(), "unexpected success on corrupt blob {blob:?}");
+        assert!(
+            !ok || blob.is_empty(),
+            "unexpected success on corrupt blob {blob:?}"
+        );
         let after = snapshot_plains(&params);
         assert_eq!(
             before, after,
@@ -150,9 +153,9 @@ pub fn assert_param_count_matches<L: PluginLogic>() {
 pub fn assert_param_defaults_match<L: PluginLogic>() {
     let p = L::Params::default();
     for pi in p.param_infos() {
-        let v = p.get_plain(pi.id).unwrap_or_else(|| {
-            panic!("param {} ({}) has no get_plain", pi.id, pi.name)
-        });
+        let v = p
+            .get_plain(pi.id)
+            .unwrap_or_else(|| panic!("param {} ({}) has no get_plain", pi.id, pi.name));
         assert!(
             (v - pi.default_plain).abs() < 1e-9,
             "param {} ({}) default mismatch: value={v} info={}",
@@ -202,23 +205,20 @@ pub fn process_with_input<L: PluginLogic>(inputs: &[Vec<f32>], frames: usize) ->
     L::reset(&mut state, &params, &config);
 
     let owned_in: Vec<Vec<f32>> = (0..ch_out)
-        .map(|c| {
-            inputs
-                .get(c)
-                .cloned()
-                .unwrap_or_else(|| vec![0.0; frames])
-        })
+        .map(|c| inputs.get(c).cloned().unwrap_or_else(|| vec![0.0; frames]))
         .collect();
     let mut owned_out = owned_in.clone();
 
     let in_refs: Vec<&[f32]> = owned_in.iter().map(Vec::as_slice).collect();
     let mut out_refs: Vec<&mut [f32]> = owned_out.iter_mut().map(Vec::as_mut_slice).collect();
     let mut buffer = AudioBuffer::from_slices_checked(&in_refs, &mut out_refs, frames);
-    let mut ctx =
-        ProcessContext::new(sample_rate, frames).with_process_mode(ProcessMode::Realtime);
+    let mut ctx = ProcessContext::new(sample_rate, frames).with_process_mode(ProcessMode::Realtime);
     let status = L::process(&mut state, &params, &mut buffer, &mut ctx);
     assert!(
-        matches!(status, ProcessStatus::Continue | ProcessStatus::TailFinished),
+        matches!(
+            status,
+            ProcessStatus::Continue | ProcessStatus::TailFinished
+        ),
         "process returned Error"
     );
     owned_out
@@ -238,10 +238,7 @@ const AUDIBLE: f32 = 1e-3;
 pub fn assert_no_nans(channels: &[Vec<f32>]) {
     for (ci, ch) in channels.iter().enumerate() {
         for (i, s) in ch.iter().enumerate() {
-            assert!(
-                s.is_finite(),
-                "non-finite sample at ch={ci} i={i}: {s}"
-            );
+            assert!(s.is_finite(), "non-finite sample at ch={ci} i={i}: {s}");
         }
     }
 }
@@ -266,10 +263,7 @@ pub fn assert_silence(channels: &[Vec<f32>]) {
         .flat_map(|c| c.iter())
         .map(|s| s.abs())
         .fold(0.0f32, f32::max);
-    assert!(
-        peak <= AUDIBLE,
-        "output not silent (peak={peak})"
-    );
+    assert!(peak <= AUDIBLE, "output not silent (peak={peak})");
 }
 
 // ---------------------------------------------------------------------------

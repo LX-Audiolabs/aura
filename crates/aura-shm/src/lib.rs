@@ -260,7 +260,12 @@ fn seqlock_begin(seq: &AtomicU32) -> u32 {
             fence(Ordering::Release);
             return cur;
         }
-        let _ = seq.compare_exchange(cur, cur.wrapping_add(1), Ordering::AcqRel, Ordering::Relaxed);
+        let _ = seq.compare_exchange(
+            cur,
+            cur.wrapping_add(1),
+            Ordering::AcqRel,
+            Ordering::Relaxed,
+        );
     }
 }
 
@@ -1222,9 +1227,15 @@ mod resolve_target_tests {
         assert_eq!(resolve_from_consumers("Ghost", &none).as_deref(), Some(""));
 
         let one = vec!["Lucent 1".to_string()];
-        assert_eq!(resolve_from_consumers("Lucent 1", &one).as_deref(), Some("Lucent 1"));
+        assert_eq!(
+            resolve_from_consumers("Lucent 1", &one).as_deref(),
+            Some("Lucent 1")
+        );
         // stale target, exactly one consumer → auto-target it
-        assert_eq!(resolve_from_consumers("Ghost", &one).as_deref(), Some("Lucent 1"));
+        assert_eq!(
+            resolve_from_consumers("Ghost", &one).as_deref(),
+            Some("Lucent 1")
+        );
 
         let two = vec!["A".to_string(), "B".to_string()];
         assert_eq!(resolve_from_consumers("B", &two).as_deref(), Some("B"));
@@ -1236,10 +1247,11 @@ mod resolve_target_tests {
     fn consumer_heartbeat_is_discoverable() {
         let hub = RelayHub::open_or_create().expect("hub");
         let now = now_ms();
-        assert!(now > 0, "now_ms() returned 0 — heartbeats would be invisible");
-        let slot = hub
-            .claim_consumer_slot(now)
-            .expect("free consumer slot");
+        assert!(
+            now > 0,
+            "now_ms() returned 0 — heartbeats would be invisible"
+        );
+        let slot = hub.claim_consumer_slot(now).expect("free consumer slot");
         hub.write_consumer_name(slot, "Test Lucent", now);
         assert!(
             hub.consumer_exists("Test Lucent", now),
@@ -1253,5 +1265,3 @@ mod resolve_target_tests {
         hub.release_consumer_slot(slot);
     }
 }
-
-

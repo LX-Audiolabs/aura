@@ -214,10 +214,12 @@ fn spawn_watcher(dir: &std::path::Path) -> Result<notify::RecommendedWatcher, St
         ) {
             return;
         }
-        let relevant = event
-            .paths
-            .iter()
-            .any(|p| matches!(p.extension().and_then(|e| e.to_str()), Some("slint" | "ttf")));
+        let relevant = event.paths.iter().any(|p| {
+            matches!(
+                p.extension().and_then(|e| e.to_str()),
+                Some("slint" | "ttf")
+            )
+        });
         if relevant {
             let _ = tx.send(());
         }

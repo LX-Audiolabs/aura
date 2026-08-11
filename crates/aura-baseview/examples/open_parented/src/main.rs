@@ -1,9 +1,9 @@
+use aura_baseview::slint_window::SlintWindow;
 use baseview::dpi::LogicalSize;
 use baseview::{
-    gl::GlConfig, Event, EventStatus, HandlerError, Window, WindowHandler, WindowSettings,
+    Event, EventStatus, HandlerError, Window, WindowHandler, WindowSettings, gl::GlConfig,
 };
 use baseview::{WindowContext, WindowSize};
-use aura_baseview::slint_window::SlintWindow;
 use std::cell::{Cell, RefCell};
 use std::{num::NonZeroU32, sync::mpsc::channel, thread::spawn};
 

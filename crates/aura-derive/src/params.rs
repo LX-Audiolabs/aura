@@ -18,7 +18,7 @@ use crate::codegen::{
     gen_field_constructor, gen_param_id_enum, gen_param_info_literal, gen_persist_read,
     gen_persist_write,
 };
-use crate::parse::{collect_fields, MidiBindKind, ParamKind};
+use crate::parse::{MidiBindKind, ParamKind, collect_fields};
 
 #[allow(clippy::too_many_lines)]
 pub(crate) fn expand(input: TokenStream) -> TokenStream {
@@ -97,11 +97,15 @@ pub(crate) fn expand(input: TokenStream) -> TokenStream {
                         "Parameter ID {id} is in the meter range (≥ {METER_ID_BASE}). \
                          Param IDs must be < {METER_ID_BASE}."
                     );
-                    return syn::Error::new(f.ident.span(), msg).to_compile_error().into();
+                    return syn::Error::new(f.ident.span(), msg)
+                        .to_compile_error()
+                        .into();
                 }
                 if !seen_ids.insert(id) {
                     let msg = format!("Duplicate parameter ID: {id}");
-                    return syn::Error::new(f.ident.span(), msg).to_compile_error().into();
+                    return syn::Error::new(f.ident.span(), msg)
+                        .to_compile_error()
+                        .into();
                 }
             }
         }
@@ -355,21 +359,28 @@ pub(crate) fn expand(input: TokenStream) -> TokenStream {
     };
 
     // --- set_plain ---
-    let set_plain_arms: Vec<_> = param_fields.iter().map(|f| {
-        let ident = &f.ident;
-        match f.kind {
-            ParamKind::Float => quote! { x if x == self.#ident.id() => self.#ident.set_value(value), },
-            ParamKind::Bool => quote! { x if x == self.#ident.id() => self.#ident.set_value(value > 0.5), },
-            ParamKind::Int => quote! { x if x == self.#ident.id() => {
-                #[allow(clippy::cast_possible_truncation)]
-                self.#ident.set_value(value.round() as i64);
-            }, },
-            ParamKind::Enum => quote! { x if x == self.#ident.id() => {
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                self.#ident.set_index(value.round() as u32);
-            }, },
-        }
-    }).collect();
+    let set_plain_arms: Vec<_> = param_fields
+        .iter()
+        .map(|f| {
+            let ident = &f.ident;
+            match f.kind {
+                ParamKind::Float => {
+                    quote! { x if x == self.#ident.id() => self.#ident.set_value(value), }
+                }
+                ParamKind::Bool => {
+                    quote! { x if x == self.#ident.id() => self.#ident.set_value(value > 0.5), }
+                }
+                ParamKind::Int => quote! { x if x == self.#ident.id() => {
+                    #[allow(clippy::cast_possible_truncation)]
+                    self.#ident.set_value(value.round() as i64);
+                }, },
+                ParamKind::Enum => quote! { x if x == self.#ident.id() => {
+                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                    self.#ident.set_index(value.round() as u32);
+                }, },
+            }
+        })
+        .collect();
 
     let set_plain_fallthrough = if nested_fields.is_empty() {
         quote! { _ => {} }

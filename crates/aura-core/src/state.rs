@@ -165,10 +165,7 @@ mod tests {
         fn collect_values(&self) -> (Vec<u32>, Vec<f64>) {
             (
                 vec![1, 2],
-                vec![
-                    self.get(1).expect("id 1"),
-                    self.get(2).expect("id 2"),
-                ],
+                vec![self.get(1).expect("id 1"), self.get(2).expect("id 2")],
             )
         }
 

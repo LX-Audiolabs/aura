@@ -65,9 +65,9 @@ use vst3::Steinberg::Vst::ProcessContext_::StatesAndFlags_::{
 use vst3::Steinberg::Vst::ProcessModes_::{kOffline, kPrefetch};
 use vst3::Steinberg::Vst::SymbolicSampleSizes_::kSample32;
 use vst3::Steinberg::Vst::{
-    BusDirection, BusInfo, BusType, Event, IAudioProcessor, IAudioProcessorTrait,
-    IAudioProcessor_iid, IComponent, IComponentHandler, IComponentTrait, IComponent_iid,
-    IEditController, IEditControllerTrait, IEditController_iid, IEventList, IEventListTrait,
+    BusDirection, BusInfo, BusType, Event, IAudioProcessor, IAudioProcessor_iid,
+    IAudioProcessorTrait, IComponent, IComponent_iid, IComponentHandler, IComponentTrait,
+    IEditController, IEditController_iid, IEditControllerTrait, IEventList, IEventListTrait,
     IParamValueQueueTrait, IParameterChanges, IParameterChangesTrait, IoMode, MediaType, ParamID,
     ParamValue, ParameterInfo, ProcessData, ProcessSetup, RoutingInfo, SpeakerArrangement,
     String128, TChar, kRootUnitId,
@@ -101,7 +101,8 @@ macro_rules! export_vst3 {
         /// VST3 module entry point called by the host after loading the bundle.
         #[allow(non_snake_case)]
         #[unsafe(no_mangle)]
-        pub extern "system" fn GetPluginFactory() -> *mut $crate::__vst3::Steinberg::IPluginFactory {
+        pub extern "system" fn GetPluginFactory() -> *mut $crate::__vst3::Steinberg::IPluginFactory
+        {
             $crate::plugin_factory::<$logic>()
         }
 
@@ -190,7 +191,10 @@ pub fn tuid_bytes(id: &str) -> [u8; 16] {
     let a = fnv1a(FNV_OFFSET, id.as_bytes());
     // Second pass: offset basis with rotated halves, so the two 64-bit
     // lanes are independent functions of the input.
-    let b = fnv1a(FNV_OFFSET.rotate_left(32) ^ 0x9e37_79b9_7f4a_7c15, id.as_bytes());
+    let b = fnv1a(
+        FNV_OFFSET.rotate_left(32) ^ 0x9e37_79b9_7f4a_7c15,
+        id.as_bytes(),
+    );
     let mut out = [0u8; 16];
     out[..8].copy_from_slice(&a.to_le_bytes());
     out[8..].copy_from_slice(&b.to_le_bytes());
@@ -286,8 +290,7 @@ impl<L: PluginLogic> IPluginFactoryTrait for Factory<L> {
         // SAFETY: non-null, host-owned out struct per spec.
         let info = unsafe { &mut *info };
         info.cid = class_id::<L>();
-        info.cardinality =
-            vst3::Steinberg::PClassInfo_::ClassCardinality_::kManyInstances as int32;
+        info.cardinality = vst3::Steinberg::PClassInfo_::ClassCardinality_::kManyInstances as int32;
         write_char8(&mut info.category, "Audio Module Class");
         write_char8(&mut info.name, meta.name);
         kResultOk
@@ -345,8 +348,7 @@ impl<L: PluginLogic> IPluginFactory2Trait for Factory<L> {
         // SAFETY: non-null, host-owned out struct per spec.
         let info = unsafe { &mut *info };
         info.cid = class_id::<L>();
-        info.cardinality =
-            vst3::Steinberg::PClassInfo_::ClassCardinality_::kManyInstances as int32;
+        info.cardinality = vst3::Steinberg::PClassInfo_::ClassCardinality_::kManyInstances as int32;
         write_char8(&mut info.category, "Audio Module Class");
         write_char8(&mut info.name, meta.name);
         info.classFlags = 0;
@@ -601,7 +603,11 @@ impl<L: PluginLogic> IPluginBaseTrait for Component<L> {
     unsafe fn initialize(&self, _context: *mut FUnknown) -> tresult {
         // Main-thread GUI factory — same timing as CLAP `plugin_init`.
         let editor = L::editor(Arc::clone(&self.params));
-        *self.gui.editor.lock().unwrap_or_else(PoisonError::into_inner) = editor;
+        *self
+            .gui
+            .editor
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = editor;
         kResultOk
     }
 
@@ -615,13 +621,21 @@ impl<L: PluginLogic> IPluginBaseTrait for Component<L> {
         {
             editor.close();
         }
-        *self.gui.editor.lock().unwrap_or_else(PoisonError::into_inner) = None;
+        *self
+            .gui
+            .editor
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = None;
         *self
             .gui
             .handler
             .lock()
             .unwrap_or_else(PoisonError::into_inner) = None;
-        *self.gui.frame.lock().unwrap_or_else(PoisonError::into_inner) = None;
+        *self
+            .gui
+            .frame
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = None;
         kResultOk
     }
 }
@@ -652,9 +666,7 @@ impl<L: PluginLogic> IComponentTrait for Component<L> {
         }
         // Main bus only. No input bus when all layouts are output-only.
         if dir == kInput as BusDirection {
-            let has_in = L::bus_layouts()
-                .iter()
-                .any(|l| l.main_in.is_some());
+            let has_in = L::bus_layouts().iter().any(|l| l.main_in.is_some());
             i32::from(has_in)
         } else {
             1
@@ -785,9 +797,10 @@ impl<L: PluginLogic> IAudioProcessorTrait for Component<L> {
         };
 
         let layouts = L::bus_layouts();
-        let Some(idx) = layouts.iter().position(|l| {
-            l.main_input_channels() == in_ch && l.main_output_channels() == out_ch
-        }) else {
+        let Some(idx) = layouts
+            .iter()
+            .position(|l| l.main_input_channels() == in_ch && l.main_output_channels() == out_ch)
+        else {
             return kResultFalse;
         };
         self.lock().layout_index = idx;
@@ -827,10 +840,7 @@ impl<L: PluginLogic> IAudioProcessorTrait for Component<L> {
 
     unsafe fn getLatencySamples(&self) -> uint32 {
         let inner = self.lock();
-        inner
-            .state
-            .as_ref()
-            .map_or(0, |s| L::latency(s))
+        inner.state.as_ref().map_or(0, |s| L::latency(s))
     }
 
     unsafe fn setupProcessing(&self, setup: *mut ProcessSetup) -> tresult {
@@ -943,7 +953,11 @@ impl<L: PluginLogic> IEditControllerTrait for Component<L> {
         kResultOk
     }
 
-    unsafe fn normalizedParamToPlain(&self, id: ParamID, valueNormalized: ParamValue) -> ParamValue {
+    unsafe fn normalizedParamToPlain(
+        &self,
+        id: ParamID,
+        valueNormalized: ParamValue,
+    ) -> ParamValue {
         self.find_info(id).map_or(valueNormalized, |meta| {
             meta.range.denormalize(valueNormalized)
         })
@@ -1185,7 +1199,9 @@ unsafe fn read_stream(stream: *mut IBStream) -> Option<Vec<u8>> {
 }
 
 fn load_state(params: &dyn Params, stream: *mut IBStream) -> tresult {
-    host_callback_with("VST3", "state_load", kInternalError, || load_state_inner(params, stream))
+    host_callback_with("VST3", "state_load", kInternalError, || {
+        load_state_inner(params, stream)
+    })
 }
 
 fn load_state_inner(params: &dyn Params, stream: *mut IBStream) -> tresult {

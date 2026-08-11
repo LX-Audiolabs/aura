@@ -14,7 +14,7 @@ use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawDisplayHandle,
     RawWindowHandle, WindowHandle,
 };
-use slint::{platform::WindowAdapter, PhysicalSize, Window};
+use slint::{PhysicalSize, Window, platform::WindowAdapter};
 
 /// Owned window handle pair extracted from `baseview::WindowContext`.
 ///

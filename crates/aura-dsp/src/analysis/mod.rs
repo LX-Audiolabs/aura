@@ -7,9 +7,9 @@
 //! **Out of scope:** Product-specific Slint widgets and chrome.
 
 pub mod dev_log;
+pub mod product_shared;
 pub mod shared;
 pub mod snap_fft;
-pub mod product_shared;
 pub mod vault;
 
 pub use shared::{

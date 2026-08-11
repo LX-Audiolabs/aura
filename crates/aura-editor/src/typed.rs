@@ -4,20 +4,19 @@
 //! Plugin authors use this for typed param access, `automate()`, and product zoom.
 
 use std::ops::Deref;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
+use aura_baseview::SlintParentedWindow;
 use aura_baseview::slint_window::SlintWindow;
-use aura_baseview::{pack_size, to_physical_px, RequestResizeFn, SizePolicy};
+use aura_baseview::{RequestResizeFn, SizePolicy, pack_size, to_physical_px};
 use aura_core::editor::{Editor, PluginContext, RawWindowHandle};
 use aura_params::Params;
-use aura_baseview::SlintParentedWindow;
-use baseview::{gl::GlConfig, WindowSettings};
+use baseview::{WindowSettings, gl::GlConfig};
 use slint::ComponentHandle;
 
 use super::ui_zoom::UiZoom;
 use super::{map_baseview_handle, parent};
-
 
 /// Typed product context: Arc params + host bridge helpers.
 pub struct LxPluginContext<P: Params + 'static> {
@@ -124,7 +123,11 @@ pub fn discrete_norm(index: usize, count: usize) -> f64 {
 
 /// Normalized 0..1 → discrete index.
 #[must_use]
-#[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss, clippy::cast_sign_loss)]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss
+)]
 pub fn discrete_index(norm: f64, count: usize) -> usize {
     if count <= 1 {
         0

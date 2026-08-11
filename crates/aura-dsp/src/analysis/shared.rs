@@ -3,12 +3,10 @@
 //! Product plugins compose these into `AetherShared` / `MensorShared` / … in
 //! the plugins repo. Framework only owns the reusable field groups.
 
-use super::{
-    ClipWaveRing, DEFAULT_BAND_TOLERANCES, SCOPE_BUFFER_LEN, SPECTRUM_BINS,
-};
+use super::{ClipWaveRing, DEFAULT_BAND_TOLERANCES, SCOPE_BUFFER_LEN, SPECTRUM_BINS};
 use atomic_float::AtomicF32;
 use aura_params::AudioTap;
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicU8};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, AtomicU32};
 use std::sync::{Arc, Mutex};
 
 #[inline]

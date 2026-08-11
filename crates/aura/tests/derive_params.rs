@@ -29,15 +29,36 @@ struct SubParams {
 
 #[derive(Params)]
 struct TestParams {
-    #[param(id = 1, name = "Gain", range = "linear(-24, 24)", default = 0.0, unit = "db", smooth = "exp(20)")]
+    #[param(
+        id = 1,
+        name = "Gain",
+        range = "linear(-24, 24)",
+        default = 0.0,
+        unit = "db",
+        smooth = "exp(20)"
+    )]
     gain: FloatParam,
-    #[param(id = 2, name = "Octave", range = "discrete(-2, 2)", default = 0, unit = "st")]
+    #[param(
+        id = 2,
+        name = "Octave",
+        range = "discrete(-2, 2)",
+        default = 0,
+        unit = "st"
+    )]
     octave: IntParam,
     #[param(id = 3, name = "Bypass", default = 0)]
     bypass: BoolParam,
     #[param(id = 4, name = "Mode", default = 1)]
     mode: EnumParam<Mode>,
-    #[param(id = 5, name = "Cutoff", range = "log(20, 20000)", default = 1000.0, unit = "Hz", chunk = false, midi_cc = 74)]
+    #[param(
+        id = 5,
+        name = "Cutoff",
+        range = "log(20, 20000)",
+        default = 1000.0,
+        unit = "Hz",
+        chunk = false,
+        midi_cc = 74
+    )]
     cutoff: FloatParam,
     #[meter]
     level: MeterSlot,
@@ -69,7 +90,11 @@ fn flags_and_midi_baked_from_attributes() {
     let p = TestParams::new();
     let infos = p.param_infos();
     // CHUNKED defaults on; `chunk = false` clears it.
-    assert!(infos[0].flags.contains(ParamFlags::AUTOMATABLE | ParamFlags::CHUNKED));
+    assert!(
+        infos[0]
+            .flags
+            .contains(ParamFlags::AUTOMATABLE | ParamFlags::CHUNKED)
+    );
     assert!(infos[4].flags.contains(ParamFlags::AUTOMATABLE));
     assert!(!infos[4].flags.contains(ParamFlags::CHUNKED));
     assert_eq!(infos[4].midi_map, Some(MidiSource::Cc(74)));
@@ -158,7 +183,11 @@ fn format_and_parse_defaults() {
     assert_eq!(p.parse_value(2, "2"), Some(2.0));
     assert_eq!(p.parse_value(3, "on"), Some(1.0));
     assert_eq!(p.parse_value(3, "False"), Some(0.0));
-    assert_eq!(p.parse_value(4, "dirt"), Some(2.0), "case-insensitive variant match");
+    assert_eq!(
+        p.parse_value(4, "dirt"),
+        Some(2.0),
+        "case-insensitive variant match"
+    );
     assert_eq!(p.parse_value(4, "crunch+"), Some(1.0));
     assert_eq!(p.parse_value(4, "nope"), None);
     // Nested param parses through the parent.
@@ -204,7 +233,11 @@ fn persist_round_trip_and_tolerance() {
     r.load_persist(&[]);
     // Count + a partial key-length word: every entry read bails out.
     r.load_persist(&blob[..6]);
-    assert_eq!(*r.active_tab.read().expect("lock"), 7, "malformed blobs never clobber state");
+    assert_eq!(
+        *r.active_tab.read().expect("lock"),
+        7,
+        "malformed blobs never clobber state"
+    );
 
     // Unknown keys are skipped: a blob advertising entries we don't
     // know just gets ignored for those slots.
@@ -225,7 +258,11 @@ fn param_enum_derive_surface() {
     assert_eq!(Mode::Crunch.name(), "Crunch+", "#[name] override");
     assert_eq!(Mode::Dirt.to_index(), 2);
     assert_eq!(Mode::from_index(2), Mode::Dirt);
-    assert_eq!(Mode::from_index(99), Mode::Clean, "out-of-range falls to first");
+    assert_eq!(
+        Mode::from_index(99),
+        Mode::Clean,
+        "out-of-range falls to first"
+    );
 }
 
 /// Parent declares `id = 10`, which the nested `SubParams` also
@@ -289,7 +326,11 @@ fn param_id_enum_maps_explicit_ids() {
 
     // Nested params get their own enum; meters are excluded.
     assert_eq!(SubParamsParamId::Tone.id(), 10);
-    assert_eq!(P::from_id(10), None, "nested IDs stay with SubParamsParamId");
+    assert_eq!(
+        P::from_id(10),
+        None,
+        "nested IDs stay with SubParamsParamId"
+    );
 
     // Round-trip every declared ID; unknown IDs fall out.
     for id in [1, 2, 3, 4, 5] {

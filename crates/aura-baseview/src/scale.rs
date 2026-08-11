@@ -87,18 +87,10 @@ pub fn unpack_size(packed: u64) -> (u32, u32) {
 
 /// Clamp a host logical size into `[min, max]`.
 #[must_use]
-pub fn fit_size(
-    w: u32,
-    h: u32,
-    min: (u32, u32),
-    max: (u32, u32),
-) -> (u32, u32) {
+pub fn fit_size(w: u32, h: u32, min: (u32, u32), max: (u32, u32)) -> (u32, u32) {
     let (min_w, min_h) = min;
     let (max_w, max_h) = max;
-    (
-        w.clamp(min_w.max(1), max_w),
-        h.clamp(min_h.max(1), max_h),
-    )
+    (w.clamp(min_w.max(1), max_w), h.clamp(min_h.max(1), max_h))
 }
 
 /// Size / scale policy handed to the window handler at open.

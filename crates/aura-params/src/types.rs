@@ -1047,6 +1047,10 @@ mod tests {
         let tap = AudioTap::new(0);
         assert_eq!(tap.capacity(), 1);
         tap.push(&[7.0, 8.0]);
-        assert_eq!(tap.drain(), vec![8.0], "only the last sample survives a 1-slot ring");
+        assert_eq!(
+            tap.drain(),
+            vec![8.0],
+            "only the last sample survives a 1-slot ring"
+        );
     }
 }

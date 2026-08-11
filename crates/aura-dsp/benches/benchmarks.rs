@@ -241,7 +241,8 @@ fn subtractive_synth_1024(c: &mut Criterion) {
 #[cfg(feature = "synthesis")]
 fn karplus_strong_1024(c: &mut Criterion) {
     c.bench_function("karplus_strong_1024", |b| {
-        let mut ks = aura_dsp::synth::physical::KarplusStrong::new(440.0, 0.99, 0.5, 44100.0).unwrap();
+        let mut ks =
+            aura_dsp::synth::physical::KarplusStrong::new(440.0, 0.99, 0.5, 44100.0).unwrap();
         ks.pluck();
         let mut buffer = [0.0f32; 1024];
         b.iter(|| {

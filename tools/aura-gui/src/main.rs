@@ -101,10 +101,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ui.on_run_doctor(move || spawn_job(ui_w.clone(), Arc::clone(&busy), Arc::clone(&b)));
     }
 
-    invoke_log(
-        &ui_weak,
-        &format!("AURA root hint: {}\n", aura_root_hint()),
-    );
+    invoke_log(&ui_weak, &format!("AURA root hint: {}\n", aura_root_hint()));
     ui.run()?;
     Ok(())
 }

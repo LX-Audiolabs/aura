@@ -123,8 +123,7 @@ fn cmd_doctor() -> ExitCode {
                 "crates/aura-baseview",
                 "crates/aura-editor",
                 "crates/aura-build",
-            ]
-            {
+            ] {
                 let p = root.join(need);
                 if p.is_dir() || p.join("Cargo.toml").is_file() {
                     println!("  ok  {need}");
@@ -333,8 +332,14 @@ fn cmd_init(args: &[String]) -> ExitCode {
     } else {
         dest.clone()
     };
-    let Some(name) = name_dir.file_name().map(|s| s.to_string_lossy().into_owned()) else {
-        eprintln!("error: cannot derive a package name from {}", dest.display());
+    let Some(name) = name_dir
+        .file_name()
+        .map(|s| s.to_string_lossy().into_owned())
+    else {
+        eprintln!(
+            "error: cannot derive a package name from {}",
+            dest.display()
+        );
         return ExitCode::FAILURE;
     };
 
@@ -431,12 +436,7 @@ fn cmd_add(args: &[String]) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    let block = scaffold::plugin_table_block(
-        &spec.display(),
-        name,
-        kind.category(),
-        &crate_path,
-    );
+    let block = scaffold::plugin_table_block(&spec.display(), name, kind.category(), &crate_path);
     let merged = scaffold::append_plugin_table(&aura_text, &block);
     if let Err(e) = fs::write(&aura_path, merged) {
         eprintln!("error: update {}: {e}", aura_path.display());
@@ -495,7 +495,9 @@ fn cmd_add_ui(args: &[String]) -> ExitCode {
     }
 
     let aura_root = match aura_root() {
-        Ok(r) => strip_verbatim_prefix(&r).to_string_lossy().replace('\\', "/"),
+        Ok(r) => strip_verbatim_prefix(&r)
+            .to_string_lossy()
+            .replace('\\', "/"),
         Err(e) => {
             eprintln!("error: {e}");
             return ExitCode::FAILURE;
@@ -514,7 +516,9 @@ fn cmd_add_ui(args: &[String]) -> ExitCode {
     println!();
     println!("next:");
     println!("  1. add \"crates/{name}\" to [workspace] members in ./Cargo.toml");
-    println!("  2. import from plugins: import {{ ... }} from \"../../../crates/{name}/ui/{name}.slint\";");
+    println!(
+        "  2. import from plugins: import {{ ... }} from \"../../../crates/{name}/ui/{name}.slint\";"
+    );
     println!("  3. add your shared components to ui/{name}.slint");
     ExitCode::SUCCESS
 }
@@ -759,7 +763,8 @@ fn install_clap(pkg: &str, target_dir: &Path, profile: &str) -> Result<(), Strin
 
     let display = plugin_display_name(pkg);
     let dest = dest_root.join(format!("{display}.clap"));
-    fs::copy(src, &dest).map_err(|e| format!("copy {} → {}: {e}", src.display(), dest.display()))?;
+    fs::copy(src, &dest)
+        .map_err(|e| format!("copy {} → {}: {e}", src.display(), dest.display()))?;
     println!("installed {}", dest.display());
     Ok(())
 }
@@ -800,7 +805,8 @@ fn install_vst3(pkg: &str, target_dir: &Path, profile: &str) -> Result<(), Strin
 
     // Binary inside the bundle uses the `.vst3` extension (still a PE/ELF/Mach-O).
     let dest = arch_dir.join(format!("{display}.vst3"));
-    fs::copy(src, &dest).map_err(|e| format!("copy {} → {}: {e}", src.display(), dest.display()))?;
+    fs::copy(src, &dest)
+        .map_err(|e| format!("copy {} → {}: {e}", src.display(), dest.display()))?;
     println!("installed {}", bundle.display());
     Ok(())
 }
@@ -1076,10 +1082,7 @@ fn read_aura_install_config() -> std::collections::HashMap<String, String> {
         };
         let key = key.trim().to_ascii_lowercase();
         let val = val.trim().trim_matches('"').trim_matches('\'').to_string();
-        if matches!(
-            key.as_str(),
-            "dir" | "installdir" | "clap" | "vst3" | "lv2"
-        ) && !val.is_empty()
+        if matches!(key.as_str(), "dir" | "installdir" | "clap" | "vst3" | "lv2") && !val.is_empty()
         {
             out.insert(key, val);
         }
@@ -1158,9 +1161,8 @@ fn expand_path(raw: &str) -> Result<PathBuf, String> {
                     j += 1;
                 }
                 let name: String = chars[i + 1..j].iter().collect();
-                let repl = env_lookup(&name).ok_or_else(|| {
-                    format!("install path env ${name} is not set (from {raw:?})")
-                })?;
+                let repl = env_lookup(&name)
+                    .ok_or_else(|| format!("install path env ${name} is not set (from {raw:?})"))?;
                 out.push_str(&repl);
                 i = j;
                 continue;
@@ -1504,7 +1506,6 @@ fn parse_build_args(args: &[String]) -> Result<BuildArgs, String> {
     })
 }
 
-
 // ---------------------------------------------------------------------------
 // paths / utils
 // ---------------------------------------------------------------------------
@@ -1539,9 +1540,7 @@ fn aura_root() -> Result<PathBuf, String> {
         }
     }
 
-    Err(
-        "could not find AURA root — set AURA_PATH or run from inside the AURA repo".into(),
-    )
+    Err("could not find AURA root — set AURA_PATH or run from inside the AURA repo".into())
 }
 
 fn which(bin: &str) -> Option<PathBuf> {
@@ -1619,7 +1618,10 @@ mod tests {
         let p = expand_path(r"%LOCALAPPDATA%\\Programs\\Common").unwrap();
         let s = p.to_string_lossy();
         assert!(!s.contains('%'), "{s}");
-        assert!(s.ends_with(r"Programs\Common") || s.ends_with("Programs/Common"), "{s}");
+        assert!(
+            s.ends_with(r"Programs\Common") || s.ends_with("Programs/Common"),
+            "{s}"
+        );
     }
 
     #[test]

@@ -4,8 +4,8 @@
 //! `host_scale × ui_zoom`. Host frame size is `design × ui_zoom`.
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 use aura_baseview::EditorScale;
 
@@ -99,7 +99,11 @@ impl UiZoom {
 }
 
 /// Apply zoom percent and request host resize to the new zoomed frame.
-pub fn apply_ui_zoom(zoom: &UiZoom, mut request_resize: impl FnMut(u32, u32) -> bool, percent: u32) {
+pub fn apply_ui_zoom(
+    zoom: &UiZoom,
+    mut request_resize: impl FnMut(u32, u32) -> bool,
+    percent: u32,
+) {
     zoom.set_percent(percent);
     let (w, h) = zoom.zoomed_size();
     let _ = request_resize(w, h);

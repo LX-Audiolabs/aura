@@ -1,6 +1,6 @@
 use crate::gui::AppWindow;
-use baseview::{dpi::PhysicalSize, gl::GlConfig, WindowSettings};
 use aura_baseview::slint_window::SlintWindow;
+use baseview::{WindowSettings, dpi::PhysicalSize, gl::GlConfig};
 use std::{io::stdin, sync::mpsc::channel, thread::spawn};
 
 mod gui;
@@ -15,10 +15,12 @@ fn main() {
         });
 
     let (ss, rs) = channel::<String>();
-    let tt = spawn(move || loop {
-        let mut buffer = String::new();
-        stdin().read_line(&mut buffer).unwrap();
-        ss.send(buffer).unwrap();
+    let tt = spawn(move || {
+        loop {
+            let mut buffer = String::new();
+            stdin().read_line(&mut buffer).unwrap();
+            ss.send(buffer).unwrap();
+        }
     });
 
     let (sf, rf) = channel::<f32>();

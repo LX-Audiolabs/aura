@@ -4,8 +4,8 @@
 //! This module only defines product-plugin aggregates.
 
 use super::{
-    band5, band5_tol, AutoLoud, ClipWaveRing, PeakMeters, SPECTRUM_BINS, ScopeRing, ShmClaimShared,
-    SnapPipeline, SpectrumView,
+    AutoLoud, ClipWaveRing, PeakMeters, SPECTRUM_BINS, ScopeRing, ShmClaimShared, SnapPipeline,
+    SpectrumView, band5, band5_tol,
 };
 use atomic_float::AtomicF32;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize};
@@ -206,4 +206,3 @@ impl Default for MensorShared {
         }
     }
 }
-

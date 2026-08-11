@@ -1,13 +1,13 @@
 use crate::open_gl_interface::SlintGlContext;
 use baseview::gl::GlContext;
 use slint::{
-    platform::{femtovg_renderer::FemtoVGRenderer, WindowAdapter},
     PhysicalSize,
+    platform::{WindowAdapter, femtovg_renderer::FemtoVGRenderer},
 };
 use std::{
     cell::RefCell,
     fmt,
-    panic::{catch_unwind, AssertUnwindSafe},
+    panic::{AssertUnwindSafe, catch_unwind},
     rc::Rc,
 };
 

@@ -32,7 +32,13 @@ const RELEASE: f32 = 0.1;
 
 #[derive(Params)]
 pub struct SynthParams {
-    #[param(id = 1, name = "Gain", range = "linear(-24, 24)", default = 0.0, unit = "db")]
+    #[param(
+        id = 1,
+        name = "Gain",
+        range = "linear(-24, 24)",
+        default = 0.0,
+        unit = "db"
+    )]
     pub gain: FloatParam,
 }
 

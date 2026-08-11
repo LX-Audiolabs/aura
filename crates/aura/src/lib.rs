@@ -22,9 +22,9 @@
 #![forbid(unsafe_code)]
 
 pub use aura_core as core;
-pub use aura_params as params;
 pub use aura_dsp as dsp;
 pub use aura_midi as midi;
+pub use aura_params as params;
 
 // Test helpers are a separate crate (`aura-test`) so release plugins
 // don't pull them; product crates depend on `aura-test` as a dev-dep.
@@ -47,12 +47,12 @@ pub use aura_core::{
 };
 
 // --- params surface ---
+pub use aura_params::sample::{Float, Sample};
 pub use aura_params::{
     AudioTap, BoolParam, EnumParam, FloatParam, FloatParamReadF32, FloatParamReadF64, IntParam,
-    MeterSlot, MidiSource, ParamEnum, ParamFlags, ParamInfo, ParamRange, ParamUnit,
-    ParamValueKind, Params, Smoother, SmoothingStyle, format_param_value, parse_param_value,
+    MeterSlot, MidiSource, ParamEnum, ParamFlags, ParamInfo, ParamRange, ParamUnit, ParamValueKind,
+    Params, Smoother, SmoothingStyle, format_param_value, parse_param_value,
 };
-pub use aura_params::sample::{Float, Sample};
 
 // --- derive macros (macro namespace; `Params` / `ParamEnum` coexist
 // with the same-named traits, serde-style) ---
@@ -75,11 +75,11 @@ pub mod prelude {
     pub use std::sync::Arc;
 
     pub use crate::{
-        AudioBuffer, AudioConfig, AudioTap, BoolParam, BusLayout, ChannelConfig, Editor,
-        EnumParam, FloatParam, FloatParamReadF32, IntParam, IntoEditor, MeterSlot, MidiBuffer,
-        MidiMessage, ParamEnum, ParamInfo, ParamRange, ParamUnit, ParamValueKind, Params,
-        PluginCategory, PluginContext, PluginInfo, PluginLogic, ProcessContext, ProcessMode,
-        ProcessStatus, RawWindowHandle, SmoothingStyle,
+        AudioBuffer, AudioConfig, AudioTap, BoolParam, BusLayout, ChannelConfig, Editor, EnumParam,
+        FloatParam, FloatParamReadF32, IntParam, IntoEditor, MeterSlot, MidiBuffer, MidiMessage,
+        ParamEnum, ParamInfo, ParamRange, ParamUnit, ParamValueKind, Params, PluginCategory,
+        PluginContext, PluginInfo, PluginLogic, ProcessContext, ProcessMode, ProcessStatus,
+        RawWindowHandle, SmoothingStyle,
     };
     // FloatParamReadF64 available as `aura::FloatParamReadF64` — not in prelude
     // (same method name as F32 → E0034 if both imported).

@@ -1,24 +1,22 @@
-use crate::translate::translate_mouse_button;
 #[cfg(feature = "backend-femtovg")]
 use crate::baseview_slint_window_adapter::BaseviewSlintWindowAdapter;
-#[cfg(feature = "backend-skia")]
-use crate::skia_window_adapter::SkiaWindowAdapter;
-use crate::platform;
-use crate::scale::{
-    to_physical_px, unpack_size, EditorScale, RequestResizeFn, SizePolicy,
-};
 #[cfg(feature = "backend-wgpu")]
 use crate::blit::BlitPipeline;
+use crate::platform;
+use crate::scale::{EditorScale, RequestResizeFn, SizePolicy, to_physical_px, unpack_size};
+#[cfg(feature = "backend-skia")]
+use crate::skia_window_adapter::SkiaWindowAdapter;
 #[cfg(feature = "backend-wgpu")]
 use crate::software_renderer::render_to_rgba;
+use crate::translate::translate_mouse_button;
 use baseview::{
-    dpi, Event, EventStatus, HandlerError, Window, WindowContext, WindowSettings, WindowSize,
+    Event, EventStatus, HandlerError, Window, WindowContext, WindowSettings, WindowSize, dpi,
 };
 use keyboard_types::{Code, Key};
-use raw_window_handle::HasWindowHandle;
 #[cfg(feature = "backend-wgpu")]
 use raw_window_handle::HasDisplayHandle;
-use slint::{platform::WindowEvent, ComponentHandle, LogicalPosition, LogicalSize, PhysicalSize};
+use raw_window_handle::HasWindowHandle;
+use slint::{ComponentHandle, LogicalPosition, LogicalSize, PhysicalSize, platform::WindowEvent};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::{
@@ -205,15 +203,27 @@ where
     S: Send + 'static,
     U: Fn(&C, &mut S) + Send + 'static,
 {
-    #[cfg(all(feature = "backend-femtovg", not(feature = "backend-skia"), not(feature = "backend-wgpu")))]
+    #[cfg(all(
+        feature = "backend-femtovg",
+        not(feature = "backend-skia"),
+        not(feature = "backend-wgpu")
+    ))]
     fn slint_window_ref(&self) -> &slint::Window {
         &self.adapter.slint_window
     }
-    #[cfg(all(feature = "backend-skia", not(feature = "backend-femtovg"), not(feature = "backend-wgpu")))]
+    #[cfg(all(
+        feature = "backend-skia",
+        not(feature = "backend-femtovg"),
+        not(feature = "backend-wgpu")
+    ))]
     fn slint_window_ref(&self) -> &slint::Window {
         &self.adapter.slint_window
     }
-    #[cfg(all(feature = "backend-wgpu", not(feature = "backend-femtovg"), not(feature = "backend-skia")))]
+    #[cfg(all(
+        feature = "backend-wgpu",
+        not(feature = "backend-femtovg"),
+        not(feature = "backend-skia")
+    ))]
     fn slint_window_ref(&self) -> &slint::Window {
         &self.wgpu.slint_window
     }
@@ -251,8 +261,7 @@ where
             not(feature = "backend-wgpu")
         ))]
         {
-            self.adapter
-                .update_size(PhysicalSize::new(phys_w, phys_h));
+            self.adapter.update_size(PhysicalSize::new(phys_w, phys_h));
             self.adapter.slint_window.dispatch_event(
                 slint::platform::WindowEvent::ScaleFactorChanged {
                     scale_factor: scale_f32,
@@ -271,8 +280,7 @@ where
             not(feature = "backend-wgpu")
         ))]
         {
-            self.adapter
-                .update_size(PhysicalSize::new(phys_w, phys_h));
+            self.adapter.update_size(PhysicalSize::new(phys_w, phys_h));
             self.adapter.slint_window.dispatch_event(
                 slint::platform::WindowEvent::ScaleFactorChanged {
                     scale_factor: scale_f32,
@@ -296,11 +304,11 @@ where
                     scale_factor: scale_f32,
                 },
             );
-            self.wgpu.slint_window.dispatch_event(
-                slint::platform::WindowEvent::Resized {
+            self.wgpu
+                .slint_window
+                .dispatch_event(slint::platform::WindowEvent::Resized {
                     size: LogicalSize::new(lw as f32, lh as f32),
-                },
-            );
+                });
             let mut sc = self.wgpu.surface_config.borrow_mut();
             sc.width = phys_w.max(1);
             sc.height = phys_h.max(1);
@@ -469,11 +477,11 @@ where
         // Announce open-time scale + logical size (truce-slint parity).
         #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
         {
-            adapter.slint_window.dispatch_event(
-                slint::platform::WindowEvent::ScaleFactorChanged {
+            adapter
+                .slint_window
+                .dispatch_event(slint::platform::WindowEvent::ScaleFactorChanged {
                     scale_factor: open_scale as f32,
-                },
-            );
+                });
             adapter
                 .slint_window
                 .dispatch_event(slint::platform::WindowEvent::Resized {
@@ -544,19 +552,18 @@ where
         let phys_h = to_physical_px(lh, open_scale);
 
         platform::ensure_platform();
-        let adapter =
-            SkiaWindowAdapter::new(PhysicalSize::new(phys_w, phys_h), window);
+        let adapter = SkiaWindowAdapter::new(PhysicalSize::new(phys_w, phys_h), window);
         platform::set_next_adapter(adapter.clone() as Rc<dyn slint::platform::WindowAdapter>);
 
         let component = build(&mut state);
 
         #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
         {
-            adapter.slint_window.dispatch_event(
-                slint::platform::WindowEvent::ScaleFactorChanged {
+            adapter
+                .slint_window
+                .dispatch_event(slint::platform::WindowEvent::ScaleFactorChanged {
                     scale_factor: open_scale as f32,
-                },
-            );
+                });
             adapter
                 .slint_window
                 .dispatch_event(slint::platform::WindowEvent::Resized {
@@ -745,7 +752,8 @@ where
         P: HasWindowHandle,
     {
         let options = options.with_parent(Some(parent));
-        let raw_slot: Arc<Mutex<SlintRawHandle>> = Arc::new(Mutex::new(SlintRawHandle::Unsupported));
+        let raw_slot: Arc<Mutex<SlintRawHandle>> =
+            Arc::new(Mutex::new(SlintRawHandle::Unsupported));
         let raw_slot_clone = Arc::clone(&raw_slot);
         let window = Window::create(options, move |w| {
             if let Ok(handle) = w.window_handle()
@@ -757,9 +765,7 @@ where
             SlintWindow::new(&w, state, update, build, policy, request_resize)
         })?;
         window.show()?;
-        let raw_handle = raw_slot
-            .lock()
-            .map_or(SlintRawHandle::Unsupported, |g| *g);
+        let raw_handle = raw_slot.lock().map_or(SlintRawHandle::Unsupported, |g| *g);
         Ok(SlintParentedWindow { window, raw_handle })
     }
 
@@ -777,14 +783,7 @@ where
         B: FnOnce(&mut S) -> C + Send + 'static,
     {
         let window = Window::create(options, move |w| {
-            SlintWindow::new(
-                &w,
-                state,
-                update,
-                build,
-                SizePolicy::default(),
-                None,
-            )
+            SlintWindow::new(&w, state, update, build, SizePolicy::default(), None)
         })?;
         window.run_until_closed()
     }
@@ -839,7 +838,11 @@ where
     S: Send + 'static,
     U: Fn(&C, &mut S) + Send + 'static,
 {
-    #[cfg(all(feature = "backend-femtovg", not(feature = "backend-skia"), not(feature = "backend-wgpu")))]
+    #[cfg(all(
+        feature = "backend-femtovg",
+        not(feature = "backend-skia"),
+        not(feature = "backend-wgpu")
+    ))]
     fn on_frame(&self) -> Result<(), HandlerError> {
         slint::platform::update_timers_and_animations();
         self.flush_pending_clipboard_paste();
@@ -849,16 +852,28 @@ where
         self.adapter.renderer.render().map_err(HandlerError::from)
     }
 
-    #[cfg(all(feature = "backend-skia", not(feature = "backend-femtovg"), not(feature = "backend-wgpu")))]
+    #[cfg(all(
+        feature = "backend-skia",
+        not(feature = "backend-femtovg"),
+        not(feature = "backend-wgpu")
+    ))]
     fn on_frame(&self) -> Result<(), HandlerError> {
         slint::platform::update_timers_and_animations();
         self.flush_pending_clipboard_paste();
         self.reconcile_pending();
         (self.update)(&self.component, &mut *self.state.borrow_mut());
-        self.adapter.renderer.render().map(|_| ()).map_err(HandlerError::from)
+        self.adapter
+            .renderer
+            .render()
+            .map(|_| ())
+            .map_err(HandlerError::from)
     }
 
-    #[cfg(all(feature = "backend-wgpu", not(feature = "backend-femtovg"), not(feature = "backend-skia")))]
+    #[cfg(all(
+        feature = "backend-wgpu",
+        not(feature = "backend-femtovg"),
+        not(feature = "backend-skia")
+    ))]
     fn on_frame(&self) -> Result<(), HandlerError> {
         slint::platform::update_timers_and_animations();
         self.flush_pending_clipboard_paste();
@@ -885,9 +900,7 @@ where
                 return Ok(());
             }
             e => {
-                return Err(string_err(format!(
-                    "get_current_texture: {e:?}"
-                )));
+                return Err(string_err(format!("get_current_texture: {e:?}")));
             }
         };
 
@@ -898,19 +911,17 @@ where
         let view = surface_texture
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
-        let mut encoder = self.wgpu.device.create_command_encoder(
-            &wgpu::CommandEncoderDescriptor {
-                label: Some("slint-wgpu-frame"),
-            },
-        );
+        let mut encoder =
+            self.wgpu
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("slint-wgpu-frame"),
+                });
         let sc = self.wgpu.surface_config.borrow();
-        self.wgpu.blit.borrow().render(
-            &self.wgpu.queue,
-            &mut encoder,
-            &view,
-            sc.width,
-            sc.height,
-        );
+        self.wgpu
+            .blit
+            .borrow()
+            .render(&self.wgpu.queue, &mut encoder, &view, sc.width, sc.height);
         drop(sc);
         self.wgpu.queue.submit(std::iter::once(encoder.finish()));
         self.wgpu.queue.present(surface_texture);
@@ -932,10 +943,8 @@ where
                         // diverge on Linux HiDPI and make knobs "fight" the cursor.
                         let s = self.last_applied_scale.get().max(0.001);
                         #[allow(clippy::cast_possible_truncation)]
-                        let pos = LogicalPosition::new(
-                            position.x as f32 / s,
-                            position.y as f32 / s,
-                        );
+                        let pos =
+                            LogicalPosition::new(position.x as f32 / s, position.y as f32 / s);
                         *self.last_cursor_pos.borrow_mut() = pos;
                         WindowEvent::PointerMoved { position: pos }
                     }
@@ -1111,9 +1120,7 @@ fn inject_clipboard_text(win: &slint::Window, text: &str) {
     win.dispatch_event(WindowEvent::KeyPressed {
         text: SK::Control.into(),
     });
-    win.dispatch_event(WindowEvent::KeyPressed {
-        text: "a".into(),
-    });
+    win.dispatch_event(WindowEvent::KeyPressed { text: "a".into() });
     win.dispatch_event(WindowEvent::KeyReleased {
         text: SK::Control.into(),
     });
@@ -1166,32 +1173,28 @@ fn create_wgpu_surface(
         let rdh = window
             .display_handle()
             .map_err(|e| format!("display_handle: {e}"))?;
-        instance
-            .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
-                raw_display_handle: Some(rdh.as_raw()),
-                raw_window_handle: rwh.as_raw(),
-            })
+        instance.create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
+            raw_display_handle: Some(rdh.as_raw()),
+            raw_window_handle: rwh.as_raw(),
+        })
     }
     .map_err(|e| format!("create_surface: {e}"))?;
 
-    let adapter = pollster::block_on(instance.request_adapter(
-        &wgpu::RequestAdapterOptions {
-            compatible_surface: Some(&surface),
-            ..Default::default()
-        },
-    ))
+    let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+        compatible_surface: Some(&surface),
+        ..Default::default()
+    }))
     .map_err(|e| format!("no wgpu adapter: {e}"))?;
 
-    let (device, queue) =
-        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-            label: Some("slint-baseview-wgpu"),
-            required_features: wgpu::Features::empty(),
-            required_limits: adapter.limits(),
-            experimental_features: wgpu::ExperimentalFeatures::default(),
-            memory_hints: wgpu::MemoryHints::Performance,
-            trace: wgpu::Trace::Off,
-        }))
-        .map_err(|e| format!("request_device: {e}"))?;
+    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+        label: Some("slint-baseview-wgpu"),
+        required_features: wgpu::Features::empty(),
+        required_limits: adapter.limits(),
+        experimental_features: wgpu::ExperimentalFeatures::default(),
+        memory_hints: wgpu::MemoryHints::Performance,
+        trace: wgpu::Trace::Off,
+    }))
+    .map_err(|e| format!("request_device: {e}"))?;
 
     let caps = surface.get_capabilities(&adapter);
     let format = caps
@@ -1220,4 +1223,3 @@ fn create_wgpu_surface(
 
     Ok((device, queue, surface, surface_config))
 }
-

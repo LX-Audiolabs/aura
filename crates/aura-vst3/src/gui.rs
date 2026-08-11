@@ -9,16 +9,16 @@ use std::sync::{Arc, Mutex, PoisonError};
 use aura_core::editor::{Editor, EditorBridge, PluginContext, RawWindowHandle};
 use aura_params::Params;
 use vst3::Steinberg::Vst::{IComponentHandler, IComponentHandlerTrait, ParamID, ParamValue};
+#[cfg(target_os = "windows")]
+use vst3::Steinberg::kPlatformTypeHWND;
+#[cfg(target_os = "macos")]
+use vst3::Steinberg::kPlatformTypeNSView;
+#[cfg(target_os = "linux")]
+use vst3::Steinberg::kPlatformTypeX11EmbedWindowID;
 use vst3::Steinberg::{
     FIDString, IPlugFrame, IPlugView, IPlugViewTrait, TBool, ViewRect, char16, int16, int32,
     kInvalidArgument, kResultFalse, kResultOk, tresult,
 };
-#[cfg(target_os = "linux")]
-use vst3::Steinberg::kPlatformTypeX11EmbedWindowID;
-#[cfg(target_os = "macos")]
-use vst3::Steinberg::kPlatformTypeNSView;
-#[cfg(target_os = "windows")]
-use vst3::Steinberg::kPlatformTypeHWND;
 use vst3::{Class, ComRef, ComWrapper};
 
 // ---------------------------------------------------------------------------
@@ -52,9 +52,7 @@ impl GuiState {
     }
 
     fn lock_editor(&self) -> std::sync::MutexGuard<'_, Option<Box<dyn Editor>>> {
-        self.editor
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
+        self.editor.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     fn sample_rate(&self) -> f64 {
@@ -316,11 +314,8 @@ impl IPlugViewTrait for PlugView {
             .gui
             .frame
             .lock()
-            .unwrap_or_else(PoisonError::into_inner) = if frame.is_null() {
-            None
-        } else {
-            Some(frame)
-        };
+            .unwrap_or_else(PoisonError::into_inner) =
+            if frame.is_null() { None } else { Some(frame) };
         kResultOk
     }
 
@@ -330,11 +325,7 @@ impl IPlugViewTrait for PlugView {
             .lock_editor()
             .as_ref()
             .is_some_and(|e| e.can_resize());
-        if can {
-            kResultOk
-        } else {
-            kResultFalse
-        }
+        if can { kResultOk } else { kResultFalse }
     }
 
     unsafe fn checkSizeConstraint(&self, rect: *mut ViewRect) -> tresult {

@@ -2,16 +2,16 @@
 //!
 //! baseview 0.3 / aura-baseview expect rwh 0.6 `HasWindowHandle`.
 
+use aura_core::editor::RawWindowHandle as AuraRaw;
+#[cfg(target_os = "macos")]
+use raw_window_handle::AppKitWindowHandle;
 use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawWindowHandle, WindowHandle,
 };
-#[cfg(target_os = "macos")]
-use raw_window_handle::AppKitWindowHandle;
 #[cfg(target_os = "linux")]
 use raw_window_handle::{RawDisplayHandle, XlibDisplayHandle, XlibWindowHandle};
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 use std::num::NonZero;
-use aura_core::editor::RawWindowHandle as AuraRaw;
 
 /// A window handle that implements `HasWindowHandle` (rwh 0.6) for any
 /// platform, constructed from aura-core's `RawWindowHandle` enum.
@@ -24,16 +24,12 @@ impl ParentedWindow {
             #[cfg(target_os = "windows")]
             AuraRaw::Win32(hwnd) => {
                 let h = NonZero::new(hwnd as _).expect("HWND must not be null");
-                RawWindowHandle::Win32(
-                    raw_window_handle::Win32WindowHandle::new(h),
-                )
+                RawWindowHandle::Win32(raw_window_handle::Win32WindowHandle::new(h))
             }
             #[cfg(target_os = "macos")]
             AuraRaw::AppKit(ns_view) => {
                 let p = NonZero::new(ns_view).expect("NSView must not be null");
-                RawWindowHandle::AppKit(
-                    AppKitWindowHandle::new(p),
-                )
+                RawWindowHandle::AppKit(AppKitWindowHandle::new(p))
             }
             #[cfg(target_os = "linux")]
             AuraRaw::X11(xid) => {
@@ -62,9 +58,7 @@ impl HasDisplayHandle for ParentedWindow {
             // X11 display — use a default display handle.
             // The actual display connection is owned by the host.
             Ok(unsafe {
-                DisplayHandle::borrow_raw(RawDisplayHandle::Xlib(
-                    XlibDisplayHandle::new(None, 0),
-                ))
+                DisplayHandle::borrow_raw(RawDisplayHandle::Xlib(XlibDisplayHandle::new(None, 0)))
             })
         }
         #[cfg(not(target_os = "linux"))]

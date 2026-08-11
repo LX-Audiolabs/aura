@@ -821,12 +821,9 @@ pub struct MasteringMeter {
 
 impl MasteringMeter {
     pub fn new(sample_rate: f32) -> Self {
-        let mut analyzer = EbuR128::new(
-            2,
-            sample_rate as u32,
-            Mode::I | Mode::LRA | Mode::TRUE_PEAK,
-        )
-        .expect("ebur128: failed to create MasteringMeter");
+        let mut analyzer =
+            EbuR128::new(2, sample_rate as u32, Mode::I | Mode::LRA | Mode::TRUE_PEAK)
+                .expect("ebur128: failed to create MasteringMeter");
         let _ = analyzer.set_max_window(120_000);
         Self {
             analyzer,
@@ -867,10 +864,7 @@ impl MasteringMeter {
 
     /// EBU R128 loudness range (LRA) in LU — needs enough programme audio.
     pub fn loudness_range_lu(&self) -> Option<f32> {
-        self.analyzer
-            .loudness_range()
-            .ok()
-            .map(|v| v as f32)
+        self.analyzer.loudness_range().ok().map(|v| v as f32)
     }
 
     fn true_peak_instant_db(&self) -> f32 {

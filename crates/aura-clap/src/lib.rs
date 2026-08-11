@@ -29,16 +29,16 @@ use std::ptr;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, OnceLock};
 
-use aura_core::info::PluginCategory;
 use aura_core::editor::{Editor, EditorBridge, PluginContext, RawWindowHandle};
 use aura_core::events::{ParamEvent, ParamEventQueue};
+use aura_core::info::PluginCategory;
 use aura_core::transport::Transport;
 use aura_core::{
     AudioBuffer, AudioConfig, BusLayout, ChannelConfig, PluginLogic, ProcessContext, ProcessMode,
     ProcessStatus, host_callback, host_callback_with, layout_at,
 };
-use aura_params::{ParamFlags, ParamInfo, ParamRange, Params};
 use aura_core::{MidiBuffer, MidiMessage};
+use aura_params::{ParamFlags, ParamInfo, ParamRange, Params};
 use clap_sys::events::{
     CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_IS_LIVE, CLAP_EVENT_MIDI, CLAP_EVENT_NOTE_CHOKE,
     CLAP_EVENT_NOTE_OFF, CLAP_EVENT_NOTE_ON, CLAP_EVENT_PARAM_GESTURE_BEGIN,
@@ -57,8 +57,8 @@ use clap_sys::ext::audio_ports_config::{
     CLAP_EXT_AUDIO_PORTS_CONFIG, clap_audio_ports_config, clap_plugin_audio_ports_config,
 };
 use clap_sys::ext::gui::{
-    CLAP_EXT_GUI, CLAP_WINDOW_API_COCOA, CLAP_WINDOW_API_WIN32, CLAP_WINDOW_API_X11,
-    clap_host_gui, clap_plugin_gui, clap_window,
+    CLAP_EXT_GUI, CLAP_WINDOW_API_COCOA, CLAP_WINDOW_API_WIN32, CLAP_WINDOW_API_X11, clap_host_gui,
+    clap_plugin_gui, clap_window,
 };
 use clap_sys::ext::latency::{CLAP_EXT_LATENCY, clap_host_latency, clap_plugin_latency};
 use clap_sys::ext::params::{
@@ -71,7 +71,6 @@ use clap_sys::ext::remote_controls::{
     clap_plugin_remote_controls, clap_remote_controls_page,
 };
 use clap_sys::ext::state::{CLAP_EXT_STATE, clap_plugin_state};
-use clap_sys::stream::{clap_istream, clap_ostream};
 use clap_sys::factory::plugin_factory::{CLAP_PLUGIN_FACTORY_ID, clap_plugin_factory};
 use clap_sys::host::clap_host;
 use clap_sys::id::{CLAP_INVALID_ID, clap_id};
@@ -83,6 +82,7 @@ use clap_sys::plugin_features::{
 use clap_sys::process::{
     CLAP_PROCESS_CONTINUE, CLAP_PROCESS_ERROR, CLAP_PROCESS_TAIL, clap_process, clap_process_status,
 };
+use clap_sys::stream::{clap_istream, clap_ostream};
 use clap_sys::string_sizes::{CLAP_NAME_SIZE, CLAP_PATH_SIZE};
 use clap_sys::version::CLAP_VERSION;
 
@@ -737,8 +737,8 @@ unsafe extern "C" fn plugin_get_extension<L: PluginLogic>(
     }
     if id == CLAP_EXT_GUI {
         // No GUI extension when the plugin has no editor.
-        let has_editor = unsafe { Instance::<L>::from_plugin(plugin) }
-            .is_some_and(|inst| inst.editor.is_some());
+        let has_editor =
+            unsafe { Instance::<L>::from_plugin(plugin) }.is_some_and(|inst| inst.editor.is_some());
         if has_editor {
             return gui_ext::<L>() as *const _ as *const c_void;
         }
@@ -880,9 +880,7 @@ unsafe extern "C" fn audio_ports_config_get<L: PluginLogic>(
     out.output_port_count = 1;
     out.has_main_input = layout.main_in.is_some();
     out.main_input_channel_count = layout.main_input_channels();
-    out.main_input_port_type = layout
-        .main_in
-        .map_or(ptr::null(), clap_port_type);
+    out.main_input_port_type = layout.main_in.map_or(ptr::null(), clap_port_type);
     out.has_main_output = true;
     out.main_output_channel_count = layout.main_output_channels();
     out.main_output_port_type = clap_port_type(layout.main_out);
@@ -1268,7 +1266,8 @@ unsafe extern "C" fn gui_get_preferred_api<L: PluginLogic>(
     api: *mut *const c_char,
     is_floating: *mut bool,
 ) -> bool {
-    let supported = unsafe { gui_is_api_supported::<L>(plugin, platform_window_api().as_ptr(), false) };
+    let supported =
+        unsafe { gui_is_api_supported::<L>(plugin, platform_window_api().as_ptr(), false) };
     if !supported || api.is_null() || is_floating.is_null() {
         return false;
     }
@@ -1517,8 +1516,13 @@ unsafe extern "C" fn state_load<L: PluginLogic>(
         let mut blob = Vec::new();
         let mut chunk = [0u8; 4096];
         loop {
-            let n =
-                unsafe { read(stream, chunk.as_mut_ptr() as *mut c_void, chunk.len() as u64) };
+            let n = unsafe {
+                read(
+                    stream,
+                    chunk.as_mut_ptr() as *mut c_void,
+                    chunk.len() as u64,
+                )
+            };
             if n < 0 {
                 return false;
             }
@@ -1576,10 +1580,7 @@ fn map_param_flags(flags: ParamFlags, range: &ParamRange) -> u32 {
     if flags.contains(ParamFlags::IS_BYPASS) {
         f |= CLAP_PARAM_IS_BYPASS;
     }
-    if matches!(
-        range,
-        ParamRange::Discrete { .. } | ParamRange::Enum { .. }
-    ) {
+    if matches!(range, ParamRange::Discrete { .. } | ParamRange::Enum { .. }) {
         f |= CLAP_PARAM_IS_STEPPED;
     }
     f
@@ -1617,9 +1618,7 @@ fn write_c_buf(out: *mut c_char, cap: usize, s: &str) -> bool {
 
 #[cfg(test)]
 mod remote_controls_tests {
-    use super::{
-        remote_control_pages, remote_controls_page_id, split_group,
-    };
+    use super::{remote_control_pages, remote_controls_page_id, split_group};
     use aura_params::{ParamFlags, ParamInfo, ParamRange, ParamUnit, ParamValueKind};
 
     fn info(id: u32, group: &'static str) -> ParamInfo {

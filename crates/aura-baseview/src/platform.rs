@@ -123,9 +123,7 @@ pub fn set_next_adapter(adapter: Rc<dyn WindowAdapter>) {
             "[slint-baseview] cannot hand off window adapter — set_platform lost \
              the race on this thread (another platform is registered)"
         ),
-        None => panic!(
-            "[slint-baseview] call ensure_platform() before set_next_adapter()"
-        ),
+        None => panic!("[slint-baseview] call ensure_platform() before set_next_adapter()"),
     });
     NEXT_ADAPTER.with(|slot| *slot.borrow_mut() = Some(adapter));
 }

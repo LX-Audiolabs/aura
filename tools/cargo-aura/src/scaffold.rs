@@ -54,11 +54,13 @@ impl Kind {
     /// Optional `bus_layouts()` body inserted into `PluginLogic`.
     fn bus_layouts_fn(self) -> &'static str {
         match self {
-            Self::EffectMono => r"
+            Self::EffectMono => {
+                r"
     fn bus_layouts() -> Vec<BusLayout> {
         vec![BusLayout::mono()]
     }
-",
+"
+            }
             Self::Effect | Self::Analyzer => "",
         }
     }
@@ -943,7 +945,10 @@ mod tests {
         assert!(lib.contains("BusLayout::mono()"), "{lib}");
         assert!(aura.contains("category = \"effect\""), "{aura}");
         // Process must not hardcode stereo.
-        assert!(lib.contains("num_outputs().min(buffer.num_inputs())"), "{lib}");
+        assert!(
+            lib.contains("num_outputs().min(buffer.num_inputs())"),
+            "{lib}"
+        );
     }
 
     #[test]
@@ -986,13 +991,31 @@ mod tests {
                 "ui/my-ui-theme.slint",
             ]
         );
-        let cargo = out.iter().find(|(p, _)| p == "Cargo.toml").unwrap().1.as_str();
+        let cargo = out
+            .iter()
+            .find(|(p, _)| p == "Cargo.toml")
+            .unwrap()
+            .1
+            .as_str();
         assert!(cargo.contains("name = \"my-ui\""), "{cargo}");
         assert!(cargo.contains("aura-build"), "{cargo}");
-        let barrel = out.iter().find(|(p, _)| p == "ui/my-ui.slint").unwrap().1.as_str();
-        assert!(barrel.contains("import { MyUi } from \"my-ui-theme.slint\""), "{barrel}");
+        let barrel = out
+            .iter()
+            .find(|(p, _)| p == "ui/my-ui.slint")
+            .unwrap()
+            .1
+            .as_str();
+        assert!(
+            barrel.contains("import { MyUi } from \"my-ui-theme.slint\""),
+            "{barrel}"
+        );
         assert!(barrel.contains("export { MyUi }"), "{barrel}");
-        let theme = out.iter().find(|(p, _)| p == "ui/my-ui-theme.slint").unwrap().1.as_str();
+        let theme = out
+            .iter()
+            .find(|(p, _)| p == "ui/my-ui-theme.slint")
+            .unwrap()
+            .1
+            .as_str();
         assert!(theme.contains("export struct MyUi"), "{theme}");
         assert!(theme.contains("property <color> surface:"), "{theme}");
     }

@@ -26,7 +26,13 @@ use GainParamsParamId as P;
 
 #[derive(Params)]
 pub struct GainParams {
-    #[param(id = 1, name = "Gain", range = "linear(-24, 24)", default = 0.0, unit = "db")]
+    #[param(
+        id = 1,
+        name = "Gain",
+        range = "linear(-24, 24)",
+        default = 0.0,
+        unit = "db"
+    )]
     pub gain: FloatParam,
 }
 

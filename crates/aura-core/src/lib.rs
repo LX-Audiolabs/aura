@@ -16,6 +16,7 @@ pub mod process;
 pub mod state;
 pub mod transport;
 
+pub use aura_params::sample::{Float, Sample};
 pub use buffer::AudioBuffer;
 pub use bus::{BusLayout, ChannelConfig, layout_at};
 pub use config::{AudioConfig, ProcessMode};
@@ -27,7 +28,6 @@ pub use plugin::PluginLogic;
 pub use process::{ProcessContext, ProcessStatus};
 pub use state::{decode_state, encode_state};
 pub use transport::Transport;
-pub use aura_params::sample::{Float, Sample};
 
 // MIDI types live in `aura-midi`; re-export for process-path convenience.
 pub use aura_midi::{MidiBuffer, MidiEvent, MidiMessage, MidiStatus};

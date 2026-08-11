@@ -1,0 +1,63 @@
+name: Framework CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  examples:
+    name: Examples (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@1.97.1
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install Linux build deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev
+
+      - name: Install cargo-aura
+        run: cargo install --path tools/cargo-aura --locked
+
+      - name: cargo aura doctor
+        env:
+          AURA_PATH: ${{ github.workspace }}
+        run: cargo aura doctor
+
+      - name: Build & install smoke-gain (CLAP/VST3/LV2)
+        shell: bash
+        env:
+          AURA_PATH: ${{ github.workspace }}
+          CLAPINS: ${{ runner.temp }}/aura-ci/clap
+          VST3INS: ${{ runner.temp }}/aura-ci/vst3
+          LV2INS: ${{ runner.temp }}/aura-ci/lv2
+        run: |
+          cargo aura install --clap --vst3 --lv2 --release -plug smoke-gain
+
+      - name: Validate CLAP plugin
+        uses: jatinchowdhury18/clap-val-action@main
+        with:
+          plugin_path: ${{ runner.temp }}/aura-ci/clap/smoke-gain.clap
+
+      - name: Upload plugin bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-gain-${{ matrix.os }}
+          path: |
+            ${{ runner.temp }}/aura-ci/clap/smoke-gain.clap
+            ${{ runner.temp }}/aura-ci/vst3/smoke-gain.vst3
+            ${{ runner.temp }}/aura-ci/lv2/smoke-gain.lv2

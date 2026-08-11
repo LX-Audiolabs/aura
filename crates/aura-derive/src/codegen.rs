@@ -692,7 +692,10 @@ pub(crate) fn snake_to_pascal(ident: &str) -> String {
 ///
 /// Call only after the explicit-`id` validation in `derive_params` has
 /// run (the variants need `ParamField::id`).
-pub(crate) fn gen_param_id_enum(struct_name: &syn::Ident, param_fields: &[ParamField]) -> TokenStream2 {
+pub(crate) fn gen_param_id_enum(
+    struct_name: &syn::Ident,
+    param_fields: &[ParamField],
+) -> TokenStream2 {
     if param_fields.is_empty() {
         return TokenStream2::new();
     }

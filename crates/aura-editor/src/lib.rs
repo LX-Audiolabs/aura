@@ -42,7 +42,9 @@ use slint::ComponentHandle;
 
 use aura_core::editor::{Editor, PluginContext, RawWindowHandle};
 
-pub(crate) fn map_baseview_handle(raw: Option<raw_window_handle::RawWindowHandle>) -> Option<RawWindowHandle> {
+pub(crate) fn map_baseview_handle(
+    raw: Option<raw_window_handle::RawWindowHandle>,
+) -> Option<RawWindowHandle> {
     use raw_window_handle::RawWindowHandle as Rwh;
     raw.and_then(|h| match h {
         #[cfg(target_os = "windows")]
@@ -297,7 +299,8 @@ where
         if self.can_resize {
             let (w, h) = aura_baseview::fit_size(width, height, self.min_size, self.max_size);
             self.design_size = (w, h);
-            self.pending_size.store(pack_size((w, h)), Ordering::Release);
+            self.pending_size
+                .store(pack_size((w, h)), Ordering::Release);
             return true;
         }
         // Fixed layout: host set_size from multi-monitor / pane chrome must

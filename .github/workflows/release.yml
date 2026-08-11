@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-binaries:
+    name: Build cargo-aura (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux-x86_64
+            binary: cargo-aura
+            archive_ext: tar.gz
+          - os: windows-latest
+            name: windows-x86_64
+            binary: cargo-aura.exe
+            archive_ext: zip
+          - os: macos-latest
+            name: macos
+            binary: cargo-aura
+            archive_ext: tar.gz
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.97.1
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Linux build deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev
+      - name: Build cargo-aura
+        run: cargo build --release -p cargo-aura
+      - name: Package binary
+        shell: bash
+        run: |
+          mkdir -p dist
+          if [ "${{ matrix.archive_ext }}" = "zip" ]; then
+            # PowerShell is available on the Windows runner.
+            pwsh -Command "Compress-Archive -Path target/release/${{ matrix.binary }} -DestinationPath dist/cargo-aura-${{ matrix.name }}.zip"
+          else
+            cp target/release/${{ matrix.binary }} dist/cargo-aura
+            tar czf dist/cargo-aura-${{ matrix.name }}.tar.gz -C dist cargo-aura
+            rm dist/cargo-aura
+          fi
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-aura-${{ matrix.name }}
+          path: dist/cargo-aura-${{ matrix.name }}.${{ matrix.archive_ext }}
+
+  release:
+    name: Create GitHub Release
+    needs: build-binaries
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download binary artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: cargo-aura-*
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true

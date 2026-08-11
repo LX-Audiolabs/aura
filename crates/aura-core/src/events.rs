@@ -6,10 +6,7 @@ use std::sync::Mutex;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ParamEvent {
     GestureBegin(u32),
-    Value {
-        id: u32,
-        plain: f64,
-    },
+    Value { id: u32, plain: f64 },
     GestureEnd(u32),
 }
 

@@ -52,11 +52,11 @@ use std::ffi::{CStr, CString, c_char, c_void};
 use std::ptr;
 use std::sync::{Arc, OnceLock};
 
+use aura_core::info::PluginInfo;
 use aura_core::{
     AudioBuffer, AudioConfig, BusLayout, MidiBuffer, MidiMessage, PluginLogic, ProcessContext,
     ProcessMode, decode_state, encode_state, host_callback, host_callback_with, layout_at,
 };
-use aura_core::info::PluginInfo;
 use aura_params::Params;
 use lv2_sys::{
     LV2_ATOM__Chunk, LV2_ATOM__Sequence, LV2_Atom, LV2_Atom_Event, LV2_Atom_Sequence,
@@ -64,7 +64,7 @@ use lv2_sys::{
     LV2_State_Flags, LV2_State_Handle, LV2_State_Interface, LV2_State_Retrieve_Function,
     LV2_State_Status, LV2_State_Status_LV2_STATE_ERR_NO_FEATURE,
     LV2_State_Status_LV2_STATE_ERR_UNKNOWN, LV2_State_Status_LV2_STATE_SUCCESS,
-    LV2_State_Store_Function, LV2_URID_Map, LV2_URID__map,
+    LV2_State_Store_Function, LV2_URID__map, LV2_URID_Map,
 };
 
 // ---------------------------------------------------------------------------
@@ -244,7 +244,10 @@ unsafe extern "C" fn instantiate<L: PluginLogic>(
         .then_some(n.saturating_sub(1) as u32);
     let (midi_event_type, sequence_type) = match (midi_port, map_ptr) {
         (Some(_), Some(m)) => unsafe {
-            (map_urid(m, LV2_MIDI__MidiEvent), map_urid(m, LV2_ATOM__Sequence))
+            (
+                map_urid(m, LV2_MIDI__MidiEvent),
+                map_urid(m, LV2_ATOM__Sequence),
+            )
         },
         _ => (0, 0),
     };
@@ -342,7 +345,11 @@ unsafe extern "C" fn run<L: PluginLogic>(instance: LV2_Handle, sample_count: u32
         let ctrl0 = inst.ctrl0;
         for (i, meta) in infos.iter().enumerate() {
             let port = ctrl0 + i as u32;
-            let ptr = inst.ports.get(port as usize).copied().unwrap_or(ptr::null_mut());
+            let ptr = inst
+                .ports
+                .get(port as usize)
+                .copied()
+                .unwrap_or(ptr::null_mut());
             if !ptr.is_null() {
                 let v = unsafe { *(ptr as *const f32) };
                 inst.params.set_plain(meta.id, f64::from(v));
@@ -419,7 +426,11 @@ fn read_midi<L: PluginLogic>(inst: &Instance<L>, n: usize) -> MidiBuffer {
     if inst.midi_event_type == 0 {
         return midi;
     }
-    let ptr = inst.ports.get(port as usize).copied().unwrap_or(ptr::null_mut());
+    let ptr = inst
+        .ports
+        .get(port as usize)
+        .copied()
+        .unwrap_or(ptr::null_mut());
     if ptr.is_null() {
         return midi;
     }
@@ -507,9 +518,8 @@ unsafe extern "C" fn state_save<L: PluginLogic>(
             if blob.is_empty() {
                 return LV2_State_Status_LV2_STATE_SUCCESS;
             }
-            let flags =
-                (LV2_State_Flags::LV2_STATE_IS_POD.0 | LV2_State_Flags::LV2_STATE_IS_PORTABLE.0)
-                    as u32;
+            let flags = (LV2_State_Flags::LV2_STATE_IS_POD.0
+                | LV2_State_Flags::LV2_STATE_IS_PORTABLE.0) as u32;
             unsafe {
                 store(
                     handle,
