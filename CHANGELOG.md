@@ -7,6 +7,10 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ## [Unreleased]
 
+### Changed
+
+- `aura-dsp::analysis`: removed product **vault** (MD frontmatter / `config.json` / AppData paths) and **`product_shared`** (`AetherShared` / …). Those live in **lx-audiolabs-plugins** (`lx-vault`, `lx-analysis`). Portable SNAP FFT / meters / spectrum stay in AURA.
+
 ## [0.6.2] - 2026-08-11
 
 ### Added

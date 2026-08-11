@@ -1,29 +1,32 @@
-//! Portable analysis primitives (from product `lx-analysis`).
+//! Portable analysis primitives for plugins / hosts.
 //!
-//! **In scope:** FFT / SNAP, spectrum display maths, clip-wave rings,
-//! audio↔UI meter building blocks, per-plugin shared state aggregates,
-//! plugin config persistence.
+//! **In scope:** FFT / SNAP accumulation maths, spectrum display helpers,
+//! clip-wave rings, audio↔UI meter building blocks (`PeakMeters`,
+//! `ScopeRing`, `SnapPipeline`, …).
 //!
-//! **Out of scope:** Product-specific Slint widgets and chrome.
+//! **Out of scope (product / `lx-audiolabs-plugins`):**
+//! - Markdown vault / presets / profiles / SNAPSHOT-*.md (`lx-vault`,
+//!   `lx-editor-utils::snap`, per-plugin `presets.rs`)
+//! - Product `*Shared` aggregates (`lx-analysis::product_shared`)
+//! - Slint chrome
 
 pub mod dev_log;
-pub mod product_shared;
 pub mod shared;
 pub mod snap_fft;
-pub mod vault;
 
 pub use shared::{
     AutoLoud, PeakMeters, ScopeRing, ShmClaimShared, SnapPipeline, SpectrumView, band5, band5_tol,
+    new_clip_wave_shared, new_spectrum_buf,
 };
 pub use snap_fft::{SnapFFT, SnapMode};
 
-/// Half-spectrum bin count (matches historical `lx_shm::SPECTRUM_BINS`).
+/// Half-spectrum bin count (matches historical product spectrum width).
 pub const SPECTRUM_BINS: usize = 1024;
 
-/// EQ band count used by multi-band product UIs (matches `lx_shm::EQ_BANDS`).
+/// EQ band count used by multi-band product UIs.
 pub const EQ_BANDS: usize = 5;
 
-/// Default per-band tolerances (matches `lx_vault::DEFAULT_TOLERANCES`).
+/// Default per-band tolerances (historical Equilibrium defaults).
 pub const DEFAULT_BAND_TOLERANCES: [f32; 5] = [1.5, 2.0, 3.5, 4.5, 4.5];
 
 pub const SCOPE_BUFFER_LEN: usize = 4096;

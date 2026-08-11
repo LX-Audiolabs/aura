@@ -32,7 +32,7 @@ aura-dsp/src/
   dynamics/     comp, limiter, gate
   effects/      chorus, delay, reverb, distortion
   eq/           parametric, graphic
-  analysis/     ✅ portable lx-analysis (FFT/SNAP, spectrum, meter blocks; no shm/vault)
+  analysis/     ✅ portable FFT/SNAP maths, spectrum, meter blocks (no vault/MD/*Shared)
   fx/           ✅ ported from lx-dsp (Biquad TDF-II, mastering, meters, …)
   synth/        higher-level engines (subtractive, FM, …)
   voice/        polyphony / steal
@@ -45,12 +45,14 @@ aura-dsp/src/
 | Keep in product | Why |
 |-----------------|-----|
 | `lx-shm` | Multi-plugin relay / shared memory |
-| `lx-vault` | Presets, config paths, product profiles |
-| Per-plugin `*Shared` UI state (Aether/Mensor/…) | Product composition, not framework |
+| `lx-vault` | Config paths, MD frontmatter, last-preset hints |
+| `lx-analysis` | Product `*Shared` + re-exports of portable `aura_dsp::analysis` |
+| `lx-editor-utils::snap` | SNAPSHOT-*.md names, vault scan helpers |
+| Per-plugin `presets.rs` | Profile types, MD export/import |
 | `lx-ui-slint` PeakMeter/FFT widgets | Product UI |
 
-Portable **algorithms** from `lx-dsp` / `lx-analysis` → modules under **`aura-dsp`**.  
-Product plugins keep thin wrappers until cutover.
+Portable **algorithms** stay under **`aura-dsp`**. Vault / MD presets / SNAP-as-file /
+product `*Shared` stay in **lx-audiolabs-plugins**.
 
 ## Naming
 
@@ -70,8 +72,9 @@ use aura::midi::{MidiBuffer, MidiMessage};
 
 | Product crate | Implementation |
 |---------------|----------------|
-| `lx-dsp` | `pub use aura_dsp::fx::*` |
-| `lx-analysis` | `aura_dsp::analysis` + `lx-shm`/`lx-vault` re-exports + product `*Shared` |
+| `lx-dsp` | thin re-export of `aura_dsp::fx` (if still present) |
+| `lx-analysis` | product `*Shared` + re-export portable `aura_dsp::analysis` + `lx-vault` |
+| `lx-vault` | config / frontmatter / vault path helpers |
 
 ## Process MIDI
 

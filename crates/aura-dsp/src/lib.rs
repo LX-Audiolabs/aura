@@ -88,7 +88,7 @@
 //!   receive an out-of-range index return `Option<()>` or `Result<()>` so
 //!   callers can detect — and not silently ignore — bad indices.
 
-/// Portable analysis (from `lx-analysis`): FFT/SNAP, spectrum, meter blocks.
+/// Portable analysis: FFT/SNAP maths, spectrum, meter blocks (no vault/MD/*Shared).
 pub mod analysis;
 pub mod delay;
 pub mod dsp_util;

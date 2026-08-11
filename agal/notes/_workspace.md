@@ -50,5 +50,6 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 [ATOM] type=decision | detail=lx-analysis portable → aura_dsp::analysis; *Shared/shm/vault stay product
 [ATOM] type=decision | detail=ProcessContext.midi MidiBuffer; CLAP note/MIDI → buffer (VST3/LV2 later)
 [ATOM] type=decision | detail=Product lx-dsp/lx-analysis thin façade over aura-dsp (+ product *Shared)
+[ATOM] type=decision | detail=SNAP/MD-presets/vault Logik ist **nur** lx-audiolabs-plugins-spezifisch; AURA speichert Presets normal (flacher Param-Blob, so wie truce es macht); keine Vault-Pfade, kein MD-Format, kein SNAP-State-Migration-Tool in AURA-Core
 ```
 

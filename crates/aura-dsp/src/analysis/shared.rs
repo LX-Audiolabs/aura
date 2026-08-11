@@ -1,7 +1,7 @@
 //! Audio ↔ UI shared-state **building blocks** (not product plugin types).
 //!
-//! Product plugins compose these into `AetherShared` / `MensorShared` / … in
-//! the plugins repo. Framework only owns the reusable field groups.
+//! Product plugins compose these into `AetherShared` / `MensorShared` / …
+//! under `lx_analysis::product_shared`. Framework only owns reusable field groups.
 
 use super::{ClipWaveRing, DEFAULT_BAND_TOLERANCES, SCOPE_BUFFER_LEN, SPECTRUM_BINS};
 use atomic_float::AtomicF32;
