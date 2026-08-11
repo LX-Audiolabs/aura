@@ -30,7 +30,11 @@ impl AtomicF64 {
 /// A continuous floating-point parameter.
 pub struct FloatParam {
     pub info: ParamInfo,
+    /// Base value (host automation / UI / state). Not including mod.
     value: AtomicF64,
+    /// Mono modulation offset from the host (CLAP `PARAM_MOD`). DSP
+    /// smoothers track [`Self::effective_target`]; host `get` stays on base.
+    mod_amount: AtomicF64,
     pub smoother: Smoother,
 }
 
@@ -70,16 +74,16 @@ impl FloatParam {
         Self {
             info,
             value: AtomicF64::new(default),
+            mod_amount: AtomicF64::new(0.0),
             smoother,
         }
     }
 
-    /// Set the plain value (host automation and, crucially, state restore
-    /// from a project file / preset - untrusted input `parse_state` can
-    /// validate the structure of but not the values). Drop non-finite
-    /// writes and clamp to the declared range, so a corrupt or hostile
-    /// value can't latch a NaN into the smoother (which would then emit
-    /// NaN audio forever) or drive out-of-range DSP.
+    /// Set the plain **base** value (host automation and state restore).
+    /// Does not clear modulation — mod is independent.
+    ///
+    /// Drop non-finite writes and clamp to the declared range, so a
+    /// corrupt or hostile value can't latch a NaN into the smoother.
     #[inline]
     pub fn set_value(&self, v: f64) {
         if !v.is_finite() {
@@ -94,54 +98,63 @@ impl FloatParam {
         self.value.store(v.clamp(lo.min(hi), lo.max(hi)));
     }
 
-    /// Internal: raw target value at `f64` precision (host-side
-    /// surface, before any narrowing for DSP use). Plugin authors
-    /// don't call this directly - they go through the prelude's
-    /// `read` / `value` / `current` instead, which have no
-    /// precision-suffix decisions at the call site.
+    /// Set mono modulation offset (CLAP `PARAM_MOD` amount). Non-finite → 0.
+    #[inline]
+    pub fn set_mod_amount(&self, amount: f64) {
+        let a = if amount.is_finite() { amount } else { 0.0 };
+        self.mod_amount.store(a);
+    }
+
+    /// Current mono modulation offset.
+    #[inline]
+    #[must_use]
+    pub fn mod_amount(&self) -> f64 {
+        self.mod_amount.load()
+    }
+
+    /// DSP target: `clamp(base + mod)` into the param range.
+    #[inline]
+    #[must_use]
+    pub fn effective_target(&self) -> f64 {
+        let (a, b) = (self.info.range.min(), self.info.range.max());
+        let (lo, hi) = (a.min(b), a.max(b));
+        (self.value.load() + self.mod_amount.load()).clamp(lo, hi)
+    }
+
+    /// Internal: raw **base** target at `f64` (host UI / state). DSP
+    /// paths use [`Self::effective_target`] via the smoother helpers.
     #[doc(hidden)]
     #[inline]
     pub fn raw_target(&self) -> f64 {
         self.value.load()
     }
 
-    /// Internal: next smoother step at `f32` (the smoother's native
-    /// precision). See [`Self::raw_target`].
+    /// Internal: next smoother step at `f32` toward effective target.
     #[doc(hidden)]
     #[inline]
     pub fn raw_smoothed_next(&self) -> f32 {
-        let target = self.value.load();
-        self.smoother.next(target)
+        self.smoother.next(self.effective_target())
     }
 
-    /// Internal: current smoother value at `f32`. See
-    /// [`Self::raw_target`].
+    /// Internal: current smoother value at `f32`.
     #[doc(hidden)]
     #[inline]
     pub fn raw_smoothed_current(&self) -> f32 {
         self.smoother.current()
     }
 
-    /// Internal: advance the smoother by `out.len()` samples,
-    /// writing each step to `out`. Plugin authors reach this through
-    /// [`FloatParamReadF32::read_into`] /
-    /// [`FloatParamReadF64::read_into`] in the prelude.
+    /// Internal: advance the smoother by `out.len()` samples.
     #[doc(hidden)]
     #[inline]
     pub fn raw_smoothed_next_into(&self, out: &mut [f32]) {
-        let target = self.value.load();
-        self.smoother.next_into(target, out);
+        self.smoother.next_into(self.effective_target(), out);
     }
 
-    /// Internal: advance the smoother by `n_samples` and return only
-    /// the final value. Plugin authors reach this through
-    /// [`FloatParamReadF32::read_after`] /
-    /// [`FloatParamReadF64::read_after`] in the prelude.
+    /// Internal: advance the smoother by `n_samples` and return final value.
     #[doc(hidden)]
     #[inline]
     pub fn raw_smoothed_next_after(&self, n_samples: usize) -> f32 {
-        let target = self.value.load();
-        self.smoother.next_after(target, n_samples)
+        self.smoother.next_after(self.effective_target(), n_samples)
     }
 
     /// Read the value rounded to the nearest non-negative `usize`.
@@ -198,7 +211,7 @@ impl FloatParam {
     #[inline]
     #[must_use]
     pub fn is_smoothing(&self) -> bool {
-        !self.smoother.is_converged(self.value.load())
+        !self.smoother.is_converged(self.effective_target())
     }
 
     /// Parameter ID.
@@ -1052,5 +1065,30 @@ mod tests {
             vec![8.0],
             "only the last sample survives a 1-slot ring"
         );
+    }
+
+    #[test]
+    fn float_mod_is_non_destructive() {
+        let p = FloatParam::new(
+            info("Gain", ParamRange::Linear { min: 0.0, max: 1.0 }, 0.5),
+            SmoothingStyle::None,
+        );
+        assert!((p.raw_target() - 0.5).abs() < 1e-12);
+        p.set_mod_amount(0.25);
+        assert!((p.raw_target() - 0.5).abs() < 1e-12);
+        assert!((p.effective_target() - 0.75).abs() < 1e-12);
+        p.set_mod_amount(0.0);
+        assert!((p.effective_target() - 0.5).abs() < 1e-12);
+    }
+
+    #[test]
+    fn float_mod_clamps_to_range() {
+        let p = FloatParam::new(
+            info("Gain", ParamRange::Linear { min: 0.0, max: 1.0 }, 0.5),
+            SmoothingStyle::None,
+        );
+        p.set_value(0.9);
+        p.set_mod_amount(0.5); // would be 1.4
+        assert!((p.effective_target() - 1.0).abs() < 1e-12);
     }
 }

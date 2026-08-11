@@ -8,8 +8,9 @@
 //! aura_clap::export!(MyPlugin);
 //! ```
 //!
-//! Covers: `clap_entry` factory, audio ports (mono/stereo layouts), params,
-//! process, state, GUI, remote-controls, latency, optional audio-ports-config.
+//! Covers: factory, audio-ports (+ config, sidechain), note-ports, params
+//! (sample-accurate + mono mod), state, GUI, remote-controls, latency, tail,
+//! render.
 
 #![allow(clippy::missing_safety_doc)]
 // ponytail: CLAP FFI glue — raw-pointer casts and C-int size conversions are
@@ -35,19 +36,20 @@ use aura_core::info::PluginCategory;
 use aura_core::transport::Transport;
 use aura_core::{
     AudioBuffer, AudioConfig, BusLayout, ChannelConfig, PluginLogic, ProcessContext, ProcessMode,
-    ProcessStatus, host_callback, host_callback_with, layout_at,
+    ProcessStatus, TimedParamEvent, apply_at_time, apply_non_chunked, host_callback,
+    host_callback_with, layout_at, split_points,
 };
 use aura_core::{MidiBuffer, MidiMessage, MidiStatus};
 use aura_params::{ParamFlags, ParamInfo, ParamRange, Params};
 use clap_sys::events::{
     CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_IS_LIVE, CLAP_EVENT_MIDI, CLAP_EVENT_NOTE_CHOKE,
     CLAP_EVENT_NOTE_OFF, CLAP_EVENT_NOTE_ON, CLAP_EVENT_PARAM_GESTURE_BEGIN,
-    CLAP_EVENT_PARAM_GESTURE_END, CLAP_EVENT_PARAM_VALUE, CLAP_TRANSPORT_HAS_BEATS_TIMELINE,
-    CLAP_TRANSPORT_HAS_SECONDS_TIMELINE, CLAP_TRANSPORT_HAS_TEMPO,
-    CLAP_TRANSPORT_HAS_TIME_SIGNATURE, CLAP_TRANSPORT_IS_LOOP_ACTIVE, CLAP_TRANSPORT_IS_PLAYING,
-    CLAP_TRANSPORT_IS_RECORDING, clap_event_header, clap_event_midi, clap_event_note,
-    clap_event_param_gesture, clap_event_param_value, clap_event_transport, clap_event_type,
-    clap_input_events, clap_output_events,
+    CLAP_EVENT_PARAM_GESTURE_END, CLAP_EVENT_PARAM_MOD, CLAP_EVENT_PARAM_VALUE,
+    CLAP_TRANSPORT_HAS_BEATS_TIMELINE, CLAP_TRANSPORT_HAS_SECONDS_TIMELINE,
+    CLAP_TRANSPORT_HAS_TEMPO, CLAP_TRANSPORT_HAS_TIME_SIGNATURE, CLAP_TRANSPORT_IS_LOOP_ACTIVE,
+    CLAP_TRANSPORT_IS_PLAYING, CLAP_TRANSPORT_IS_RECORDING, clap_event_header, clap_event_midi,
+    clap_event_note, clap_event_param_gesture, clap_event_param_mod, clap_event_param_value,
+    clap_event_transport, clap_event_type, clap_input_events, clap_output_events,
 };
 use clap_sys::ext::audio_ports::{
     CLAP_AUDIO_PORT_IS_MAIN, CLAP_EXT_AUDIO_PORTS, CLAP_PORT_MONO, CLAP_PORT_STEREO,
@@ -62,14 +64,20 @@ use clap_sys::ext::gui::{
 };
 use clap_sys::ext::latency::{CLAP_EXT_LATENCY, clap_host_latency, clap_plugin_latency};
 use clap_sys::ext::note_ports::{
-    CLAP_EXT_NOTE_PORTS, CLAP_NOTE_DIALECT_MIDI, CLAP_NOTE_DIALECT_MIDI2,
-    clap_note_port_info, clap_plugin_note_ports,
+    CLAP_EXT_NOTE_PORTS, CLAP_NOTE_DIALECT_MIDI, CLAP_NOTE_DIALECT_MIDI2, clap_note_port_info,
+    clap_plugin_note_ports,
 };
 use clap_sys::ext::params::{
     CLAP_EXT_PARAMS, CLAP_PARAM_IS_AUTOMATABLE, CLAP_PARAM_IS_BYPASS, CLAP_PARAM_IS_HIDDEN,
-    CLAP_PARAM_IS_READONLY, CLAP_PARAM_IS_STEPPED, CLAP_PARAM_RESCAN_VALUES, clap_host_params,
-    clap_param_info, clap_plugin_params,
+    CLAP_PARAM_IS_MODULATABLE, CLAP_PARAM_IS_MODULATABLE_PER_NOTE_ID, CLAP_PARAM_IS_READONLY,
+    CLAP_PARAM_IS_STEPPED, CLAP_PARAM_RESCAN_VALUES, clap_host_params, clap_param_info,
+    clap_plugin_params,
 };
+use clap_sys::ext::render::{
+    CLAP_EXT_RENDER, CLAP_RENDER_OFFLINE, CLAP_RENDER_REALTIME, clap_plugin_render,
+    clap_plugin_render_mode,
+};
+use clap_sys::ext::tail::{CLAP_EXT_TAIL, clap_host_tail, clap_plugin_tail};
 use clap_sys::ext::remote_controls::{
     CLAP_EXT_REMOTE_CONTROLS, CLAP_EXT_REMOTE_CONTROLS_COMPAT, CLAP_REMOTE_CONTROLS_COUNT,
     clap_plugin_remote_controls, clap_remote_controls_page,
@@ -195,6 +203,8 @@ unsafe extern "C" fn factory_create_plugin<L: PluginLogic>(
         layout_index: 0,
         latency_cache: AtomicU32::new(0),
         latency_dirty: AtomicBool::new(false),
+        tail_cache: AtomicU32::new(0),
+        process_mode: ProcessMode::Realtime,
     });
 
     let plugin = Box::new(clap_plugin {
@@ -298,6 +308,10 @@ struct Instance<L: PluginLogic> {
     latency_cache: AtomicU32,
     /// Set on the audio thread when latency changes; drained on main thread.
     latency_dirty: AtomicBool,
+    /// Last tail length reported to the host.
+    tail_cache: AtomicU32,
+    /// Host render mode (`clap.render`) → `ProcessContext.process_mode`.
+    process_mode: ProcessMode,
 }
 
 impl<L: PluginLogic> Instance<L> {
@@ -313,6 +327,16 @@ impl<L: PluginLogic> Instance<L> {
         };
         let new = L::latency(state);
         let old = self.latency_cache.swap(new, Ordering::Relaxed);
+        old != new
+    }
+
+    /// Snapshot `PluginLogic::tail_length` into the cache. Returns `true` if changed.
+    fn update_tail_cache(&self) -> bool {
+        let Some(state) = self.state.as_ref() else {
+            return false;
+        };
+        let new = L::tail_length(state);
+        let old = self.tail_cache.swap(new, Ordering::Relaxed);
         old != new
     }
 
@@ -342,6 +366,24 @@ fn host_latency_changed(host: *const clap_host) {
     }
     let host_lat = unsafe { &*(ext as *const clap_host_latency) };
     if let Some(changed) = host_lat.changed {
+        unsafe { changed(host) };
+    }
+}
+
+/// Call `clap_host_tail.changed` if the host exposes it (main thread).
+fn host_tail_changed(host: *const clap_host) {
+    if host.is_null() {
+        return;
+    }
+    let Some(get) = (unsafe { (*host).get_extension }) else {
+        return;
+    };
+    let ext = unsafe { get(host, CLAP_EXT_TAIL.as_ptr()) };
+    if ext.is_null() {
+        return;
+    }
+    let host_tail = unsafe { &*(ext as *const clap_host_tail) };
+    if let Some(changed) = host_tail.changed {
         unsafe { changed(host) };
     }
 }
@@ -412,12 +454,16 @@ unsafe extern "C" fn plugin_activate<L: PluginLogic>(
         L::reset(&mut state, &inst.params, &config);
         inst.params.set_sample_rate(sample_rate);
         let latency = L::latency(&state);
+        let tail = L::tail_length(&state);
         inst.state = Some(state);
         inst.latency_cache.store(latency, Ordering::Relaxed);
         inst.latency_dirty.store(false, Ordering::Relaxed);
+        inst.tail_cache.store(tail, Ordering::Relaxed);
         inst.active = true;
-        // Spec: latency may change during activate — tell the host now (main thread).
+        // Spec: latency.changed is [main-thread]; host re-reads get after activate.
         host_latency_changed(inst.host);
+        // tail.changed is [audio-thread] when active — host calls get() after
+        // activate; mid-run changes notify from process (see plugin_process).
         true
     })
 }
@@ -458,6 +504,9 @@ unsafe extern "C" fn plugin_reset<L: PluginLogic>(plugin: *const clap_plugin) {
     });
 }
 
+// CLAP process owns host buffers, timed events, and optional multi-chunk
+// process loops — length is inherent to the ABI glue.
+#[allow(clippy::too_many_lines)]
 unsafe extern "C" fn plugin_process<L: PluginLogic>(
     plugin: *const clap_plugin,
     process: *const clap_process,
@@ -476,9 +525,10 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
             return CLAP_PROCESS_CONTINUE;
         }
 
+        let mut timed: Vec<TimedParamEvent> = Vec::new();
         let mut midi = MidiBuffer::with_capacity(32);
         if !process.in_events.is_null() {
-            unsafe { apply_input_events(&*inst.params, process.in_events, &mut midi) };
+            unsafe { collect_input_events(process.in_events, &mut timed, &mut midi) };
         }
         unsafe { emit_param_events(&inst.param_events, process.out_events) };
 
@@ -489,6 +539,7 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
         };
 
         let layout = inst.selected_layout();
+        let process_mode = inst.process_mode;
 
         let Some(state) = inst.state.as_mut() else {
             return CLAP_PROCESS_ERROR;
@@ -541,26 +592,63 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
             return CLAP_PROCESS_ERROR;
         }
 
-        let in_refs: Vec<&[f32]> = owned_in.iter().map(Vec::as_slice).collect();
-        let mut out_refs: Vec<&mut [f32]> = owned_out.iter_mut().map(Vec::as_mut_slice).collect();
+        // Sample-accurate: non-CHUNKED params apply at block start; CHUNKED
+        // params split the block at their event times.
+        let infos = inst.params.param_infos();
+        apply_non_chunked(&*inst.params, &timed, &infos);
+        let frames_u = frames as u32;
+        let splits = split_points(frames_u, &timed, &infos);
 
-        let (status, midi_out) = {
+        let mut status = ProcessStatus::Continue;
+        let mut midi_out_all = MidiBuffer::with_capacity(32);
+
+        for w in splits.windows(2) {
+            let t0 = w[0] as usize;
+            let t1 = w[1] as usize;
+            if t1 <= t0 {
+                continue;
+            }
+            let chunk_len = t1 - t0;
+            apply_at_time(&*inst.params, &timed, w[0], &infos);
+
+            let in_refs: Vec<&[f32]> = owned_in
+                .iter()
+                .map(|ch| &ch[t0..t1])
+                .collect();
+            let mut out_owned: Vec<&mut [f32]> = owned_out
+                .iter_mut()
+                .map(|ch| &mut ch[t0..t1])
+                .collect();
+
             let mut buffer = AudioBuffer::from_slices_checked_with_sidechain(
                 &in_refs,
-                &mut out_refs,
-                frames,
+                &mut out_owned,
+                chunk_len,
                 main_in_ch,
                 sidechain_in_ch,
             );
-            let mut ctx = ProcessContext::new(inst.sample_rate, frames)
-                .with_process_mode(ProcessMode::Realtime)
-                .with_midi(midi);
+            let chunk_midi = midi.slice_rebased(w[0], w[1]);
+            let mut ctx = ProcessContext::new(inst.sample_rate, chunk_len)
+                .with_process_mode(process_mode)
+                .with_midi(chunk_midi);
             ctx.transport = transport;
-            let status = L::process(state, &inst.params, &mut buffer, &mut ctx);
-            (status, std::mem::take(&mut ctx.midi_out))
-        };
+            let chunk_status = L::process(state, &inst.params, &mut buffer, &mut ctx);
+            midi_out_all.extend_rebased(&ctx.midi_out, w[0]);
+            match chunk_status {
+                ProcessStatus::Error => {
+                    status = ProcessStatus::Error;
+                    break;
+                }
+                ProcessStatus::TailFinished => status = ProcessStatus::TailFinished,
+                ProcessStatus::Continue => {
+                    if status != ProcessStatus::TailFinished {
+                        status = ProcessStatus::Continue;
+                    }
+                }
+            }
+        }
 
-        unsafe { emit_midi_events(process.out_events, &midi_out) };
+        unsafe { emit_midi_events(process.out_events, &midi_out_all) };
 
         for (c, host_ptr) in host_out.iter().enumerate() {
             if host_ptr.is_null() {
@@ -570,11 +658,15 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
             dst.copy_from_slice(&owned_out[c]);
         }
 
-        // PDC: if latency moved, schedule main-thread notify (never call host
-        // latency.changed from the audio thread).
+        // PDC: latency.changed is [main-thread] only — schedule callback.
         if inst.update_latency_cache() {
             inst.latency_dirty.store(true, Ordering::Relaxed);
             host_request_callback(inst.host);
+        }
+        // tail.changed is [audio-thread] when active — notify here, not via
+        // on_main_thread (clap-validator enforces the thread rule).
+        if inst.update_tail_cache() {
+            host_tail_changed(inst.host);
         }
 
         match status {
@@ -585,12 +677,14 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
     })
 }
 
-unsafe fn apply_input_events(
-    params: &dyn Params,
+/// Collect timed param/MIDI events from the host input list (no apply).
+unsafe fn collect_input_events(
     in_events: *const clap_input_events,
+    timed: &mut Vec<TimedParamEvent>,
     midi: &mut MidiBuffer,
 ) {
     midi.clear();
+    timed.clear();
     let ev = unsafe { &*in_events };
     let Some(size_fn) = ev.size else {
         return;
@@ -611,7 +705,23 @@ unsafe fn apply_input_events(
         match header.type_ {
             CLAP_EVENT_PARAM_VALUE => {
                 let pev = unsafe { &*(hdr as *const clap_event_param_value) };
-                params.set_plain(pev.param_id, pev.value);
+                timed.push(TimedParamEvent::Value {
+                    sample_offset: header.time,
+                    id: pev.param_id,
+                    plain: pev.value,
+                });
+            }
+            CLAP_EVENT_PARAM_MOD => {
+                let pev = unsafe { &*(hdr as *const clap_event_param_mod) };
+                // Mono first-class path: ignore per-note scoping (note_id < 0).
+                if pev.note_id >= 0 {
+                    continue;
+                }
+                timed.push(TimedParamEvent::Mod {
+                    sample_offset: header.time,
+                    id: pev.param_id,
+                    amount: pev.amount,
+                });
             }
             CLAP_EVENT_NOTE_ON | CLAP_EVENT_NOTE_OFF | CLAP_EVENT_NOTE_CHOKE => {
                 if let Some(msg) = clap_note_to_midi(header.type_, hdr) {
@@ -627,6 +737,19 @@ unsafe fn apply_input_events(
             }
             _ => {}
         }
+    }
+}
+
+/// Apply all param events immediately (flush / no-audio path).
+unsafe fn apply_input_events(
+    params: &dyn Params,
+    in_events: *const clap_input_events,
+    midi: &mut MidiBuffer,
+) {
+    let mut timed = Vec::new();
+    unsafe { collect_input_events(in_events, &mut timed, midi) };
+    for ev in timed {
+        aura_core::apply_event(params, ev);
     }
 }
 
@@ -797,6 +920,12 @@ unsafe extern "C" fn plugin_get_extension<L: PluginLogic>(
     if id == CLAP_EXT_LATENCY {
         return latency_ext::<L>() as *const _ as *const c_void;
     }
+    if id == CLAP_EXT_TAIL {
+        return tail_ext::<L>() as *const _ as *const c_void;
+    }
+    if id == CLAP_EXT_RENDER {
+        return render_ext::<L>() as *const _ as *const c_void;
+    }
     if id == CLAP_EXT_NOTE_PORTS {
         let info = L::info();
         if info.accepts_midi_in || info.emits_midi {
@@ -852,6 +981,56 @@ unsafe extern "C" fn latency_get<L: PluginLogic>(plugin: *const clap_plugin) -> 
 }
 
 // ---------------------------------------------------------------------------
+// tail
+// ---------------------------------------------------------------------------
+
+fn tail_ext<L: PluginLogic>() -> &'static clap_plugin_tail {
+    static CELL: OnceLock<clap_plugin_tail> = OnceLock::new();
+    CELL.get_or_init(|| clap_plugin_tail {
+        get: Some(tail_get::<L>),
+    })
+}
+
+unsafe extern "C" fn tail_get<L: PluginLogic>(plugin: *const clap_plugin) -> u32 {
+    let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
+        return 0;
+    };
+    inst.tail_cache.load(Ordering::Relaxed)
+}
+
+// ---------------------------------------------------------------------------
+// render (realtime vs offline)
+// ---------------------------------------------------------------------------
+
+fn render_ext<L: PluginLogic>() -> &'static clap_plugin_render {
+    static CELL: OnceLock<clap_plugin_render> = OnceLock::new();
+    CELL.get_or_init(|| clap_plugin_render {
+        has_hard_realtime_requirement: Some(render_hard_rt),
+        set: Some(render_set::<L>),
+    })
+}
+
+unsafe extern "C" fn render_hard_rt(_plugin: *const clap_plugin) -> bool {
+    // Authors can oversample offline; we never *require* hard realtime exclusivity.
+    false
+}
+
+unsafe extern "C" fn render_set<L: PluginLogic>(
+    plugin: *const clap_plugin,
+    mode: clap_plugin_render_mode,
+) -> bool {
+    let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
+        return false;
+    };
+    inst.process_mode = match mode {
+        CLAP_RENDER_OFFLINE => ProcessMode::Offline,
+        _ => ProcessMode::Realtime, // CLAP_RENDER_REALTIME and unknown
+    };
+    let _ = CLAP_RENDER_REALTIME; // silence unused when matched via `_`
+    true
+}
+
+// ---------------------------------------------------------------------------
 // note-ports (MIDI / note input + output)
 // ---------------------------------------------------------------------------
 
@@ -892,10 +1071,10 @@ unsafe extern "C" fn note_ports_get<L: PluginLogic>(
     };
     let dialects = match dialect {
         aura_core::info::MidiDialect::Midi2 => CLAP_NOTE_DIALECT_MIDI | CLAP_NOTE_DIALECT_MIDI2,
-        _ => CLAP_NOTE_DIALECT_MIDI,
+        aura_core::info::MidiDialect::Midi1 => CLAP_NOTE_DIALECT_MIDI,
     };
     let out = unsafe { &mut *info };
-    out.id = if is_input { 0 } else { 1 };
+    out.id = u32::from(!is_input);
     out.supported_dialects = dialects;
     out.preferred_dialect = CLAP_NOTE_DIALECT_MIDI;
     write_name(
@@ -1717,6 +1896,11 @@ fn map_param_flags(flags: ParamFlags, range: &ParamRange) -> u32 {
     }
     if flags.contains(ParamFlags::IS_BYPASS) {
         f |= CLAP_PARAM_IS_BYPASS;
+    }
+    if flags.contains(ParamFlags::MODULATABLE_PER_NOTE) {
+        f |= CLAP_PARAM_IS_MODULATABLE | CLAP_PARAM_IS_MODULATABLE_PER_NOTE_ID;
+    } else if flags.contains(ParamFlags::MODULATABLE) {
+        f |= CLAP_PARAM_IS_MODULATABLE;
     }
     if matches!(range, ParamRange::Discrete { .. } | ParamRange::Enum { .. }) {
         f |= CLAP_PARAM_IS_STEPPED;

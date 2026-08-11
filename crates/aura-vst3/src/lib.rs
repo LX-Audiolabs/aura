@@ -482,6 +482,8 @@ impl<L: PluginLogic> Component<L> {
         }
     }
 
+    // Host buffer glue + bus layout + MIDI — length is inherent to VST3 process.
+    #[allow(clippy::too_many_lines)]
     unsafe fn process_audio(&self, data: *mut ProcessData) -> tresult {
         // Author `process` must not unwind across the COM ABI.
         host_callback_with("VST3", "process", kInternalError, || {
@@ -940,7 +942,11 @@ impl<L: PluginLogic> IAudioProcessorTrait for Component<L> {
     }
 
     unsafe fn getTailSamples(&self) -> uint32 {
-        0
+        let inner = self.lock();
+        let Some(state) = inner.state.as_ref() else {
+            return 0;
+        };
+        L::tail_length(state)
     }
 }
 

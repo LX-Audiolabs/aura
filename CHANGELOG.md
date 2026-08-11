@@ -16,10 +16,16 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 - `AudioConfig::sidechain_input_channels` + `with_sidechain_channels()`.
 - `examples/smoke-midi-fx`: MIDI thru + transpose; clap-validator green (33 passed, 0 failed).
 - `examples/smoke-sidechain`: stereo main + mono sidechain mix; clap-validator green (31 passed, 0 failed).
+- **Sample-accurate automation (G17):** `aura_core::chunked_process` + CLAP process sub-block splits for `ParamFlags::CHUNKED` (default; opt out with `#[param(chunk = false)]`).
+- **Mono param modulation (G18):** `Params::set_mod` / `FloatParam` mod amount; `PARAM_MOD` + `CLAP_PARAM_IS_MODULATABLE` flags; DSP effective = `clamp(base + mod)`.
+- **`clap.tail` / `PluginLogic::tail_length`** + VST3 `getTailSamples` (G14 partial).
+  `host_tail.changed` is invoked on the **audio thread** when active (CLAP thread rule).
+- **`clap.render`** → `ProcessContext.process_mode` Realtime/Offline (G14 partial).
 
 ### Changed
 
 - Workspace version bumped to `0.6.0` (public `BusLayout`/`AudioConfig` fields extended).
+- CLAP process applies non-chunked param events at block start; chunked events at sample-accurate boundaries.
 
 ## [0.5.0] - 2026-08-09
 

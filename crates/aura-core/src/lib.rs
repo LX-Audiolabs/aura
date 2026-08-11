@@ -6,6 +6,7 @@
 
 pub mod buffer;
 pub mod bus;
+pub mod chunked_process;
 pub mod config;
 pub mod editor;
 pub mod events;
@@ -19,6 +20,9 @@ pub mod transport;
 pub use aura_params::sample::{Float, Sample};
 pub use buffer::AudioBuffer;
 pub use bus::{BusLayout, ChannelConfig, layout_at};
+pub use chunked_process::{
+    TimedParamEvent, apply_at_time, apply_event, apply_non_chunked, is_split_event, split_points,
+};
 pub use config::{AudioConfig, ProcessMode};
 pub use editor::{Editor, EditorBridge, IntoEditor, PluginContext, RawWindowHandle};
 pub use events::{ParamEvent, ParamEventQueue};

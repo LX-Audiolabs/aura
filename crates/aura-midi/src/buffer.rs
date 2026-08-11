@@ -80,6 +80,23 @@ impl MidiBuffer {
             .filter(move |e| e.sample_offset >= start && e.sample_offset < end)
     }
 
+    /// Copy events in `start..end` with offsets rebased to `0` (chunk process).
+    #[must_use]
+    pub fn slice_rebased(&self, start: u32, end: u32) -> Self {
+        let mut out = Self::with_capacity(self.events.len());
+        for ev in self.iter_range(start, end) {
+            out.push(ev.sample_offset.saturating_sub(start), ev.message);
+        }
+        out
+    }
+
+    /// Append events, adding `base` to each sample offset (merge chunk outs).
+    pub fn extend_rebased(&mut self, other: &Self, base: u32) {
+        for ev in other.iter() {
+            self.push(ev.sample_offset.saturating_add(base), ev.message);
+        }
+    }
+
     #[must_use]
     pub fn as_slice(&self) -> &[MidiEvent] {
         &self.events

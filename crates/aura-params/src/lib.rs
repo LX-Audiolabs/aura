@@ -299,11 +299,20 @@ pub trait Params: __private::Sealed + Send + Sync + 'static {
     /// Get plain value by ID.
     fn get_plain(&self, id: u32) -> Option<f64>;
 
-    /// Set plain value by ID.
+    /// Set plain **base** value by ID (host automation / state).
     ///
     /// Same `&self` interior-mutability contract as
-    /// [`Self::set_normalized`].
+    /// [`Self::set_normalized`]. Does not clear mono modulation.
     fn set_plain(&self, id: u32, value: f64);
+
+    /// Set mono modulation offset for `id` (CLAP `PARAM_MOD` amount).
+    ///
+    /// Default: no-op (params without mod storage ignore). Derive overrides
+    /// for `FloatParam` fields. Non-modulatable ids may still store amount;
+    /// hosts only send mods for flagged params.
+    fn set_mod(&self, id: u32, amount: f64) {
+        let _ = (id, amount);
+    }
 
     /// Format a plain value to display string.
     fn format_value(&self, id: u32, value: f64) -> Option<String>;

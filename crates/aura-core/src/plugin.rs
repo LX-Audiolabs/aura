@@ -62,6 +62,16 @@ pub trait PluginLogic: 'static {
         0
     }
 
+    /// Processing tail length in samples after input goes silent.
+    ///
+    /// Hosts read this via CLAP `clap.tail` / VST3 `getTailSamples`.
+    /// Default `0` (no tail). Return a large value (e.g. `u32::MAX`) when
+    /// the tail is effectively infinite / unknown.
+    #[must_use]
+    fn tail_length(_state: &Self::DspState) -> u32 {
+        0
+    }
+
     /// Whether in-place buffer aliasing is supported. Default false.
     #[must_use]
     fn supports_in_place() -> bool {

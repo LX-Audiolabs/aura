@@ -392,6 +392,26 @@ pub(crate) fn expand(input: TokenStream) -> TokenStream {
         }
     };
 
+    // --- set_mod (FloatParam mono modulation; other kinds ignore) ---
+    let set_mod_arms: Vec<_> = param_fields
+        .iter()
+        .filter(|f| matches!(f.kind, ParamKind::Float))
+        .map(|f| {
+            let ident = &f.ident;
+            quote! { x if x == self.#ident.id() => self.#ident.set_mod_amount(amount), }
+        })
+        .collect();
+
+    let set_mod_fallthrough = if nested_fields.is_empty() {
+        quote! { _ => {} }
+    } else {
+        quote! {
+            _ => {
+                #(::aura::params::Params::set_mod(&self.#nested_idents, id, amount);)*
+            }
+        }
+    };
+
     // --- set_normalized ---
     //
     // Per-id arms denormalize through the matching param's range, then
@@ -954,6 +974,13 @@ pub(crate) fn expand(input: TokenStream) -> TokenStream {
                 match id {
                     #(#set_plain_arms)*
                     #set_plain_fallthrough
+                }
+            }
+
+            fn set_mod(&self, id: u32, amount: f64) {
+                match id {
+                    #(#set_mod_arms)*
+                    #set_mod_fallthrough
                 }
             }
 

@@ -123,25 +123,21 @@ bitflags::bitflags! {
         const HIDDEN      = 0b0_0010;
         const READONLY    = 0b0_0100;
         const IS_BYPASS   = 0b0_1000;
-        /// This parameter participates in sample-accurate sub-block
-        /// chunking: a `ParamChange` event targeting it splits the
-        /// audio block at its `sample_offset`. Defaults on; cleared
-        /// by `#[param(chunk = false)]` on expensive-to-retarget
-        /// params (FFT sizes, lookahead, etc.) where the per-event
-        /// fixed cost of subdividing the block outweighs the
-        /// sample-accuracy win. Read by
-        /// `aura_core::chunked_process::is_split_event`.
+        /// Sample-accurate sub-block chunking: a host automation or
+        /// mono-mod event targeting this param splits the audio block
+        /// at its sample offset (see `aura_core::chunked_process`).
+        /// Defaults on; clear with `#[param(chunk = false)]` for
+        /// expensive-to-retarget params (FFT size, lookahead, …).
         const CHUNKED     = 0b1_0000;
-        /// The host may modulate this parameter (CLAP
-        /// `CLAP_PARAM_IS_MODULATABLE`): it emits `CLAP_EVENT_PARAM_MOD`,
-        /// delivered to `process` as an `EventBody::ParamMod`. Opt-in - a
-        /// plugin sets it only for params it actually reads mod events
-        /// for; other formats ignore it (host-owned there).
+        /// Host may modulate this parameter (CLAP
+        /// `CLAP_PARAM_IS_MODULATABLE` + `CLAP_EVENT_PARAM_MOD`).
+        /// Opt-in via `#[param(flags = "modulatable")]`. Effective DSP
+        /// value is `clamp(base + mod)`; host UI still shows base.
         const MODULATABLE = 0b10_0000;
         /// Per-note-id (polyphonic) modulation: implies
         /// [`Self::MODULATABLE`] and maps to
-        /// `CLAP_PARAM_IS_MODULATABLE_PER_NOTE_ID`. The `ParamMod`
-        /// event's `note_id` scopes the offset to one voice.
+        /// `CLAP_PARAM_IS_MODULATABLE_PER_NOTE_ID`. Mono mod path
+        /// ignores `note_id` until poly voice routing lands.
         const MODULATABLE_PER_NOTE = 0b100_0000;
     }
 }

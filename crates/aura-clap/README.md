@@ -10,7 +10,7 @@ CLAP format wrapper for AURA.
 |-------|------|
 | **Spec / ABI** | free-audio/clap (`CLAP_VERSION` on their `main` / releases) |
 | **Rust bindings** | [`clap-sys`](https://crates.io/crates/clap-sys) — C layout + constants from those headers |
-| **Our code** | `export!`, factory, process, audio-ports (+ config), params, state, GUI, remote-controls, latency |
+| **Our code** | `export!`, factory, process, audio-ports (+ config, sidechain), note-ports, params (sample-accurate + mono mod), state, GUI, remote-controls, latency, tail, render |
 
 Rules:
 
@@ -41,12 +41,20 @@ aura::export!(MyPlugin);
 
 ## Status
 
-Entry, factory, audio-ports (mono/stereo layouts), audio-ports-config (when multi-layout), params, process, state, GUI, remote-controls, **latency**.
+Entry, factory, audio-ports (mono/stereo + optional sidechain), audio-ports-config, note-ports, params, process, state, GUI, remote-controls, latency, **tail**, **render**.
 
-**Layouts:** `PluginLogic::bus_layouts()` — default stereo. Override with `BusLayout::mono()` or `BusLayout::stereo_and_mono()`. Host switches via `clap.audio-ports-config` when more than one layout is declared.
+**Layouts:** `PluginLogic::bus_layouts()` — default stereo. Override with `BusLayout::mono()`, `stereo_and_mono()`, or `.with_sidechain(…)`. Host switches via `clap.audio-ports-config` when more than one layout is declared.
 
-**Latency:** override `PluginLogic::latency(&state) -> u32` (samples). Reported via `clap.latency`; cache updates on activate / process; mid-run changes request host restart for PDC.
+**Sample-accurate automation:** host `PARAM_VALUE` / `PARAM_MOD` with `time > 0` split the block for params with `ParamFlags::CHUNKED` (default). Opt out with `#[param(chunk = false)]`. See `aura_core::chunked_process`.
+
+**Modulation:** `#[param(flags = "modulatable")]` → `CLAP_PARAM_IS_MODULATABLE`. Host `PARAM_MOD` is a non-destructive offset; DSP reads `clamp(base + mod)` via smoothers; host UI/`get` stays on base. Mono first; per-note id is accepted only for mono (`note_id < 0`).
+
+**Latency:** override `PluginLogic::latency(&state) -> u32` (samples). Via `clap.latency`; mid-run changes request host restart for PDC.
+
+**Tail:** override `PluginLogic::tail_length(&state) -> u32`. Via `clap.tail` (+ VST3 `getTailSamples`).
+
+**Render:** `clap.render` sets `ProcessContext.process_mode` (`Realtime` / `Offline`).
 
 **Remote-controls:** pages of ≤8 params from `ParamInfo.group`. Empty group = no device page. `"Section/Page"` splits on the first `/`. Hidden/readonly never take a hardware slot.
 
-Later: note-ports, multi-bus / sidechain, tail, … per free-audio + product need.
+Later (product-driven): poly mod routing, note expression, preset-load.
