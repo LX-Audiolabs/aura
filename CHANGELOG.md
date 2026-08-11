@@ -7,6 +7,10 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ## [Unreleased]
 
+### Fixed
+
+- macOS: `cargo aura install --clap` ships a CFBundle (`Contents/MacOS/` + `Info.plist`) so clap-validator and hosts can load the plugin (was a flat Mach-O → "Could not open bundle").
+
 ## [0.6.1] - 2026-08-11
 
 ### Changed

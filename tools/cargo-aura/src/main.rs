@@ -771,10 +771,100 @@ fn install_clap(pkg: &str, target_dir: &Path, profile: &str) -> Result<(), Strin
 
     let display = plugin_display_name(pkg);
     let dest = dest_root.join(format!("{display}.clap"));
-    fs::copy(src, &dest)
-        .map_err(|e| format!("copy {} → {}: {e}", src.display(), dest.display()))?;
-    println!("installed {}", dest.display());
-    Ok(())
+
+    // macOS hosts / clap-validator load CLAP via CFBundle ("Could not open bundle"
+    // if we ship a flat Mach-O). Linux/Windows use a single file named `*.clap`.
+    #[cfg(target_os = "macos")]
+    {
+        remove_path_all(&dest)?;
+        let macos_dir = dest.join("Contents").join("MacOS");
+        fs::create_dir_all(&macos_dir)
+            .map_err(|e| format!("create_dir_all {}: {e}", macos_dir.display()))?;
+        let binary = macos_dir.join(&display);
+        fs::copy(src, &binary)
+            .map_err(|e| format!("copy {} → {}: {e}", src.display(), binary.display()))?;
+        // Ensure the bundle executable is +x (copy can drop mode on some FS).
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let meta = fs::metadata(&binary).map_err(|e| e.to_string())?;
+            let mut perms = meta.permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&binary, perms).map_err(|e| e.to_string())?;
+        }
+        let plist = clap_macos_info_plist(&display);
+        let plist_path = dest.join("Contents").join("Info.plist");
+        fs::write(&plist_path, plist)
+            .map_err(|e| format!("write {}: {e}", plist_path.display()))?;
+        println!("installed {} (macOS bundle)", dest.display());
+        return Ok(());
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        // Replacing a previous macOS-style directory with a file (cross-compile
+        // edge case / shared install dir).
+        if dest.is_dir() {
+            remove_path_all(&dest)?;
+        }
+        fs::copy(src, &dest)
+            .map_err(|e| format!("copy {} → {}: {e}", src.display(), dest.display()))?;
+        println!("installed {}", dest.display());
+        Ok(())
+    }
+}
+
+/// Minimal loadable-bundle Info.plist for a macOS `.clap`.
+///
+/// `CFBundleExecutable` must match the binary name under `Contents/MacOS/`.
+/// Built on all hosts so unit tests cover the template; only `install_clap`
+/// on macOS writes it to disk.
+fn clap_macos_info_plist(display_name: &str) -> String {
+    // Escape XML special chars in the display name (plugins are usually
+    // [A-Za-z0-9._-], but don't corrupt plist on odd names).
+    let esc = |s: &str| {
+        s.replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+            .replace('"', "&quot;")
+    };
+    let name = esc(display_name);
+    let id = esc(&format!("com.lx-audiolabs.{display_name}"));
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>English</string>
+	<key>CFBundleExecutable</key>
+	<string>{name}</string>
+	<key>CFBundleIdentifier</key>
+	<string>{id}</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>{name}</string>
+	<key>CFBundlePackageType</key>
+	<string>BNDL</string>
+	<key>CFBundleVersion</key>
+	<string>1.0</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+</dict>
+</plist>
+"#
+    )
+}
+
+fn remove_path_all(path: &Path) -> Result<(), String> {
+    if !path.exists() {
+        return Ok(());
+    }
+    if path.is_dir() {
+        fs::remove_dir_all(path).map_err(|e| format!("remove_dir_all {}: {e}", path.display()))
+    } else {
+        fs::remove_file(path).map_err(|e| format!("remove_file {}: {e}", path.display()))
+    }
 }
 
 /// Install as a VST3 module bundle:
@@ -1724,5 +1814,22 @@ category = "analyzer"
             "Lucent Relay"
         );
         assert_eq!(plugin_display_name_from_text(text, "unknown"), "unknown");
+    }
+
+    #[test]
+    fn clap_macos_plist_has_bundle_keys() {
+        let p = clap_macos_info_plist("smoke-gain");
+        assert!(p.contains("CFBundleExecutable"), "{p}");
+        assert!(p.contains("<string>smoke-gain</string>"), "{p}");
+        assert!(p.contains("CFBundlePackageType"), "{p}");
+        assert!(p.contains("<string>BNDL</string>"), "{p}");
+        assert!(p.contains("com.lx-audiolabs.smoke-gain"), "{p}");
+    }
+
+    #[test]
+    fn clap_macos_plist_escapes_xml() {
+        let p = clap_macos_info_plist("a&b<c>");
+        assert!(p.contains("a&amp;b&lt;c&gt;"), "{p}");
+        assert!(!p.contains("a&b<c>"), "{p}");
     }
 }
