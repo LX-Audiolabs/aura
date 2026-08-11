@@ -25,9 +25,9 @@
 //! ## Quick Start
 //!
 //! ```rust
-//! use naad::oscillator::{Oscillator, Waveform};
-//! use naad::envelope::Adsr;
-//! use naad::filter::{BiquadFilter, FilterType};
+//! use aura_dsp::oscillator::{Oscillator, Waveform};
+//! use aura_dsp::envelope::Adsr;
+//! use aura_dsp::filter::{BiquadFilter, FilterType};
 //!
 //! // Create a 440 Hz sine oscillator
 //! let mut osc = Oscillator::new(Waveform::Sine, 440.0, 44100.0).unwrap();

@@ -129,7 +129,7 @@ pub const MAX_ROUTINGS: usize = 16;
 /// # Usage
 ///
 /// ```rust
-/// use naad::mod_matrix::*;
+/// use aura_dsp::mod_matrix::*;
 ///
 /// let mut matrix = ModMatrix::new();
 /// matrix.add_routing(ModRouting::new(ModSource::Lfo1, ModDestination::Pitch, 0.5));
