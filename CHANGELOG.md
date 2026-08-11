@@ -7,6 +7,27 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-08-11
+
+### Changed
+
+- **Ship matrix** (documented support / CI install targets):
+  - **CLAP** — Linux, Windows, macOS (primary format)
+  - **VST3** — Windows, macOS only (no Linux/Wine ship path)
+  - **LV2** — Linux only
+- Framework CI installs only the matrix formats per OS; Quality excludes `aura-lv2` off Linux.
+- `cargo aura help` / `doctor` print the ship matrix.
+- README: **CLAP first** section parallel to **Slint only** (motto + matrix table).
+
+### Fixed
+
+- Linux CI: install `libfontconfig1-dev` / related deps so cold-cache Slint-backed builds work.
+- Windows CI: clap-validator path via `$RUNNER_TEMP` (unquoted `D:\a\_temp` was eaten by bash).
+- macOS: `aura-editor` AppKit parent handle uses `NonNull` (rwh 0.6; `NonZero<*mut c_void>` does not compile).
+- Workspace `rustfmt` clean so Quality `cargo fmt --check` passes.
+
+## [0.6.0] - 2026-08-11
+
 ### Added
 
 - `ProcessContext::midi_out` + `with_midi_out()` / `clear_midi()` — plugins can generate MIDI events.
@@ -117,6 +138,8 @@ this release records what `main` contains after the multi-format + UI pass.
 - Still open for “Basis fertig”: VST3/LV2 real-host smoke; optional LV2 UI; product cutover later
 - Crates not published to crates.io (`publish = false`)
 
-[Unreleased]: https://github.com/LX-Audiolabs/aura/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/LX-Audiolabs/aura/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/LX-Audiolabs/aura/compare/v0.6.0...v0.6.1
+[0.6.0]: https://github.com/LX-Audiolabs/aura/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/LX-Audiolabs/aura/releases/tag/v0.5.0
 [0.1.0]: https://github.com/LX-Audiolabs/aura/releases/tag/v0.1.0

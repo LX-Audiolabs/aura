@@ -1,6 +1,6 @@
 //! Product-grade FX / metering ported from `lx-dsp` (LX Audiolabs plugins).
 //!
-//! Lives under `aura_dsp::fx` so names do not collide with the naad-derived
+//! Lives under `aura_dsp::fx` so names do not collide with the aura-dsp-derived
 //! primitives (`dynamics::Compressor`, `filter::BiquadFilter`, …).
 //! Prefer these types for mastering / multi-band product paths that already
 //! used `lx_dsp::*`.

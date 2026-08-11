@@ -68,9 +68,9 @@ use vst3::Steinberg::Vst::{
     BusDirection, BusInfo, BusType, Event, IAudioProcessor, IAudioProcessor_iid,
     IAudioProcessorTrait, IComponent, IComponent_iid, IComponentHandler, IComponentTrait,
     IEditController, IEditController_iid, IEditControllerTrait, IEventList, IEventListTrait,
-    IParamValueQueueTrait, IParameterChanges, IParameterChangesTrait, IoMode, MediaType, NoteOffEvent,
-    NoteOnEvent, ParamID, ParamValue, ParameterInfo, ProcessData, ProcessSetup, RoutingInfo,
-    SpeakerArrangement, String128, TChar, kRootUnitId,
+    IParamValueQueueTrait, IParameterChanges, IParameterChangesTrait, IoMode, MediaType,
+    NoteOffEvent, NoteOnEvent, ParamID, ParamValue, ParameterInfo, ProcessData, ProcessSetup,
+    RoutingInfo, SpeakerArrangement, String128, TChar, kRootUnitId,
 };
 // IPlugView / TBool live in Steinberg root, not Steinberg::Vst.
 use vst3::Steinberg::{
@@ -446,7 +446,6 @@ impl<L: PluginLogic> Component<L> {
         n as i32
     }
 
-
     fn lock(&self) -> MutexGuard<'_, Inner<L>> {
         self.inner.lock().unwrap_or_else(PoisonError::into_inner)
     }
@@ -558,9 +557,8 @@ impl<L: PluginLogic> Component<L> {
                         if ip.is_null() {
                             owned_in.push(vec![0.0; frames]);
                         } else {
-                            owned_in.push(
-                                unsafe { std::slice::from_raw_parts(ip, frames) }.to_vec(),
-                            );
+                            owned_in
+                                .push(unsafe { std::slice::from_raw_parts(ip, frames) }.to_vec());
                         }
                     }
                 }

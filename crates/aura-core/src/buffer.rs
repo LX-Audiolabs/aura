@@ -68,7 +68,15 @@ impl<'a, S: Sample> AudioBuffer<'a, S> {
         assert_eq!(main_input_count + sidechain_input_count, inputs.len());
         assert!(inputs.iter().all(|c| c.len() >= num_samples));
         assert!(outputs.iter().all(|c| c.len() >= num_samples));
-        unsafe { Self::from_slices_with_sidechain_unchecked(inputs, outputs, num_samples, main_input_count, sidechain_input_count) }
+        unsafe {
+            Self::from_slices_with_sidechain_unchecked(
+                inputs,
+                outputs,
+                num_samples,
+                main_input_count,
+                sidechain_input_count,
+            )
+        }
     }
 
     /// # Safety

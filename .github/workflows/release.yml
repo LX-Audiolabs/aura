@@ -36,7 +36,14 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev
+          sudo apt-get install -y \
+            pkg-config \
+            libfontconfig1-dev \
+            libfreetype6-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev \
+            libxkbcommon-dev \
+            libgl1-mesa-dev
       - name: Build cargo-aura
         run: cargo build --release -p cargo-aura
       - name: Package binary

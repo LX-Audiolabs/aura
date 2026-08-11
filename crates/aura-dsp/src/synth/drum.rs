@@ -62,7 +62,7 @@ impl KickDrum {
         sample_rate: f32,
     ) -> Result<Self> {
         if sample_rate <= 0.0 || !sample_rate.is_finite() {
-            return Err(crate::error::NaadError::InvalidSampleRate { sample_rate });
+            return Err(crate::error::DspError::InvalidSampleRate { sample_rate });
         }
 
         let body_decay_samples = (body_decay_ms / 1000.0) * sample_rate;
@@ -206,7 +206,7 @@ impl SnareDrum {
     /// Returns error if sample_rate is invalid.
     pub fn new(sample_rate: f32) -> Result<Self> {
         if sample_rate <= 0.0 || !sample_rate.is_finite() {
-            return Err(crate::error::NaadError::InvalidSampleRate { sample_rate });
+            return Err(crate::error::DspError::InvalidSampleRate { sample_rate });
         }
 
         let tone_decay_samples = 0.1 * sample_rate; // 100ms
@@ -325,7 +325,7 @@ impl HiHat {
     /// Returns error if sample_rate is invalid.
     pub fn new(open: bool, sample_rate: f32) -> Result<Self> {
         if sample_rate <= 0.0 || !sample_rate.is_finite() {
-            return Err(crate::error::NaadError::InvalidSampleRate { sample_rate });
+            return Err(crate::error::DspError::InvalidSampleRate { sample_rate });
         }
 
         let decay_ms = if open { 200.0 } else { 30.0 };

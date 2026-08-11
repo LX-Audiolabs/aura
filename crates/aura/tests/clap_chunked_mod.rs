@@ -1,9 +1,7 @@
 //! Sample-accurate automation + mono modulation (framework unit level).
 
 use aura::prelude::*;
-use aura_core::{
-    TimedParamEvent, apply_at_time, apply_non_chunked, split_points,
-};
+use aura_core::{TimedParamEvent, apply_at_time, apply_non_chunked, split_points};
 use aura_params::ParamFlags;
 
 #[derive(Params)]
@@ -60,10 +58,7 @@ fn split_points_respect_chunk_flag() {
         },
     ];
     // Gain (chunked) + Drive (chunked default) split; Mode does not.
-    assert_eq!(
-        split_points(128, &events, &infos),
-        vec![0, 32, 64, 128]
-    );
+    assert_eq!(split_points(128, &events, &infos), vec![0, 32, 64, 128]);
 }
 
 #[test]

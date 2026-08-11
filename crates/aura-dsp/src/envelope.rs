@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "synthesis")]
 use hisab::Vec3;
 
-use crate::error::{NaadError, Result};
+use crate::error::{DspError, Result};
 
 /// Envelope state machine stages.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -87,31 +87,31 @@ impl Adsr {
         sample_rate: f32,
     ) -> Result<Self> {
         if attack < 0.0 {
-            return Err(NaadError::InvalidParameter {
+            return Err(DspError::InvalidParameter {
                 name: "attack".to_string(),
                 reason: "must be >= 0".to_string(),
             });
         }
         if decay < 0.0 {
-            return Err(NaadError::InvalidParameter {
+            return Err(DspError::InvalidParameter {
                 name: "decay".to_string(),
                 reason: "must be >= 0".to_string(),
             });
         }
         if !(0.0..=1.0).contains(&sustain) {
-            return Err(NaadError::InvalidParameter {
+            return Err(DspError::InvalidParameter {
                 name: "sustain".to_string(),
                 reason: "must be between 0.0 and 1.0".to_string(),
             });
         }
         if release < 0.0 {
-            return Err(NaadError::InvalidParameter {
+            return Err(DspError::InvalidParameter {
                 name: "release".to_string(),
                 reason: "must be >= 0".to_string(),
             });
         }
         if sample_rate <= 0.0 || !sample_rate.is_finite() {
-            return Err(NaadError::InvalidSampleRate { sample_rate });
+            return Err(DspError::InvalidSampleRate { sample_rate });
         }
 
         Ok(Self {
@@ -266,13 +266,13 @@ impl MultiStageEnvelope {
     /// Returns error if segments is empty or sample_rate is invalid.
     pub fn with_sample_rate(segments: Vec<EnvelopeSegment>, sample_rate: f32) -> Result<Self> {
         if segments.is_empty() {
-            return Err(NaadError::InvalidParameter {
+            return Err(DspError::InvalidParameter {
                 name: "segments".to_string(),
                 reason: "must have at least one segment".to_string(),
             });
         }
         if sample_rate <= 0.0 || !sample_rate.is_finite() {
-            return Err(NaadError::InvalidSampleRate { sample_rate });
+            return Err(DspError::InvalidSampleRate { sample_rate });
         }
 
         Ok(Self {
@@ -390,21 +390,21 @@ impl CatmullRomEnvelope {
     /// [`NaadError::InvalidSampleRate`] for a bad sample rate.
     pub fn new(points: Vec<EnvelopePoint>, sample_rate: f32) -> Result<Self> {
         if points.len() < 2 {
-            return Err(NaadError::InvalidParameter {
+            return Err(DspError::InvalidParameter {
                 name: "points".to_string(),
                 reason: "need at least 2 control points".to_string(),
             });
         }
         for w in points.windows(2) {
             if w[1].time <= w[0].time {
-                return Err(NaadError::InvalidParameter {
+                return Err(DspError::InvalidParameter {
                     name: "points[*].time".to_string(),
                     reason: "control point times must be strictly increasing".to_string(),
                 });
             }
         }
         if sample_rate <= 0.0 || !sample_rate.is_finite() {
-            return Err(NaadError::InvalidSampleRate { sample_rate });
+            return Err(DspError::InvalidSampleRate { sample_rate });
         }
         Ok(Self {
             points,

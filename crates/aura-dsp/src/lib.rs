@@ -3,13 +3,15 @@
 //! JUCE analogue: **`juce_dsp`** (processors, filters, oscillators, FX, maths).
 //! MIDI messages/buffers live in **`aura-midi`** (not here).
 //!
-//! Core synthesis/FX stack forked from **naad** (Sanskrit: primordial sound):
+//! Core synthesis/FX stack forked from **naad** (Sanskrit: primordial sound)
+//! and now maintained as part of AURA:
 //! oscillators, filters, envelopes, wavetables, modulation, delay, effects,
 //! noise, tuning. Product-grade LX FX / analysis modules land under this crate
 //! over time (`fx/`, `analysis/`) — not as separate product-only silos in the
 //! framework tree.
 //!
-//! Historical: naad was part of the AGNOS ecosystem (dhvani / svara).
+//! Historical: this crate was forked from naad v1.2.5 (GPL-3.0-only,
+//! part of the AGNOS ecosystem — dhvani / svara).
 //!
 //! ## Architecture
 //!
@@ -20,7 +22,7 @@
 //! appropriate target features (`-C target-cpu=native`).
 //!
 //! dhvani (the sound engine) handles buffer alignment and SIMD dispatch.
-//! naad provides the scalar reference implementations.
+//! aura-dsp provides the scalar reference implementations.
 //!
 //! ## Quick Start
 //!
@@ -55,7 +57,7 @@
 //! ## API Conventions
 //!
 //! These conventions apply uniformly across the crate. Knowing them up front
-//! avoids surprises when wiring naad into a host (dhvani, svara, etc.).
+//! avoids surprises when wiring aura-dsp into a host (dhvani, svara, etc.).
 //!
 //! ### Encapsulation
 //!
@@ -115,7 +117,7 @@ pub mod synth;
 #[cfg(feature = "acoustics")]
 pub mod acoustics;
 
-pub use error::{NaadError, Result};
+pub use error::{DspError, Result};
 
 /// Flush denormal floating-point values to zero.
 ///

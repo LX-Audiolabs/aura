@@ -13,7 +13,7 @@ use goonj::material::AcousticMaterial;
 use goonj::room::AcousticRoom;
 use hisab::Vec3;
 
-use crate::error::{NaadError, Result};
+use crate::error::{DspError, Result};
 
 /// Binaural HRTF processor for spatialization of mono audio.
 ///
@@ -53,11 +53,11 @@ impl BinauralProcessor {
     ///
     /// # Errors
     ///
-    /// Returns [`NaadError::ComputationError`] if the binaural IR generation
+    /// Returns [`DspError::ComputationError`] if the binaural IR generation
     /// fails.
     pub fn new(azimuth: f32, elevation: f32, sample_rate: u32) -> Result<Self> {
         if sample_rate == 0 {
-            return Err(NaadError::ComputationError {
+            return Err(DspError::ComputationError {
                 message: "sample rate must be > 0".into(),
             });
         }

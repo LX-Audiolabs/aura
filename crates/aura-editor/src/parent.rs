@@ -10,8 +10,10 @@ use raw_window_handle::{
 };
 #[cfg(target_os = "linux")]
 use raw_window_handle::{RawDisplayHandle, XlibDisplayHandle, XlibWindowHandle};
-#[cfg(any(target_os = "windows", target_os = "macos"))]
+#[cfg(target_os = "windows")]
 use std::num::NonZero;
+#[cfg(target_os = "macos")]
+use std::ptr::NonNull;
 
 /// A window handle that implements `HasWindowHandle` (rwh 0.6) for any
 /// platform, constructed from aura-core's `RawWindowHandle` enum.
@@ -28,7 +30,9 @@ impl ParentedWindow {
             }
             #[cfg(target_os = "macos")]
             AuraRaw::AppKit(ns_view) => {
-                let p = NonZero::new(ns_view).expect("NSView must not be null");
+                // rwh 0.6 AppKitWindowHandle takes NonNull<c_void>, not NonZero
+                // (raw pointers are not ZeroablePrimitive).
+                let p = NonNull::new(ns_view).expect("NSView must not be null");
                 RawWindowHandle::AppKit(AppKitWindowHandle::new(p))
             }
             #[cfg(target_os = "linux")]

@@ -15,7 +15,7 @@ use goonj::impulse::{IrConfig, generate_ir};
 use goonj::room::AcousticRoom;
 use hisab::{Complex, Vec3};
 
-use crate::error::{NaadError, Result};
+use crate::error::{DspError, Result};
 
 /// Convolution reverb processor.
 ///
@@ -68,17 +68,17 @@ impl ConvolutionReverb {
     ///
     /// # Errors
     ///
-    /// Returns [`NaadError::ComputationError`] if the material name is unknown
+    /// Returns [`DspError::ComputationError`] if the material name is unknown
     /// or room dimensions are invalid.
     pub fn from_room(config: &super::room::RoomReverbConfig) -> Result<Self> {
         let material = super::material_by_name(&config.wall_material_name).ok_or_else(|| {
-            NaadError::ComputationError {
+            DspError::ComputationError {
                 message: format!("unknown wall material: {}", config.wall_material_name),
             }
         })?;
 
         if config.length <= 0.0 || config.width <= 0.0 || config.height <= 0.0 {
-            return Err(NaadError::ComputationError {
+            return Err(DspError::ComputationError {
                 message: "room dimensions must be positive".into(),
             });
         }

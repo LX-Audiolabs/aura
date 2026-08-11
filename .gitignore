@@ -12,6 +12,7 @@ examples/*/.cargo
 *.clap
 *.vst3
 *.lv2
+/target-clap-check
 
 # agal generate (regenerate: `agal .`). Keep notes + skills tracked.
 /agal/*

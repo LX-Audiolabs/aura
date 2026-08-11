@@ -7,7 +7,7 @@
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-use crate::error::{self, NaadError, Result};
+use crate::error::{self, DspError, Result};
 
 /// Filter type for biquad coefficient calculation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -100,7 +100,7 @@ impl BiquadFilter {
             return Err(e);
         }
         if q <= 0.0 || !q.is_finite() {
-            return Err(NaadError::InvalidParameter {
+            return Err(DspError::InvalidParameter {
                 name: "q".to_string(),
                 reason: "must be > 0".to_string(),
             });
@@ -245,7 +245,7 @@ impl BiquadFilter {
             return Err(e);
         }
         if q <= 0.0 || !q.is_finite() {
-            return Err(NaadError::InvalidParameter {
+            return Err(DspError::InvalidParameter {
                 name: "q".to_string(),
                 reason: "must be > 0".to_string(),
             });
@@ -322,7 +322,7 @@ impl StateVariableFilter {
             return Err(e);
         }
         if q <= 0.0 || !q.is_finite() {
-            return Err(NaadError::InvalidParameter {
+            return Err(DspError::InvalidParameter {
                 name: "q".to_string(),
                 reason: "must be > 0".to_string(),
             });
@@ -379,7 +379,7 @@ impl StateVariableFilter {
             return Err(e);
         }
         if q <= 0.0 || !q.is_finite() {
-            return Err(NaadError::InvalidParameter {
+            return Err(DspError::InvalidParameter {
                 name: "q".to_string(),
                 reason: "must be > 0".to_string(),
             });

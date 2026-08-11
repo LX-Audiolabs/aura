@@ -8,7 +8,7 @@ use tracing::debug;
 
 use goonj::fdn::{Fdn, fdn_config_for_room};
 
-use crate::error::{NaadError, Result};
+use crate::error::{DspError, Result};
 
 /// Feedback Delay Network reverb backed by goonj.
 ///
@@ -41,7 +41,7 @@ impl FdnReverb {
     ///
     /// # Errors
     ///
-    /// Returns [`NaadError::ComputationError`] if parameters are out of range.
+    /// Returns [`DspError::ComputationError`] if parameters are out of range.
     pub fn new(
         room_length: f32,
         room_width: f32,
@@ -51,17 +51,17 @@ impl FdnReverb {
         mix: f32,
     ) -> Result<Self> {
         if room_length <= 0.0 || room_width <= 0.0 || room_height <= 0.0 {
-            return Err(NaadError::ComputationError {
+            return Err(DspError::ComputationError {
                 message: "room dimensions must be positive".into(),
             });
         }
         if target_rt60 <= 0.0 || !target_rt60.is_finite() {
-            return Err(NaadError::ComputationError {
+            return Err(DspError::ComputationError {
                 message: "target_rt60 must be positive and finite".into(),
             });
         }
         if sample_rate == 0 {
-            return Err(NaadError::ComputationError {
+            return Err(DspError::ComputationError {
                 message: "sample_rate must be > 0".into(),
             });
         }
@@ -142,7 +142,7 @@ const MATRIX_FDN_N: usize = 8;
 
 /// Color-free Feedback Delay Network reverb with a Hadamard feedback matrix.
 ///
-/// Implements the FDN from scratch with `naad`-owned delay lines + per-line
+/// Implements the FDN from scratch with aura-dsp-owned delay lines + per-line
 /// damping filters + an 8×8 Hadamard feedback matrix (orthogonal, hence
 /// energy-preserving — the "color-free" property the roadmap calls out).
 /// Delay lengths are mutually-coprime primes spread around the target
@@ -190,16 +190,16 @@ impl MatrixFdn {
     ///
     /// # Errors
     ///
-    /// Returns [`NaadError::ComputationError`] if `target_rt60 <= 0`,
+    /// Returns [`DspError::ComputationError`] if `target_rt60 <= 0`,
     /// `sample_rate == 0`, or numerical setup fails.
     pub fn new(target_rt60: f32, sample_rate: u32, mix: f32) -> Result<Self> {
         if target_rt60 <= 0.0 || !target_rt60.is_finite() {
-            return Err(NaadError::ComputationError {
+            return Err(DspError::ComputationError {
                 message: "target_rt60 must be positive and finite".into(),
             });
         }
         if sample_rate == 0 {
-            return Err(NaadError::ComputationError {
+            return Err(DspError::ComputationError {
                 message: "sample_rate must be > 0".into(),
             });
         }

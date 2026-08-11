@@ -1,7 +1,7 @@
 //! Source directivity patterns for monitor placement and spatial synthesis.
 //!
 //! Wraps goonj's analytical directivity patterns (omni / cardioid family /
-//! figure-8) for use in naad. Given a source's front-axis vector and the
+//! figure-8) for use in aura-dsp. Given a source's front-axis vector and the
 //! direction toward a listener / receiver, [`SourceDirectivity::gain`]
 //! returns the linear attenuation factor that should be applied to the
 //! signal before further propagation.
@@ -9,7 +9,7 @@
 //! Tabulated balloon data (CLF/CF2 measured directivity) is intentionally
 //! out of scope here — load that via goonj directly if you need it; this
 //! module exposes only the closed-form analytical patterns that map
-//! cleanly onto naad's no-IO contract.
+//! cleanly onto aura-dsp's no-IO contract.
 
 use serde::{Deserialize, Serialize};
 
@@ -18,8 +18,8 @@ use hisab::Vec3;
 
 /// An analytical directivity pattern.
 ///
-/// Naad-side mirror of [`goonj::directivity::DirectivityPattern`] for the
-/// closed-form variants. Re-defined locally so naad's public API does not
+/// Aura-dsp-side mirror of [`goonj::directivity::DirectivityPattern`] for the
+/// closed-form variants. Re-defined locally so aura-dsp's public API does not
 /// transitively expose goonj's enum (which may evolve independently in
 /// future major versions).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

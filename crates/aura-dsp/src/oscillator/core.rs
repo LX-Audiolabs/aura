@@ -92,8 +92,8 @@ impl Oscillator {
     ///
     /// # Errors
     ///
-    /// Returns `NaadError::InvalidSampleRate` if sample_rate <= 0.
-    /// Returns `NaadError::InvalidFrequency` if frequency is out of range
+    /// Returns `DspError::InvalidSampleRate` if sample_rate <= 0.
+    /// Returns `DspError::InvalidFrequency` if frequency is out of range
     /// (does not apply to noise waveforms).
     pub fn new(waveform: Waveform, frequency: f32, sample_rate: f32) -> Result<Self> {
         if let Some(e) = error::validate_sample_rate(sample_rate) {
@@ -253,7 +253,7 @@ impl Oscillator {
     ///
     /// # Errors
     ///
-    /// Returns `NaadError::InvalidFrequency` if frequency is out of valid range.
+    /// Returns `DspError::InvalidFrequency` if frequency is out of valid range.
     pub fn set_frequency(&mut self, freq: f32) -> Result<()> {
         if let Some(e) = error::validate_frequency(freq, self.sample_rate) {
             return Err(e);

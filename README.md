@@ -32,11 +32,9 @@ AURA is **intentionally narrow**. If that is not your stack, use something else 
 | We commit to | We do **not** ship |
 |--------------|--------------------|
 | **UI:** [Slint](https://slint.dev) **only**, via **`aura-baseview`** (+ **`aura-editor`** host adapter) | egui, iced, Vizia as first-class UIs |
-| **Formats:** **CLAP**, **VST3**, **LV2** | Audio Units (AU), AAX, VST2 |
-| **Hosts:** Bitwig-first, then REAPER and other CLAP/VST3/LV2 hosts | Pro Tools / Logic-only AU pipelines as a goal |
+| **Formats:** **CLAP** primary; **VST3** / **LV2** only on the OS cells below | Audio Units (AU), AAX, VST2; “every format everywhere” |
+| **Hosts:** Bitwig-first, then REAPER and other real CLAP/VST3/LV2 hosts | Pro Tools / Logic-only AU pipelines as a goal; Wine workarounds as product path |
 | **Platforms:** Windows, Linux, macOS | iOS / embedded plugin hosts in v1 |
-
-**CLAP is primary.** VST3 and LV2 are supported; they are not an excuse to grow a kitchen-sink framework.
 
 ### Slint + baseview (always)
 
@@ -49,7 +47,25 @@ AURA is **intentionally narrow**. If that is not your stack, use something else 
 
 That stack is **`aura-baseview`** (window/renderer) + **`aura-editor`** (host adapter) + **`aura-build`** (compile-time). Every AURA plugin UI goes through it — not an optional addon.
 
-### Looking for egui, iced, or AU?
+### CLAP first (formats)
+
+Same hardness as Slint: we pick a primary path and refuse a kitchen-sink matrix.
+
+- **CLAP is the better plugin format** for what we build — modern, open, one native path on Linux, Windows, and macOS. That is the motto and the default (`cargo aura new`, CI validator, Bitwig-first host smoke).
+- **VST3** is a **pragmatic second path** where the host world actually needs it: **Windows and macOS only**. Linux VST3 often means Wine or other heavy hacks — we do **not** treat that as a supported ship path.
+- **LV2** is a **Linux-native** path (process/params/state/UI where the ecosystem fits). Not a Windows UI story; not a macOS story (`rust-lv2` / host reality).
+
+**Ship matrix** (what CI installs / what we call a supported host path):
+
+| Format | Linux | Windows | macOS | Role |
+|--------|:-----:|:-------:|:-----:|------|
+| **CLAP** | yes | yes | yes | Primary — always |
+| **VST3** | — | yes | yes | Secondary — Win/mac hosts |
+| **LV2** | yes | — | — | Secondary — Linux |
+
+Wrappers may still compile on other OSes for unit tests; **product support** is the table above — just as “Slint only” does not mean “optional egui if you flip a feature.”
+
+### Looking for egui, iced, AU, or every-format-everywhere?
 
 AURA is **not** the right framework. Please use other open source projects that already optimize for that:
 
@@ -59,14 +75,14 @@ AURA is **not** the right framework. Please use other open source projects that 
 | CLAP-centric Rust ecosystem / lower-level CLAP work | **[clack](https://github.com/prokopyl/clack)** (and related CLAP crates) |
 | Full multi-format framework including AU/AAX paths, egui/iced/Vizia options | **[truce](https://github.com/truce-audio/truce)** · [truce.audio](https://truce.audio) |
 
-We stand on the shoulders of that work (and permissive crates like CLAP bindings). AURA exists so **LX** can own a **Slint + baseview + CLAP/VST3/LV2** line without carrying every UI toolkit and every legacy format.
+We stand on the shoulders of that work (and permissive crates like CLAP bindings). AURA exists so **LX** can own a **Slint + baseview + CLAP-first** line — with thin VST3/LV2 where the OS and hosts justify them — without carrying every UI toolkit and every legacy format.
 
 ---
 
 ## Design principles
 
 1. **Slint + baseview only** — renderer is a backend choice (FemtoVG / Skia / software); toolkit is not.
-2. **Thin formats** — one plugin logic API, three wrappers; no format-shaped core.
+2. **CLAP first, thin formats** — one plugin logic API; VST3/LV2 only on the ship matrix; no format-shaped core.
 3. **Framework layout** — `crates/` · `examples/` · `tools/` (product catalogs keep their own `plugins/` outside AURA).
 4. **One CLI:** **`cargo aura`** — parity with `cargo truce` (`new`, `build`, `install`, `doctor`).
 5. **KISS for humans and agents** — `aura.toml`, boring paths; orientation in **agal**.

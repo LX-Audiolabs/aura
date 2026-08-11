@@ -99,7 +99,12 @@ pub fn apply_non_chunked(params: &dyn Params, events: &[TimedParamEvent], infos:
 }
 
 /// Apply all split events whose `sample_offset == time` (chunk boundary).
-pub fn apply_at_time(params: &dyn Params, events: &[TimedParamEvent], time: u32, infos: &[ParamInfo]) {
+pub fn apply_at_time(
+    params: &dyn Params,
+    events: &[TimedParamEvent],
+    time: u32,
+    infos: &[ParamInfo],
+) {
     for ev in events {
         if is_split_event(ev, infos) && ev.sample_offset() == time {
             apply_event(params, *ev);

@@ -98,7 +98,10 @@ Environment:
   CLAPINS / CLAP_PATH     Override CLAP install directory
   VST3INS / VST3_PATH     Override VST3 install directory
 
-Status: CLAP + VST3 + LV2 path ship (LV2: process/params/state + TTL bundle; no GUI yet).
+Ship matrix:
+  CLAP  — Linux, Windows, macOS
+  VST3  — Windows, macOS
+  LV2   — Linux (process/params/state + TTL + UI ext; rust-lv2 has no macOS)
 "
     );
 }
@@ -152,6 +155,11 @@ fn cmd_doctor() -> ExitCode {
     } else {
         println!("  --  agal not on PATH (optional; orientation only, builds don't need it)");
     }
+
+    println!("\nShip matrix (host install targets):");
+    println!("  CLAP  Linux · Windows · macOS");
+    println!("  VST3  Windows · macOS");
+    println!("  LV2   Linux");
 
     if ok {
         println!("\ndoctor: lookin' good.");

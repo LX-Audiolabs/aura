@@ -160,7 +160,7 @@ impl GraphicEq {
     /// Returns error if index is out of range or gain is invalid.
     pub fn set_band_gain(&mut self, index: usize, gain_db: f32) -> Result<()> {
         if index >= self.active_frequencies.len() {
-            return Err(crate::NaadError::InvalidParameter {
+            return Err(crate::DspError::InvalidParameter {
                 name: "index".to_string(),
                 reason: format!(
                     "band index {index} out of range ({}  active bands)",
@@ -172,7 +172,7 @@ impl GraphicEq {
         if let Some(band) = self.eq.band_mut(index) {
             band.filter.set_params(freq, 1.4, gain_db)
         } else {
-            Err(crate::NaadError::InvalidParameter {
+            Err(crate::DspError::InvalidParameter {
                 name: "index".to_string(),
                 reason: format!("band index {index} out of range"),
             })

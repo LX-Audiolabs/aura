@@ -27,12 +27,7 @@ use aura::prelude::*;
 
 #[derive(Params)]
 pub struct SidechainParams {
-    #[param(
-        id = 1,
-        name = "Amount",
-        range = "linear(0, 1)",
-        default = 0.5
-    )]
+    #[param(id = 1, name = "Amount", range = "linear(0, 1)", default = 0.5)]
     pub amount: FloatParam,
 }
 

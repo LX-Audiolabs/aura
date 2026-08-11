@@ -152,13 +152,13 @@ impl FmSynthEngine {
     /// Returns error if `num_operators` is 0 or > 6, or sample_rate is invalid.
     pub fn new(num_operators: usize, sample_rate: f32) -> Result<Self> {
         if num_operators == 0 || num_operators > MAX_OPERATORS {
-            return Err(crate::error::NaadError::InvalidParameter {
+            return Err(crate::error::DspError::InvalidParameter {
                 name: "num_operators".to_string(),
                 reason: format!("must be 1..={MAX_OPERATORS}"),
             });
         }
         if sample_rate <= 0.0 || !sample_rate.is_finite() {
-            return Err(crate::error::NaadError::InvalidSampleRate { sample_rate });
+            return Err(crate::error::DspError::InvalidSampleRate { sample_rate });
         }
 
         let mut operators: SmallVec<[FmOperator; MAX_OPERATORS]> = SmallVec::new();

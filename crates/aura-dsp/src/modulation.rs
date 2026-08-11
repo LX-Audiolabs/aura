@@ -79,7 +79,7 @@ impl Lfo {
             return Err(e);
         }
         if frequency < 0.0 || !frequency.is_finite() {
-            return Err(crate::NaadError::InvalidParameter {
+            return Err(crate::DspError::InvalidParameter {
                 name: "frequency".to_string(),
                 reason: "must be >= 0 and finite".to_string(),
             });
@@ -187,7 +187,7 @@ impl Lfo {
     /// Returns error if frequency is invalid.
     pub fn set_frequency(&mut self, freq: f32) -> Result<()> {
         if freq < 0.0 || !freq.is_finite() {
-            return Err(crate::NaadError::InvalidParameter {
+            return Err(crate::DspError::InvalidParameter {
                 name: "frequency".to_string(),
                 reason: "must be >= 0 and finite".to_string(),
             });

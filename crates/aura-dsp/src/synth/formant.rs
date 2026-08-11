@@ -88,11 +88,11 @@ impl FormantFilter {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::NaadError::InvalidParameter`] if `formants.len()` is
+    /// Returns [`crate::DspError::InvalidParameter`] if `formants.len()` is
     /// not exactly 3, or if any filter parameters are invalid.
     pub fn new(formants: &[(f32, f32, f32)], sample_rate: f32) -> Result<Self> {
         if formants.len() != NUM_FORMANTS {
-            return Err(crate::error::NaadError::InvalidParameter {
+            return Err(crate::error::DspError::InvalidParameter {
                 name: "formants".to_string(),
                 reason: format!(
                     "expected exactly {NUM_FORMANTS} formant bands, got {}",

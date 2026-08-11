@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::{NaadError, Result};
+use crate::error::{DspError, Result};
 
 /// Calculate the frequency of a note in 12-tone equal temperament.
 ///
@@ -140,14 +140,14 @@ impl TuningTable {
     /// Returns error if any ratio is <= 0 or a4_hz is invalid.
     pub fn custom(name: String, ratios: [f32; 12], a4_hz: f32) -> Result<Self> {
         if a4_hz <= 0.0 || !a4_hz.is_finite() {
-            return Err(NaadError::InvalidParameter {
+            return Err(DspError::InvalidParameter {
                 name: "a4_hz".to_string(),
                 reason: "must be > 0 and finite".to_string(),
             });
         }
         for (i, &r) in ratios.iter().enumerate() {
             if r <= 0.0 || !r.is_finite() {
-                return Err(NaadError::InvalidParameter {
+                return Err(DspError::InvalidParameter {
                     name: format!("ratios[{i}]"),
                     reason: "must be > 0 and finite".to_string(),
                 });

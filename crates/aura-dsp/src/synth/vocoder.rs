@@ -91,16 +91,16 @@ impl Vocoder {
     /// Returns error if any parameters are invalid.
     pub fn new(num_bands: usize, low_freq: f32, high_freq: f32, sample_rate: f32) -> Result<Self> {
         if sample_rate <= 0.0 || !sample_rate.is_finite() {
-            return Err(crate::error::NaadError::InvalidSampleRate { sample_rate });
+            return Err(crate::error::DspError::InvalidSampleRate { sample_rate });
         }
         if num_bands == 0 {
-            return Err(crate::error::NaadError::InvalidParameter {
+            return Err(crate::error::DspError::InvalidParameter {
                 name: "num_bands".to_string(),
                 reason: "must be > 0".to_string(),
             });
         }
         if low_freq <= 0.0 || high_freq <= low_freq {
-            return Err(crate::error::NaadError::InvalidParameter {
+            return Err(crate::error::DspError::InvalidParameter {
                 name: "frequency range".to_string(),
                 reason: "low_freq must be > 0 and < high_freq".to_string(),
             });

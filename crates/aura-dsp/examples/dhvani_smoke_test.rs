@@ -24,7 +24,7 @@ fn main() {
     // --- Voice Manager (dhvani allocates voices) ---
     let mut voice_mgr = VoiceManager::new(8, PolyMode::Poly, StealMode::Oldest);
 
-    // --- Per-voice synthesis chain (naad provides all primitives) ---
+    // --- Per-voice synthesis chain (aura-dsp provides all primitives) ---
     // In a real dhvani implementation, these would be per-voice arrays.
     let mut osc = UnisonOscillator::new(Waveform::Saw, 440.0, 4, 15.0, sample_rate).unwrap();
     let mut filter = StateVariableFilter::new(2000.0, 2.0, sample_rate).unwrap();
@@ -134,5 +134,5 @@ fn main() {
         );
     }
 
-    println!("\nSmoke test passed — all naad primitives compose cleanly for dhvani.");
+    println!("\nSmoke test passed — all aura-dsp primitives compose cleanly for dhvani.");
 }

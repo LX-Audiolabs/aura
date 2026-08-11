@@ -57,10 +57,10 @@ impl AdditiveSynth {
     /// Returns error if parameters are invalid.
     pub fn new(fundamental: f32, num_partials: usize, sample_rate: f32) -> Result<Self> {
         if sample_rate <= 0.0 || !sample_rate.is_finite() {
-            return Err(crate::error::NaadError::InvalidSampleRate { sample_rate });
+            return Err(crate::error::DspError::InvalidSampleRate { sample_rate });
         }
         if fundamental <= 0.0 || !fundamental.is_finite() {
-            return Err(crate::error::NaadError::InvalidFrequency {
+            return Err(crate::error::DspError::InvalidFrequency {
                 frequency: fundamental,
                 nyquist: sample_rate / 2.0,
             });
@@ -102,7 +102,7 @@ impl AdditiveSynth {
     /// Returns error if frequency is invalid.
     pub fn set_fundamental(&mut self, freq: f32) -> Result<()> {
         if freq <= 0.0 || !freq.is_finite() {
-            return Err(crate::error::NaadError::InvalidFrequency {
+            return Err(crate::error::DspError::InvalidFrequency {
                 frequency: freq,
                 nyquist: self.sample_rate / 2.0,
             });
@@ -195,14 +195,14 @@ impl AdditiveSynth {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::NaadError::ComputationError`] if the underlying
+    /// Returns [`crate::DspError::ComputationError`] if the underlying
     /// `hisab::num::dct` call fails.
     ///
     /// Requires the `synthesis` feature (uses hisab DCT).
     pub fn compress_amplitudes_dct(&self, num_coeffs: usize) -> Result<Vec<f64>> {
         let amps: Vec<f64> = self.partials.iter().map(|p| p.amplitude as f64).collect();
         let coeffs =
-            hisab::num::dct(&amps).map_err(|e| crate::error::NaadError::ComputationError {
+            hisab::num::dct(&amps).map_err(|e| crate::error::DspError::ComputationError {
                 message: format!("DCT failed: {e:?}"),
             })?;
         let keep = num_coeffs.clamp(1, coeffs.len());
@@ -218,15 +218,15 @@ impl AdditiveSynth {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::NaadError::InvalidParameter`] if `coeffs` is
+    /// Returns [`crate::DspError::InvalidParameter`] if `coeffs` is
     /// empty or longer than the partial count, or
-    /// [`crate::NaadError::ComputationError`] if `hisab::num::idct` fails.
+    /// [`crate::DspError::ComputationError`] if `hisab::num::idct` fails.
     ///
     /// Requires the `synthesis` feature.
     pub fn restore_amplitudes_dct(&mut self, coeffs: &[f64]) -> Result<()> {
         let n = self.partials.len();
         if coeffs.is_empty() || coeffs.len() > n {
-            return Err(crate::error::NaadError::InvalidParameter {
+            return Err(crate::error::DspError::InvalidParameter {
                 name: "coeffs".to_string(),
                 reason: format!("must be 1..={n} long, got {}", coeffs.len()),
             });
@@ -235,7 +235,7 @@ impl AdditiveSynth {
         let mut padded = vec![0.0f64; n];
         padded[..coeffs.len()].copy_from_slice(coeffs);
         let restored =
-            hisab::num::idct(&padded).map_err(|e| crate::error::NaadError::ComputationError {
+            hisab::num::idct(&padded).map_err(|e| crate::error::DspError::ComputationError {
                 message: format!("IDCT failed: {e:?}"),
             })?;
 

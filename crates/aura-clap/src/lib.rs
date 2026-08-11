@@ -73,16 +73,16 @@ use clap_sys::ext::params::{
     CLAP_PARAM_IS_STEPPED, CLAP_PARAM_RESCAN_VALUES, clap_host_params, clap_param_info,
     clap_plugin_params,
 };
-use clap_sys::ext::render::{
-    CLAP_EXT_RENDER, CLAP_RENDER_OFFLINE, CLAP_RENDER_REALTIME, clap_plugin_render,
-    clap_plugin_render_mode,
-};
-use clap_sys::ext::tail::{CLAP_EXT_TAIL, clap_host_tail, clap_plugin_tail};
 use clap_sys::ext::remote_controls::{
     CLAP_EXT_REMOTE_CONTROLS, CLAP_EXT_REMOTE_CONTROLS_COMPAT, CLAP_REMOTE_CONTROLS_COUNT,
     clap_plugin_remote_controls, clap_remote_controls_page,
 };
+use clap_sys::ext::render::{
+    CLAP_EXT_RENDER, CLAP_RENDER_OFFLINE, CLAP_RENDER_REALTIME, clap_plugin_render,
+    clap_plugin_render_mode,
+};
 use clap_sys::ext::state::{CLAP_EXT_STATE, clap_plugin_state};
+use clap_sys::ext::tail::{CLAP_EXT_TAIL, clap_host_tail, clap_plugin_tail};
 use clap_sys::factory::plugin_factory::{CLAP_PLUGIN_FACTORY_ID, clap_plugin_factory};
 use clap_sys::host::clap_host;
 use clap_sys::id::{CLAP_INVALID_ID, clap_id};
@@ -565,8 +565,7 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
                     if ip.is_null() {
                         owned_in.push(vec![0.0; frames]);
                     } else {
-                        owned_in
-                            .push(unsafe { std::slice::from_raw_parts(ip, frames) }.to_vec());
+                        owned_in.push(unsafe { std::slice::from_raw_parts(ip, frames) }.to_vec());
                     }
                 }
             }
@@ -611,14 +610,9 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
             let chunk_len = t1 - t0;
             apply_at_time(&*inst.params, &timed, w[0], &infos);
 
-            let in_refs: Vec<&[f32]> = owned_in
-                .iter()
-                .map(|ch| &ch[t0..t1])
-                .collect();
-            let mut out_owned: Vec<&mut [f32]> = owned_out
-                .iter_mut()
-                .map(|ch| &mut ch[t0..t1])
-                .collect();
+            let in_refs: Vec<&[f32]> = owned_in.iter().map(|ch| &ch[t0..t1]).collect();
+            let mut out_owned: Vec<&mut [f32]> =
+                owned_out.iter_mut().map(|ch| &mut ch[t0..t1]).collect();
 
             let mut buffer = AudioBuffer::from_slices_checked_with_sidechain(
                 &in_refs,
@@ -859,11 +853,7 @@ unsafe fn emit_midi_events(out: *const clap_output_events, midi: &MidiBuffer) {
                 let e = clap_event_midi {
                     header: event_header(CLAP_EVENT_MIDI, size_of::<clap_event_midi>() as u32),
                     port_index: 0,
-                    data: [
-                        ev.message.status_byte(),
-                        ev.message.data1,
-                        ev.message.data2,
-                    ],
+                    data: [ev.message.status_byte(), ev.message.data1, ev.message.data2],
                 };
                 let mut header = e.header;
                 header.time = ev.sample_offset;
@@ -1077,10 +1067,7 @@ unsafe extern "C" fn note_ports_get<L: PluginLogic>(
     out.id = u32::from(!is_input);
     out.supported_dialects = dialects;
     out.preferred_dialect = CLAP_NOTE_DIALECT_MIDI;
-    write_name(
-        &mut out.name,
-        if is_input { "Note In" } else { "Note Out" },
-    );
+    write_name(&mut out.name, if is_input { "Note In" } else { "Note Out" });
     true
 }
 

@@ -1,4 +1,4 @@
-//! Error types for the naad synthesis crate.
+//! Error types for the aura-dsp synthesis crate.
 
 use serde::{Deserialize, Serialize};
 use tracing::warn;
@@ -6,7 +6,7 @@ use tracing::warn;
 /// Errors that can occur during audio synthesis operations.
 #[derive(Debug, Clone, Serialize, Deserialize, thiserror::Error)]
 #[non_exhaustive]
-pub enum NaadError {
+pub enum DspError {
     /// Frequency is out of valid range (must be > 0 and < Nyquist).
     #[error("invalid frequency {frequency}: must be > 0 and < {nyquist} (Nyquist)")]
     InvalidFrequency {
@@ -49,16 +49,16 @@ pub enum NaadError {
     },
 }
 
-/// Result type alias for naad operations.
-pub type Result<T> = std::result::Result<T, NaadError>;
+/// Result type alias for aura-dsp operations.
+pub type Result<T> = std::result::Result<T, DspError>;
 
 /// Validate that a frequency is within the valid range for a given sample rate.
 #[must_use]
-pub(crate) fn validate_frequency(frequency: f32, sample_rate: f32) -> Option<NaadError> {
+pub(crate) fn validate_frequency(frequency: f32, sample_rate: f32) -> Option<DspError> {
     let nyquist = sample_rate / 2.0;
     if frequency <= 0.0 || frequency >= nyquist || !frequency.is_finite() {
         warn!(frequency, nyquist, "invalid frequency");
-        Some(NaadError::InvalidFrequency { frequency, nyquist })
+        Some(DspError::InvalidFrequency { frequency, nyquist })
     } else {
         None
     }
@@ -66,10 +66,10 @@ pub(crate) fn validate_frequency(frequency: f32, sample_rate: f32) -> Option<Naa
 
 /// Validate that a sample rate is positive and finite.
 #[must_use]
-pub(crate) fn validate_sample_rate(sample_rate: f32) -> Option<NaadError> {
+pub(crate) fn validate_sample_rate(sample_rate: f32) -> Option<DspError> {
     if sample_rate <= 0.0 || !sample_rate.is_finite() {
         warn!(sample_rate, "invalid sample rate");
-        Some(NaadError::InvalidSampleRate { sample_rate })
+        Some(DspError::InvalidSampleRate { sample_rate })
     } else {
         None
     }
@@ -81,7 +81,7 @@ mod tests {
 
     #[test]
     fn test_error_display() {
-        let err = NaadError::InvalidFrequency {
+        let err = DspError::InvalidFrequency {
             frequency: -1.0,
             nyquist: 22050.0,
         };
@@ -90,34 +90,34 @@ mod tests {
 
     #[test]
     fn test_error_display_all_variants() {
-        let cases: Vec<(NaadError, &str)> = vec![
+        let cases: Vec<(DspError, &str)> = vec![
             (
-                NaadError::InvalidFrequency {
+                DspError::InvalidFrequency {
                     frequency: -1.0,
                     nyquist: 22050.0,
                 },
                 "invalid frequency",
             ),
             (
-                NaadError::InvalidSampleRate { sample_rate: 0.0 },
+                DspError::InvalidSampleRate { sample_rate: 0.0 },
                 "invalid sample rate",
             ),
             (
-                NaadError::InvalidParameter {
+                DspError::InvalidParameter {
                     name: "q".into(),
                     reason: "must be > 0".into(),
                 },
                 "invalid parameter",
             ),
             (
-                NaadError::BufferOverflow {
+                DspError::BufferOverflow {
                     attempted: 2048,
                     capacity: 1024,
                 },
                 "buffer overflow",
             ),
             (
-                NaadError::ComputationError {
+                DspError::ComputationError {
                     message: "division by zero".into(),
                 },
                 "computation error",
@@ -135,35 +135,35 @@ mod tests {
 
     #[test]
     fn test_serde_roundtrip() {
-        let err = NaadError::InvalidParameter {
+        let err = DspError::InvalidParameter {
             name: "q".to_string(),
             reason: "must be > 0".to_string(),
         };
         let json = serde_json::to_string(&err).unwrap();
-        let back: NaadError = serde_json::from_str(&json).unwrap();
+        let back: DspError = serde_json::from_str(&json).unwrap();
         assert_eq!(err.to_string(), back.to_string());
     }
 
     #[test]
     fn test_serde_roundtrip_all_variants() {
         let errors = vec![
-            NaadError::InvalidFrequency {
+            DspError::InvalidFrequency {
                 frequency: 50000.0,
                 nyquist: 22050.0,
             },
-            NaadError::InvalidSampleRate { sample_rate: -1.0 },
-            NaadError::BufferOverflow {
+            DspError::InvalidSampleRate { sample_rate: -1.0 },
+            DspError::BufferOverflow {
                 attempted: 100,
                 capacity: 50,
             },
-            NaadError::ComputationError {
+            DspError::ComputationError {
                 message: "test".into(),
             },
         ];
 
         for err in &errors {
             let json = serde_json::to_string(err).unwrap();
-            let back: NaadError = serde_json::from_str(&json).unwrap();
+            let back: DspError = serde_json::from_str(&json).unwrap();
             assert_eq!(err.to_string(), back.to_string());
         }
     }

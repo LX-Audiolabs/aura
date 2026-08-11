@@ -10,7 +10,7 @@ use goonj::analysis::{clarity_c50, clarity_c80, definition_d50, sti_estimate};
 use goonj::impulse::ImpulseResponse;
 use goonj::room::AcousticRoom;
 
-use crate::error::{NaadError, Result};
+use crate::error::{DspError, Result};
 
 use super::room::RoomReverbConfig;
 
@@ -36,16 +36,16 @@ pub struct RoomMetrics {
 ///
 /// # Errors
 ///
-/// Returns [`NaadError::ComputationError`] if the impulse response is empty
+/// Returns [`DspError::ComputationError`] if the impulse response is empty
 /// or the sample rate is zero.
 pub fn analyze_impulse_response(ir: &[f32], sample_rate: u32) -> Result<RoomMetrics> {
     if ir.is_empty() {
-        return Err(NaadError::ComputationError {
+        return Err(DspError::ComputationError {
             message: "impulse response is empty".into(),
         });
     }
     if sample_rate == 0 {
-        return Err(NaadError::ComputationError {
+        return Err(DspError::ComputationError {
             message: "sample rate must be > 0".into(),
         });
     }
@@ -131,20 +131,20 @@ pub struct WallAbsorptionAdvice {
 ///
 /// # Errors
 ///
-/// Returns [`NaadError::ComputationError`] if the wall material name is
+/// Returns [`DspError::ComputationError`] if the wall material name is
 /// unknown or the room dimensions are invalid.
 pub fn suggest_absorption(
     config: &RoomReverbConfig,
     target_rt60: f32,
 ) -> Result<Vec<WallAbsorptionAdvice>> {
     let material = super::material_by_name(&config.wall_material_name).ok_or_else(|| {
-        NaadError::ComputationError {
+        DspError::ComputationError {
             message: format!("unknown wall material: {}", config.wall_material_name),
         }
     })?;
 
     if config.length <= 0.0 || config.width <= 0.0 || config.height <= 0.0 {
-        return Err(NaadError::ComputationError {
+        return Err(DspError::ComputationError {
             message: "room dimensions must be positive".into(),
         });
     }

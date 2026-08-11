@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::{self, NaadError, Result};
+use crate::error::{self, DspError, Result};
 
 /// A single wavetable containing one cycle of a waveform.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -22,7 +22,7 @@ impl Wavetable {
     /// Returns `NaadError::InvalidParameter` if samples is empty.
     pub fn from_samples(samples: Vec<f32>) -> Result<Self> {
         if samples.is_empty() {
-            return Err(NaadError::InvalidParameter {
+            return Err(DspError::InvalidParameter {
                 name: "samples".to_string(),
                 reason: "wavetable must have at least one sample".to_string(),
             });
@@ -41,19 +41,19 @@ impl Wavetable {
     /// `amplitudes` is empty, or `size` is 0.
     pub fn from_harmonics(num_harmonics: usize, amplitudes: &[f32], size: usize) -> Result<Self> {
         if num_harmonics == 0 {
-            return Err(NaadError::InvalidParameter {
+            return Err(DspError::InvalidParameter {
                 name: "num_harmonics".to_string(),
                 reason: "must be > 0".to_string(),
             });
         }
         if amplitudes.is_empty() {
-            return Err(NaadError::InvalidParameter {
+            return Err(DspError::InvalidParameter {
                 name: "amplitudes".to_string(),
                 reason: "must not be empty".to_string(),
             });
         }
         if size == 0 {
-            return Err(NaadError::InvalidParameter {
+            return Err(DspError::InvalidParameter {
                 name: "size".to_string(),
                 reason: "must be > 0".to_string(),
             });
@@ -239,7 +239,7 @@ impl MorphWavetable {
     /// Returns error if tables is empty, or sample_rate/frequency is invalid.
     pub fn new(tables: Vec<Wavetable>, frequency: f32, sample_rate: f32) -> Result<Self> {
         if tables.is_empty() {
-            return Err(NaadError::InvalidParameter {
+            return Err(DspError::InvalidParameter {
                 name: "tables".to_string(),
                 reason: "must have at least one wavetable".to_string(),
             });
@@ -247,7 +247,7 @@ impl MorphWavetable {
         // Validate all tables have the same size for correct morphing
         let first_len = tables[0].samples.len();
         if tables.iter().any(|t| t.samples.len() != first_len) {
-            return Err(NaadError::InvalidParameter {
+            return Err(DspError::InvalidParameter {
                 name: "tables".to_string(),
                 reason: "all wavetables must have the same number of samples".to_string(),
             });

@@ -12,7 +12,7 @@
 //! - [`sync`] — [`HardSync`] (master/slave phase-reset pair)
 //!
 //! All public types are re-exported at the module root, so external
-//! callers continue to use `naad::oscillator::Oscillator` etc.
+//! callers continue to use `aura_dsp::oscillator::Oscillator` etc.
 
 pub mod core;
 pub mod sub;

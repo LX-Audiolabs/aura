@@ -52,10 +52,10 @@ impl KarplusStrong {
     /// Returns error if frequency or sample_rate is invalid.
     pub fn new(frequency: f32, decay: f32, brightness: f32, sample_rate: f32) -> Result<Self> {
         if sample_rate <= 0.0 || !sample_rate.is_finite() {
-            return Err(crate::error::NaadError::InvalidSampleRate { sample_rate });
+            return Err(crate::error::DspError::InvalidSampleRate { sample_rate });
         }
         if frequency <= 0.0 || !frequency.is_finite() || frequency >= sample_rate / 2.0 {
-            return Err(crate::error::NaadError::InvalidFrequency {
+            return Err(crate::error::DspError::InvalidFrequency {
                 frequency,
                 nyquist: sample_rate / 2.0,
             });
@@ -98,7 +98,7 @@ impl KarplusStrong {
     /// Returns error if frequency is invalid.
     pub fn set_frequency(&mut self, frequency: f32) -> Result<()> {
         if frequency <= 0.0 || !frequency.is_finite() || frequency >= self.sample_rate / 2.0 {
-            return Err(crate::error::NaadError::InvalidFrequency {
+            return Err(crate::error::DspError::InvalidFrequency {
                 frequency,
                 nyquist: self.sample_rate / 2.0,
             });
@@ -192,10 +192,10 @@ impl Waveguide {
     /// Returns error if parameters are invalid.
     pub fn new(frequency: f32, damping: f32, sample_rate: f32) -> Result<Self> {
         if sample_rate <= 0.0 || !sample_rate.is_finite() {
-            return Err(crate::error::NaadError::InvalidSampleRate { sample_rate });
+            return Err(crate::error::DspError::InvalidSampleRate { sample_rate });
         }
         if frequency <= 0.0 || !frequency.is_finite() || frequency >= sample_rate / 2.0 {
-            return Err(crate::error::NaadError::InvalidFrequency {
+            return Err(crate::error::DspError::InvalidFrequency {
                 frequency,
                 nyquist: sample_rate / 2.0,
             });
@@ -311,8 +311,8 @@ impl MoogLadder {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::NaadError::InvalidSampleRate`] if `sample_rate <= 0`,
-    /// or [`crate::NaadError::InvalidFrequency`] if `cutoff_hz` is non-positive
+    /// Returns [`crate::DspError::InvalidSampleRate`] if `sample_rate <= 0`,
+    /// or [`crate::DspError::InvalidFrequency`] if `cutoff_hz` is non-positive
     /// or above Nyquist.
     pub fn new(cutoff_hz: f32, resonance: f32, sample_rate: f32) -> Result<Self> {
         if let Some(e) = crate::error::validate_sample_rate(sample_rate) {
@@ -333,7 +333,7 @@ impl MoogLadder {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::NaadError::InvalidFrequency`] if out of valid range.
+    /// Returns [`crate::DspError::InvalidFrequency`] if out of valid range.
     pub fn set_cutoff(&mut self, cutoff_hz: f32) -> Result<()> {
         if let Some(e) = crate::error::validate_frequency(cutoff_hz, self.sample_rate) {
             return Err(e);

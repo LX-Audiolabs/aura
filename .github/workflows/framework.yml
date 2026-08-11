@@ -1,5 +1,12 @@
 name: Framework CI
 
+# Ship matrix (CI installs only these per OS):
+#   CLAP  — Linux, Windows, macOS
+#   VST3  — Windows, macOS
+#   LV2   — Linux
+#
+# (rust-lv2/lv2-sys has no macOS support; VST3 is not a Linux ship target.)
+
 on:
   push:
     branches: [main]
@@ -11,11 +18,20 @@ env:
 
 jobs:
   examples:
-    name: Examples (${{ matrix.os }})
+    name: Examples (${{ matrix.name }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            name: linux
+            formats: --clap --lv2
+          - os: windows-latest
+            name: windows
+            formats: --clap --vst3
+          - os: macos-latest
+            name: macos
+            formats: --clap --vst3
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -28,7 +44,14 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev
+          sudo apt-get install -y \
+            pkg-config \
+            libfontconfig1-dev \
+            libfreetype6-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev \
+            libxkbcommon-dev \
+            libgl1-mesa-dev
 
       - name: Install cargo-aura
         run: cargo install --path tools/cargo-aura --locked
@@ -38,7 +61,7 @@ jobs:
           AURA_PATH: ${{ github.workspace }}
         run: cargo aura doctor
 
-      - name: Build & install smoke-gain (CLAP/VST3/LV2)
+      - name: Build & install smoke-gain (${{ matrix.formats }})
         shell: bash
         env:
           AURA_PATH: ${{ github.workspace }}
@@ -46,18 +69,46 @@ jobs:
           VST3INS: ${{ runner.temp }}/aura-ci/vst3
           LV2INS: ${{ runner.temp }}/aura-ci/lv2
         run: |
-          cargo aura install --clap --vst3 --lv2 --release -plug smoke-gain
+          cargo aura install ${{ matrix.formats }} --release -plug smoke-gain
+
+      # clap-val-action injects Windows paths with backslashes into an unquoted
+      # bash line, so \a / \t get eaten (D:\a\_temp → D:a_temp). Download and
+      # validate ourselves using $RUNNER_TEMP (env expansion is not re-parsed).
+      - name: Download clap-validator
+        shell: bash
+        run: |
+          set -euo pipefail
+          VER=0.3.2
+          case "${{ runner.os }}" in
+            Linux)
+              curl -fsSL "https://github.com/free-audio/clap-validator/releases/download/${VER}/clap-validator-${VER}-ubuntu-18.04.tar.gz" -o cv.tgz
+              tar xzf cv.tgz
+              ;;
+            macOS)
+              curl -fsSL "https://github.com/free-audio/clap-validator/releases/download/${VER}/clap-validator-${VER}-macos-universal.tar.gz" -o cv.tgz
+              tar xzf cv.tgz
+              mv binaries/clap-validator ./clap-validator
+              ;;
+            Windows)
+              curl -fsSL "https://github.com/free-audio/clap-validator/releases/download/${VER}/clap-validator-${VER}-windows.zip" -o cv.zip
+              unzip -o cv.zip
+              ;;
+          esac
+          ./clap-validator --version
 
       - name: Validate CLAP plugin
-        uses: jatinchowdhury18/clap-val-action@main
-        with:
-          plugin_path: ${{ runner.temp }}/aura-ci/clap/smoke-gain.clap
+        shell: bash
+        run: |
+          set -euo pipefail
+          PLUGIN="${RUNNER_TEMP}/aura-ci/clap/smoke-gain.clap"
+          ./clap-validator validate "$PLUGIN"
 
       - name: Upload plugin bundles
         uses: actions/upload-artifact@v4
         with:
-          name: smoke-gain-${{ matrix.os }}
+          name: smoke-gain-${{ matrix.name }}
           path: |
             ${{ runner.temp }}/aura-ci/clap/smoke-gain.clap
             ${{ runner.temp }}/aura-ci/vst3/smoke-gain.vst3
             ${{ runner.temp }}/aura-ci/lv2/smoke-gain.lv2
+          if-no-files-found: warn
