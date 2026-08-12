@@ -1,7 +1,8 @@
 //! Product UI zoom (75% / 100% / 125%) — separate from host `HiDPI` scale.
 //!
 //! Layout stays at design logical size. Effective content scale is
-//! `host_scale × ui_zoom`. Host frame size is `design × ui_zoom`.
+//! `host_scale × ui_zoom`. Host **logical** frame is `design × ui_zoom`;
+//! CLAP Win/Linux reports that × `host_scale` as physical embed pixels.
 
 use std::path::PathBuf;
 use std::sync::Arc;

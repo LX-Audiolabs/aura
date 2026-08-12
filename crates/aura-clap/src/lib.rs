@@ -27,7 +27,7 @@
 
 use std::ffi::{CStr, CString, c_char, c_void};
 use std::ptr;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
 
 use aura_core::editor::{Editor, EditorBridge, PluginContext, RawWindowHandle};
@@ -196,6 +196,7 @@ unsafe extern "C" fn factory_create_plugin<L: PluginLogic>(
         params,
         editor: None,
         param_events: Arc::new(ParamEventQueue::default()),
+        host_scale: Arc::new(AtomicU64::new(1.0f64.to_bits())),
         state: None,
         sample_rate: 44_100.0,
         max_frames: 0,
@@ -298,6 +299,9 @@ struct Instance<L: PluginLogic> {
     editor: Option<Box<dyn Editor>>,
     /// GUI → host param events, drained in process/flush.
     param_events: Arc<ParamEventQueue>,
+    /// Host content scale from `gui.set_scale` (f64 bits, default 1.0).
+    /// Shared with [`ClapBridge`] so `request_resize` matches `get_size`.
+    host_scale: Arc<AtomicU64>,
     state: Option<L::DspState>,
     sample_rate: f64,
     max_frames: u32,
@@ -315,6 +319,16 @@ struct Instance<L: PluginLogic> {
 }
 
 impl<L: PluginLogic> Instance<L> {
+    fn host_scale(&self) -> f64 {
+        f64::from_bits(self.host_scale.load(Ordering::Relaxed))
+    }
+
+    fn set_host_scale(&self, scale: f64) {
+        if scale.is_finite() && scale > 0.0 {
+            self.host_scale.store(scale.to_bits(), Ordering::Relaxed);
+        }
+    }
+
     fn selected_layout(&self) -> BusLayout {
         let layouts = L::bus_layouts();
         layout_at(&layouts, self.layout_index)
@@ -1461,6 +1475,8 @@ struct ClapBridge {
     params: Arc<dyn Params>,
     events: Arc<ParamEventQueue>,
     host: *const clap_host,
+    /// Same cell as [`Instance::host_scale`] — logical→physical for resize.
+    host_scale: Arc<AtomicU64>,
 }
 
 // SAFETY: used from the GUI thread only; `host` is valid for the plugin
@@ -1480,6 +1496,10 @@ impl ClapBridge {
         } else {
             Some(unsafe { &*(ext as *const clap_host_gui) })
         }
+    }
+
+    fn host_scale(&self) -> f64 {
+        f64::from_bits(self.host_scale.load(Ordering::Relaxed))
     }
 }
 
@@ -1511,8 +1531,55 @@ impl EditorBridge for ClapBridge {
         let Some(rr) = self.host_gui().and_then(|gui| gui.request_resize) else {
             return false;
         };
-        unsafe { rr(self.host, w, h) }
+        // Editor API is logical; CLAP host on Win/Linux expects physical
+        // pixels (same units as `gui_get_size`). macOS stays logical.
+        let (pw, ph) = gui_logical_to_host_px(w, h, self.host_scale());
+        unsafe { rr(self.host, pw, ph) }
     }
+}
+
+/// Logical editor size → host GUI pixels (Win/Linux × `host_scale`; macOS identity).
+fn gui_logical_to_host_px(lw: u32, lh: u32, host_scale: f64) -> (u32, u32) {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = host_scale;
+        (lw.max(1), lh.max(1))
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        scale_logical_to_physical(lw, lh, host_scale)
+    }
+}
+
+/// Host GUI pixels → logical editor size (inverse of [`gui_logical_to_host_px`]).
+fn gui_host_px_to_logical(pw: u32, ph: u32, host_scale: f64) -> (u32, u32) {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = host_scale;
+        (pw.max(1), ph.max(1))
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        scale_physical_to_logical(pw, ph, host_scale)
+    }
+}
+
+fn scale_logical_to_physical(lw: u32, lh: u32, host_scale: f64) -> (u32, u32) {
+    if !host_scale.is_finite() || host_scale <= 0.0 || (host_scale - 1.0).abs() < f64::EPSILON {
+        return (lw.max(1), lh.max(1));
+    }
+    let pw = (f64::from(lw.max(1)) * host_scale).round().max(1.0) as u32;
+    let ph = (f64::from(lh.max(1)) * host_scale).round().max(1.0) as u32;
+    (pw, ph)
+}
+
+fn scale_physical_to_logical(pw: u32, ph: u32, host_scale: f64) -> (u32, u32) {
+    if !host_scale.is_finite() || host_scale <= 0.0 || (host_scale - 1.0).abs() < f64::EPSILON {
+        return (pw.max(1), ph.max(1));
+    }
+    let lw = (f64::from(pw.max(1)) / host_scale).round().max(1.0) as u32;
+    let lh = (f64::from(ph.max(1)) / host_scale).round().max(1.0) as u32;
+    (lw, lh)
 }
 
 fn platform_window_api() -> &'static CStr {
@@ -1599,13 +1666,17 @@ unsafe extern "C" fn gui_destroy<L: PluginLogic>(plugin: *const clap_plugin) {
 }
 
 unsafe extern "C" fn gui_set_scale<L: PluginLogic>(plugin: *const clap_plugin, scale: f64) -> bool {
+    if !scale.is_finite() || scale <= 0.0 {
+        return false;
+    }
     let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
         return false;
     };
-    let Some(editor) = inst.editor.as_mut() else {
-        return false;
-    };
-    editor.set_scale(scale);
+    // Remember for get_size / request_resize even if editor is not open yet.
+    inst.set_host_scale(scale);
+    if let Some(editor) = inst.editor.as_mut() {
+        editor.set_scale(scale);
+    }
     true
 }
 
@@ -1624,9 +1695,15 @@ unsafe extern "C" fn gui_get_size<L: PluginLogic>(
         return false;
     }
     let (w, h) = editor.size();
+    // Editor size is logical layout points. CLAP hosts on Win/Linux size the
+    // embed frame in physical pixels = logical × set_scale (default 1.0).
+    // macOS AppKit applies backing scale itself — report logical there.
+    // Without the Win/Linux multiply, HiDPI / multi-monitor clips the child
+    // (child HWND is design × host_scale, host frame was only design).
+    let (pw, ph) = gui_logical_to_host_px(w, h, inst.host_scale());
     unsafe {
-        *width = w;
-        *height = h;
+        *width = pw;
+        *height = ph;
     }
     true
 }
@@ -1652,17 +1729,24 @@ unsafe extern "C" fn gui_adjust_size<L: PluginLogic>(
     let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
         return false;
     };
-    let Some(editor) = inst.editor.as_mut() else {
-        return false;
-    };
     if width.is_null() || height.is_null() {
         return false;
     }
+    let scale = inst.host_scale();
+    let Some(editor) = inst.editor.as_mut() else {
+        return false;
+    };
     let (min_w, min_h) = editor.min_size();
     let (max_w, max_h) = editor.max_size();
+    // Host passes physical pixels; clamp in logical space then convert back.
+    let (req_w, req_h) = unsafe { (*width, *height) };
+    let (lw, lh) = gui_host_px_to_logical(req_w, req_h, scale);
+    let lw = lw.clamp(min_w.max(1), max_w);
+    let lh = lh.clamp(min_h.max(1), max_h);
+    let (pw, ph) = gui_logical_to_host_px(lw, lh, scale);
     unsafe {
-        *width = (*width).clamp(min_w.max(1), max_w);
-        *height = (*height).clamp(min_h.max(1), max_h);
+        *width = pw;
+        *height = ph;
     }
     true
 }
@@ -1675,10 +1759,12 @@ unsafe extern "C" fn gui_set_size<L: PluginLogic>(
     let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
         return false;
     };
+    // Host → physical; Editor::set_size is logical (same as size()).
+    let (lw, lh) = gui_host_px_to_logical(width, height, inst.host_scale());
     let Some(editor) = inst.editor.as_mut() else {
         return false;
     };
-    editor.set_size(width, height)
+    editor.set_size(lw, lh)
 }
 
 unsafe extern "C" fn gui_set_parent<L: PluginLogic>(
@@ -1712,6 +1798,7 @@ unsafe extern "C" fn gui_set_parent<L: PluginLogic>(
             params,
             events: Arc::clone(&inst.param_events),
             host: inst.host,
+            host_scale: Arc::clone(&inst.host_scale),
         }))
         .with_sample_rate(inst.sample_rate);
     editor.open(parent, ctx);
@@ -2035,5 +2122,37 @@ mod latency_cache_tests {
         assert!(!swap_latency(&cache, 512));
         assert!(swap_latency(&cache, 1024));
         assert_eq!(cache.load(Ordering::Relaxed), 1024);
+    }
+}
+
+#[cfg(test)]
+mod gui_scale_tests {
+    use super::{scale_logical_to_physical, scale_physical_to_logical};
+
+    #[test]
+    fn scale_1_is_identity() {
+        assert_eq!(scale_logical_to_physical(730, 395, 1.0), (730, 395));
+        assert_eq!(scale_physical_to_logical(730, 395, 1.0), (730, 395));
+    }
+
+    #[test]
+    fn scale_15_round_trip() {
+        let (pw, ph) = scale_logical_to_physical(730, 395, 1.5);
+        assert_eq!((pw, ph), (1095, 593));
+        assert_eq!(scale_physical_to_logical(pw, ph, 1.5), (730, 395));
+    }
+
+    #[test]
+    fn zoomed_frame_matches_child_physical() {
+        // design 730×395, ui_zoom 100%, host 1.5 → host frame physical =
+        // zoomed_logical × host_scale; child HWND = design × (host×zoom).
+        let design = (730u32, 395u32);
+        let ui_zoom = 1.0_f64;
+        let host = 1.5_f64;
+        let zoomed_w = ((f64::from(design.0) * ui_zoom).round() as u32).max(1);
+        let zoomed_h = ((f64::from(design.1) * ui_zoom).round() as u32).max(1);
+        let host_frame = scale_logical_to_physical(zoomed_w, zoomed_h, host);
+        let child = scale_logical_to_physical(design.0, design.1, host * ui_zoom);
+        assert_eq!(host_frame, child);
     }
 }
