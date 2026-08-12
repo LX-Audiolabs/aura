@@ -387,5 +387,4 @@ mod tests {
         assert!((wg.damping - back.damping).abs() < f32::EPSILON);
         assert!((wg.delay_samples - back.delay_samples).abs() < f32::EPSILON);
     }
-
 }
