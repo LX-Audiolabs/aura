@@ -711,7 +711,7 @@ use std::sync::atomic::AtomicUsize;
 pub const DEFAULT_TAP_CAPACITY: usize = 4096;
 
 /// Lock-free single-producer/single-consumer sample tap for the audio
-/// → UI analyzer path (G15 in `docs/gaps-and-optimizations.md`).
+/// → UI analyzer path (audio→UI sample ring).
 ///
 /// The audio thread [`push`](Self::push)es raw samples every
 /// `process()` call; the UI/editor thread [`drain`](Self::drain)s them

@@ -20,5 +20,4 @@ import "NotoSans-Regular.ttf";
 // background: AuraTheme.surface;
 ```
 
-Direction: [docs/slint-ui-direction.md](../../docs/slint-ui-direction.md).  
 Pairs with **`aura-baseview`** (window stack) and **`aura-editor`** (host adapter).

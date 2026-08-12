@@ -9,7 +9,9 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ### Changed
 
-- `aura-dsp::analysis`: removed product **vault** (MD frontmatter / `config.json` / AppData paths) and **`product_shared`** (`AetherShared` / …). Those live in **lx-audiolabs-plugins** (`lx-vault`, `lx-analysis`). Portable SNAP FFT / meters / spectrum stay in AURA.
+- `aura-dsp::analysis`: removed product **vault** (MD frontmatter / `config.json` / AppData paths) and **`product_shared`** types. Those belong in product catalogs, not the framework. Portable SNAP FFT / meters / spectrum stay in AURA.
+- README: public-facing quick start, status, workspace map; product plugins clarified as separate private catalog.
+- Docs: hide internal DSP roadmap; drop broken links to private planning docs; rephrase product-boundary sections without private repo paths.
 
 ## [0.6.2] - 2026-08-11
 

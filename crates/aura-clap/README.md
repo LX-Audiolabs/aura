@@ -92,4 +92,4 @@ Ship-capable CLAP core is **done**. Remaining work is **product-driven** or opti
 - AU / AAX / VST2  
 - Multi-UI toolkits  
 
-Living gap ledger (internal): `docs/gaps-and-optimizations.md` · roadmap: `docs/migration-steps.md`.
+Outstanding items above are product-driven — implement when a plugin needs them, not as framework completeness.

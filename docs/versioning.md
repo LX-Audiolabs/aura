@@ -11,7 +11,7 @@ Last pass: 2026-08-11.
 | **Scheme** | [Semantic Versioning 2.0](https://semver.org/) |
 | **Workspace version** | `0.6.2` in root `Cargo.toml` → `[workspace.package] version` |
 | **Crates** | all `aura-*` + `cargo-aura` / `aura-preview` use `version.workspace = true` |
-| **crates.io** | `publish = false` until **Basis fertig** (see [migration-steps.md](./migration-steps.md)) |
+| **crates.io** | `publish = false` for now — consume via path or git; crates.io when we cut a published line |
 | **Git tags** | `vMAJOR.MINOR.PATCH` (annotated), e.g. `v0.1.0` |
 | **Changelog** | root [`CHANGELOG.md`](../CHANGELOG.md) ([Keep a Changelog](https://keepachangelog.com/)) |
 
@@ -19,12 +19,12 @@ Examples (`smoke-gain`, baseview demos) may pin their own version for packaging 
 
 ## 0.x vs 1.0
 
-We are in **0.y.z** until the framework is ready for product cutover and a stable author surface.
+We are in **0.y.z** until the author surface is stable enough for a 1.0 compatibility promise.
 
 | Range | Meaning |
 |-------|---------|
 | **0.y.z** | Public API may change. Prefer bumping **MINOR** for breaking or large feature drops; **PATCH** for fixes/docs. |
-| **1.0.0** | First stable line: Basis DoD green + at least one product pilot on AURA; documented compatibility promise. |
+| **1.0.0** | First stable line: documented compatibility promise on `PluginLogic` / params / export macros. |
 
 Cargo treats `0.1` → `0.2` as a major-style break for dependents. That matches us: path deps today, crates.io later.
 
@@ -67,7 +67,7 @@ Wire IDs (`clap_id`, `vst3_id`, `lv2_uri`, param `id`s) are **forever** once a p
 
 - Per-crate independent SemVer (lockstep workspace is enough pre-crates.io)
 - git-cliff / release-plz automation (add when releases hurt by hand)
-- Plugin product versions (lx-audiolabs-plugins own their SemVer)
+- Downstream product-plugin SemVer (each catalog versions itself)
 
 ## Checklist (copy into PRs that cut a release)
 

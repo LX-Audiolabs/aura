@@ -12,12 +12,11 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 
 ## Open
 
-- [ ] CI matrix for all six product plugins (lives in lx-audiolabs-plugins)
 - [x] G12 sidechain (one optional SC) — done 2026-08-11
 - [x] G13 note-ports/MIDI I/O — done 2026-08-11
 - [x] G14 tail + render — done 2026-08-11; **preset-load still open**
 - [x] G17 sample-accurate + G18 mono mod — done 2026-08-11 (CLAP first-class)
-- [ ] **CLAP outstanding (product-driven)** — full list: `crates/aura-clap/README.md` + `docs/gaps-and-optimizations.md`
+- [ ] **CLAP outstanding (product-driven)** — list: `crates/aura-clap/README.md`
   - [ ] `clap.preset-load` when factory presets need host browser
   - [ ] poly mod (`PER_NOTE_ID`) / note expression — instrument pilot
   - [ ] multi-out / >1 sidechain — only if plugin needs
@@ -26,30 +25,24 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 - [x] LV2 UI extension — done 2026-08-10 (host smoke pending suitable LV2 host)
 - [x] F1 split aura-derive — done 2026-08-10
 - [ ] Stage 6 optional: richer agal mesh / hot-reload / MIDI 2.0 stubs
+- [ ] crates.io publish when ready (`publish = false` today)
 
 ## Decisions
 
 ```text
-[ATOM] type=decision | detail=Rust toolchain moved nightly → stable 1.97.1 2026-08-10 (rust-toolchain.toml pin); stale incremental cache from the old nightly caused rustc ICEs (STATUS_ACCESS_VIOLATION on fontique/resvg) — `cargo clean` fixed it, not a real regression
-[ATOM] type=decision | detail=F1 done 2026-08-10 — aura-derive/src/lib.rs 2719→114 LOC; parse.rs (field/attr parsing), codegen.rs (token builders — `gen` is a reserved keyword), params.rs (Params derive orchestration), param_enum.rs (ParamEnum derive); #[proc_macro_derive] fns stay thin wrappers in lib.rs (crate-root requirement), logic moved to module::expand()
-[ATOM] type=decision | detail=CI matrix (six plugins) lives in lx-audiolabs-plugins repo, not AURA — build-linux.yml (GH Actions, workflow_dispatch) + build-local-zip.ps1 (local win+linux via zig cross) already exist there; keeping GH workflow as-is but not extending it (GH CI intentionally not the primary path — local script is); fixed stale `aurum`→`mensor` clapNames key in build-local-zip.ps1, mensor still excluded from its default plugin list on purpose
-[ATOM] type=decision | detail=LV2 UI extension done 2026-08-10 — aura-lv2/src/ui.rs exposes shared Editor as lv2ui_descriptor with Lv2Bridge + idleInterface; TTL UI triples emitted when plugin has an editor; host smoke blocked on Windows by lack of LV2 host (REAPER win64 has no LV2 support)
-[ATOM] type=decision | detail=G15 AudioTap landed 2026-08-10 — lock-free SPSC sample ring in aura-params; #[skip] declare, concrete Arc<Params> editor access, no core/derive change
-[ATOM] type=decision | detail=Stage 7 pilot + catalog migration done 2026-08-09 — all six plugins on AURA path deps
-[ATOM] type=decision | detail=Basis fertig 2026-08-08 — DoD green; cutover gate open
-[ATOM] type=decision | detail=CLAP first-class 2026-08-11: G17 sample-accurate, G18 mono mod, G14 tail+render, G12 SC, G13 MIDI; validator 0-fail smokes; outstanding = preset-load / poly-mod / note-expr / multi-out / G5 — see aura-clap README + gaps CLAP outstanding
-[ATOM] type=decision | detail=Stage 5b P1 done: G9 layouts, G10 remote-controls, G11 latency
-[ATOM] type=decision | detail=Stage 6 core tooling done: kinds, add, aura-gui (CLI parity)
-[ATOM] type=decision | detail=Host panic fence in aura-core + CLAP/VST3/LV2 process+state (cutover blocker 1)
-[ATOM] type=decision | detail=aura-test crate: state round-trip + process smoke (cutover blocker 2 minimal)
-[ATOM] type=constraint | detail=PeakMeter/FFT/Spectrum widgets stay lx-ui-slint (product); @aura basics incl XYPad only
-[ATOM] type=constraint | detail=No AU/egui zoo; lx-shm/vault/product *Shared stay product
-[ATOM] type=decision | detail=JUCE-shaped: aura-dsp (signal) + aura-midi (messages); ex aura-synth
-[ATOM] type=decision | detail=Portable lx-dsp/lx-analysis algos land under aura-dsp modules (docs/dsp-layout.md)
-[ATOM] type=decision | detail=lx-dsp ported → aura_dsp::fx (2026-08-08); product lx-dsp may thin-reexport later
-[ATOM] type=decision | detail=lx-analysis portable → aura_dsp::analysis; *Shared/shm/vault stay product
-[ATOM] type=decision | detail=ProcessContext.midi MidiBuffer; CLAP note/MIDI → buffer (VST3/LV2 later)
-[ATOM] type=decision | detail=Product lx-dsp/lx-analysis thin façade over aura-dsp (+ product *Shared)
-[ATOM] type=decision | detail=SNAP/MD-presets/vault Logik ist **nur** lx-audiolabs-plugins-spezifisch; AURA speichert Presets normal (flacher Param-Blob, so wie truce es macht); keine Vault-Pfade, kein MD-Format, kein SNAP-State-Migration-Tool in AURA-Core
+[ATOM] type=decision | detail=Rust toolchain pinned stable 1.97.1 (rust-toolchain.toml); stale incremental cache can cause rustc ICEs — `cargo clean` if needed
+[ATOM] type=decision | detail=F1 done 2026-08-10 — aura-derive split: parse.rs / codegen.rs / params.rs / param_enum.rs; thin wrappers stay in lib.rs
+[ATOM] type=decision | detail=Product plugin CI lives in product catalogs, not AURA; AURA CI = framework smokes + quality
+[ATOM] type=decision | detail=LV2 UI extension done 2026-08-10 — lv2ui_descriptor + Editor bridge + idleInterface; TTL UI triples when plugin has editor
+[ATOM] type=decision | detail=G15 AudioTap landed 2026-08-10 — lock-free SPSC sample ring in aura-params
+[ATOM] type=decision | detail=Basis fertig 2026-08-08 — DoD green; first-class CLAP path 2026-08-11
+[ATOM] type=decision | detail=CLAP outstanding = preset-load / poly-mod / note-expr / multi-out / G5 — see aura-clap README
+[ATOM] type=decision | detail=Host panic fence in aura-core + CLAP/VST3/LV2 process+state
+[ATOM] type=decision | detail=aura-test crate: state round-trip + process smoke
+[ATOM] type=constraint | detail=PeakMeter/FFT/Spectrum widgets stay product design system; @aura basics incl XYPad only
+[ATOM] type=constraint | detail=No AU/egui zoo; product shm/vault/*Shared stay product
+[ATOM] type=decision | detail=JUCE-shaped: aura-dsp (signal) + aura-midi (messages)
+[ATOM] type=decision | detail=Portable DSP algos land under aura-dsp modules (docs/dsp-layout.md)
+[ATOM] type=decision | detail=ProcessContext.midi / midi_out wired across CLAP/VST3/LV2
+[ATOM] type=decision | detail=AURA state = flat param blob (truce-like); no vault/MD/SNAP migration tools in framework core
 ```
-

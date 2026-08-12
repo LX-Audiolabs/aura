@@ -1,27 +1,25 @@
 # AURA
 
 [![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/rust-1.96+-orange.svg)](rust-toolchain.toml)
+[![Rust](https://img.shields.io/badge/rust-1.97-orange.svg)](rust-toolchain.toml)
+[![CI](https://github.com/LX-Audiolabs/aura/actions/workflows/framework.yml/badge.svg)](https://github.com/LX-Audiolabs/aura/actions/workflows/framework.yml)
 [![Slint](https://img.shields.io/badge/UI-Slint-2379F4.svg)](https://slint.dev)
 [![agal](https://img.shields.io/badge/powered%20by-agal-00ADD8.svg)](https://github.com/LX-Audiolabs/agal)
-[![AI](https://img.shields.io/badge/dev-AI--assisted-6E40C9.svg)](https://github.com/LX-Audiolabs/agal)
 
 **Audio Unified Rust Architecture**  
 *(DE-Gag: **AU**dio **RA**hmenwerk)*
 
 CLAP-first plugin framework for **LX Audiolabs**.  
-Partner tooling: **[agal](https://github.com/LX-Audiolabs/agal)** (agent orientation) · this repo (runtime + formats + build + CLI).
+Runtime + formats + build + CLI live here. Agent orientation: **[agal](https://github.com/LX-Audiolabs/agal)**.
 
-**License:** [GPL-3.0-or-later](./LICENSE) — see [docs/licensing-compliance.md](./docs/licensing-compliance.md).
+| | |
+|--|--|
+| **Status** | **0.6.x** — basis complete; used in production LX plugins (private product repo) |
+| **Dependency** | path / git deps today (`publish = false`); crates.io later |
+| **License** | [GPL-3.0-or-later](./LICENSE) — see [docs/licensing-compliance.md](./docs/licensing-compliance.md) |
+| **Rust** | 1.97+ (pinned in `rust-toolchain.toml`), edition 2024 |
 
-| Layer | Name |
-|-------|------|
-| Product | **AURA** |
-| Crates | **`aura-*`** |
-| Umbrella | **`aura`** → `use aura::*` |
-| CLI package | **`cargo-aura`** |
-| Invoke | **`cargo aura …`** (e.g. `cargo aura new`, `cargo aura build --clap -plug <crate> [<crate>...]`) |
-| Config | **`aura.toml`** |
+Commercial LX product plugins (aether, lucent, meridian, …) are **not** in this repository. They live in a separate private catalog. This repo is the **framework only** — smoke examples prove the ship path.
 
 ---
 
@@ -40,9 +38,9 @@ AURA is **intentionally narrow**. If that is not your stack, use something else 
 
 - **Always:** Slint UI + **baseview** host window (embed, scale, keys, clipboard, …).
 - **Choose renderer** (features / project config), not toolkit:
-  - **FemtoVG** (OpenGL) — default  
-  - **Skia** — optional  
-  - **Software / wgpu blit** — optional  
+  - **FemtoVG** (OpenGL) — default
+  - **Skia** — optional
+  - **Software / wgpu blit** — optional
 - There is no “raw egui editor” mode and no second UI framework in AURA.
 
 That stack is **`aura-baseview`** (window/renderer) + **`aura-editor`** (host adapter) + **`aura-build`** (compile-time). Every AURA plugin UI goes through it — not an optional addon.
@@ -79,13 +77,171 @@ We stand on the shoulders of that work (and permissive crates like CLAP bindings
 
 ---
 
+## Quick start
+
+```bash
+# 1) Clone + install the CLI (from this repo)
+git clone https://github.com/LX-Audiolabs/aura.git
+cd aura
+cargo install --path tools/cargo-aura --locked
+
+# 2) Point cargo-aura at the framework (path deps)
+export AURA_PATH="$(pwd)"          # PowerShell: $env:AURA_PATH = (Get-Location).Path
+
+# 3) Scaffold a plugin (CLAP always; add --vst3 / --lv2 if needed)
+cargo aura new my-plugin
+cd my-plugin
+
+# 4) Build & install into the host search path
+cargo aura install --clap --release
+
+# 5) Optional: clap-validator on the installed .clap
+clap-validator validate path/to/my-plugin.clap
+```
+
+### In-repo smoke examples
+
+Prove formats + UI without leaving this tree:
+
+```bash
+export AURA_PATH="$(pwd)"
+cargo install --path tools/cargo-aura --locked
+
+cargo aura install --clap --release -plug smoke-gain
+# also: smoke-sidechain, smoke-midi-fx, smoke-synth
+```
+
+| Example | What it proves |
+|---------|----------------|
+| `examples/smoke-gain` | Stereo gain, Slint GUI, state, CLAP/VST3/LV2 |
+| `examples/smoke-sidechain` | Main + one optional sidechain bus |
+| `examples/smoke-midi-fx` | MIDI in/out (transpose thru) |
+| `examples/smoke-synth` | Instrument / note path |
+
+### UI preview (no DAW)
+
+```bash
+cargo aura preview
+# or: cargo run -p aura-preview -- path/to/ui/main.slint
+```
+
+### Build / test the framework
+
+```bash
+cargo build --workspace
+cargo test --workspace          # on non-Linux: --exclude aura-lv2
+cargo clippy --workspace --all-targets
+```
+
+---
+
 ## Design principles
 
 1. **Slint + baseview only** — renderer is a backend choice (FemtoVG / Skia / software); toolkit is not.
 2. **CLAP first, thin formats** — one plugin logic API; VST3/LV2 only on the ship matrix; no format-shaped core.
-3. **Framework layout** — `crates/` · `examples/` · `tools/` (product catalogs keep their own `plugins/` outside AURA).
-4. **One CLI:** **`cargo aura`** — parity with `cargo truce` (`new`, `build`, `install`, `doctor`).
+3. **Framework layout** — `crates/` · `examples/` · `tools/` (product catalogs keep their own plugins outside AURA).
+4. **One CLI:** **`cargo aura`** — `new`, `build`, `install`, `doctor`, `preview`, …
 5. **KISS for humans and agents** — `aura.toml`, boring paths; orientation in **agal**.
+
+---
+
+## Workspace map
+
+| Layer | Name |
+|-------|------|
+| Product name | **AURA** |
+| Umbrella crate | **`aura`** → `use aura::prelude::*` |
+| CLI package | **`cargo-aura`** → invoke as **`cargo aura …`** |
+| Config | **`aura.toml`** |
+
+| Crate / tool | Role |
+|--------------|------|
+| `aura` | Umbrella re-exports + features `clap` / `vst3` / `lv2` |
+| `aura-core` | `PluginLogic`, process, buffer, state, host fence |
+| `aura-params` + `aura-derive` | Params, smoothers, `#[derive(Params)]` with explicit `id = N` |
+| `aura-clap` / `aura-vst3` / `aura-lv2` | Thin format wrappers |
+| `aura-baseview` + `aura-editor` + `aura-build` | Slint window stack + host adapter + `@aura` widgets |
+| `aura-dsp` + `aura-midi` | Portable DSP / MIDI helpers |
+| `aura-test` | State round-trip + process smokes (dev-dep) |
+| `cargo-aura` | Scaffold, build, install, doctor, preview |
+| `aura-preview` / `aura-gui` | Slint preview + optional project console |
+
+---
+
+## Author surface (minimal)
+
+```rust
+use aura::prelude::*;
+
+#[derive(Params)]
+pub struct GainParams {
+    #[param(id = 1, name = "Gain", range = "linear(-24, 24)", default = 0.0, unit = "db")]
+    pub gain: FloatParam,
+}
+
+pub struct MyGain;
+pub struct DspState;
+
+impl PluginLogic for MyGain {
+    type Params = GainParams;
+    type DspState = DspState;
+
+    fn info() -> PluginInfo { /* clap_id, vst3_id, … */ }
+
+    fn process(
+        _ctx: &mut PluginContext,
+        params: &GainParams,
+        _state: &mut DspState,
+        buf: &mut AudioBuffer,
+        _pc: &ProcessContext,
+    ) -> ProcessStatus {
+        // realtime-safe DSP here
+        ProcessStatus::Continue
+    }
+}
+
+#[cfg(feature = "clap")]
+aura::export!(MyGain);
+```
+
+Param IDs are **required and wire-stable** — reordering fields does not renumber automation.
+
+More detail: crate docs (`cargo doc -p aura --open`), [docs/versioning.md](./docs/versioning.md), [docs/dsp-layout.md](./docs/dsp-layout.md), [crates/aura-clap/README.md](./crates/aura-clap/README.md).
+
+---
+
+## Status & maturity
+
+| Area | State |
+|------|--------|
+| `PluginLogic` + `#[derive(Params)]` | done |
+| CLAP process / params / state / GUI | done (Bitwig host smoke) |
+| Sample-accurate automation + mono mod | done |
+| Sidechain (one optional bus) + MIDI I/O | done |
+| Latency / remote-controls / tail / render | done |
+| VST3 (Win/mac) | done (host smoke) |
+| LV2 (Linux) process + UI extension | done (UI host smoke depends on host) |
+| crates.io publish | **not yet** — path/git only |
+| Poly mod / note expression / preset-load | open, product-driven |
+
+Changelog: [CHANGELOG.md](./CHANGELOG.md). Releases are tagged `vX.Y.Z`.
+
+---
+
+## Contributing
+
+Issues and PRs welcome on this framework repo.
+
+- Keep the **scope** (Slint + CLAP-first ship matrix). Do not add AU/egui/AAX “just in case.”
+- Prefer small, tested changes. One assert for non-trivial logic.
+- Match workspace versioning: single version in root `Cargo.toml` + `CHANGELOG.md`.
+- CI: Framework (build/install smokes per OS matrix) + Quality (fmt, clippy, tests).
+
+```bash
+cargo fmt --all
+cargo test --workspace
+cargo clippy --workspace --all-targets
+```
 
 ---
 
@@ -101,11 +257,13 @@ We stand on the shoulders of that work (and permissive crates like CLAP bindings
 
 Thanks to the maintainers of these projects — your work directly influenced our DSP layer.
 
+Also: [truce](https://github.com/truce-audio/truce), [CLAP](https://github.com/free-audio/clap), [Slint](https://slint.dev), and the Rust audio community.
+
 ---
 
 ## License
 
-Copyright © 2026 LX Audiolabs  
+Copyright © 2026 LX Audiolabs
 
 This project is free software under the **GNU General Public License v3.0 or later**.  
 Distributing plugins that link AURA implies GPL obligations for that combined work. Selling with source is fine; closed-only ships are not the goal.

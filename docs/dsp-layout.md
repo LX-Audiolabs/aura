@@ -40,19 +40,20 @@ aura-dsp/src/
   acoustics/    optional feature
 ```
 
-## What stays product (`lx-audiolabs-plugins`)
+## What stays outside AURA (product catalogs)
+
+Product plugin repos own product-only infra. AURA does **not** absorb:
 
 | Keep in product | Why |
 |-----------------|-----|
-| `lx-shm` | Multi-plugin relay / shared memory |
-| `lx-vault` | Config paths, MD frontmatter, last-preset hints |
-| `lx-analysis` | Product `*Shared` + re-exports of portable `aura_dsp::analysis` |
-| `lx-editor-utils::snap` | SNAPSHOT-*.md names, vault scan helpers |
-| Per-plugin `presets.rs` | Profile types, MD export/import |
-| `lx-ui-slint` PeakMeter/FFT widgets | Product UI |
+| Multi-plugin shared memory / relay | Product topology, not framework core |
+| Vault / MD frontmatter / last-preset paths | AppData layouts differ per brand |
+| Product `*Shared` analysis structs | UI/host-facing product types |
+| PeakMeter / FFT / Spectrum widgets | Product design system (`@aura` stays basic) |
+| Per-plugin preset profiles | Product UX |
 
 Portable **algorithms** stay under **`aura-dsp`**. Vault / MD presets / SNAP-as-file /
-product `*Shared` stay in **lx-audiolabs-plugins**.
+product shared state stay in product catalogs.
 
 ## Naming
 
@@ -68,16 +69,6 @@ use aura::midi::{MidiBuffer, MidiMessage};
 // context.midi.iter()
 ```
 
-## Product façade
-
-| Product crate | Implementation |
-|---------------|----------------|
-| `lx-dsp` | thin re-export of `aura_dsp::fx` (if still present) |
-| `lx-analysis` | product `*Shared` + re-export portable `aura_dsp::analysis` + `lx-vault` |
-| `lx-vault` | config / frontmatter / vault path helpers |
-
 ## Process MIDI
 
-`ProcessContext::midi: MidiBuffer` — CLAP fills from note / MIDI events. VST3/LV2 empty until wired.
-
-See also: [dsp-synth-roadmap.md](./dsp-synth-roadmap.md) · [migration-steps.md](./migration-steps.md).
+`ProcessContext::midi` / `midi_out` — CLAP, VST3, and LV2 wrappers fill and flush note/MIDI events (see in-tree `examples/smoke-midi-fx`).

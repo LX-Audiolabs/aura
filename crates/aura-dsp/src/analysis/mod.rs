@@ -4,7 +4,7 @@
 //! clip-wave rings, audio↔UI meter building blocks (`PeakMeters`,
 //! `ScopeRing`, `SnapPipeline`, …).
 //!
-//! **Out of scope (product / `lx-audiolabs-plugins`):**
+//! **Out of scope (product catalogs):**
 //! - Markdown vault / presets / profiles / SNAPSHOT-*.md (`lx-vault`,
 //!   `lx-editor-utils::snap`, per-plugin `presets.rs`)
 //! - Product `*Shared` aggregates (`lx-analysis::product_shared`)
