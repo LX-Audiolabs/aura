@@ -78,10 +78,13 @@ pub const STALE_MS: u64 = 500;
 /// was actually visible.
 /// Seqlock writers now heal abandoned odd `seq` values and reset `seq` on claim
 /// so a crash mid-write cannot brick a slot permanently.
-const SHM_OS_ID: &str = "lxaudiolabs_lucent_relay_v6";
+/// `_v7`: creator zero-fills the whole hub; `try_claim` reclaims any non-zero
+/// `claimed` with a stale heartbeat (not only `claimed==1`). Uninitialized or
+/// corrupted consumer slots previously stuck forever → Relay saw "no Lucent".
+const SHM_OS_ID: &str = "lxaudiolabs_lucent_relay_v7";
 /// "LXRD" — marks a fully-initialized segment.
 const MAGIC: u32 = 0x4C58_5244;
-const VERSION: u32 = 6;
+const VERSION: u32 = 7;
 /// Number of EQ bands for band-energy reporting.
 pub const EQ_BANDS: usize = 5;
 
@@ -277,13 +280,17 @@ fn seqlock_end(seq: &AtomicU32, seq0: u32) {
 
 /// Generic CAS-based slot claim shared by both registries.
 /// `claimed`/`heartbeat` are the slot's atomics. Returns whether the claim won.
+///
+/// Any non-zero `claimed` with a stale (or zero) heartbeat is freeable — not
+/// only the canonical `1`. Garbage values from a non-zeroed mapping used to
+/// brick every consumer slot forever (Relay: "no Lucent online").
 fn try_claim(claimed: &AtomicU32, heartbeat: &AtomicU64, now_ms: u64) -> bool {
     let mut c = claimed.load(Ordering::Acquire);
-    if c == 1 {
+    if c != 0 {
         let hb = heartbeat.load(Ordering::Acquire);
         let stale = hb == 0 || now_ms.wrapping_sub(hb) > STALE_MS;
         if stale {
-            let _ = claimed.compare_exchange(1, 0, Ordering::AcqRel, Ordering::Relaxed);
+            let _ = claimed.compare_exchange(c, 0, Ordering::AcqRel, Ordering::Relaxed);
             c = claimed.load(Ordering::Acquire);
         }
     }
@@ -311,11 +318,11 @@ fn try_claim_gen(
     now_ms: u64,
 ) -> Option<u32> {
     let mut c = claimed.load(Ordering::Acquire);
-    if c == 1 {
+    if c != 0 {
         let hb = heartbeat.load(Ordering::Acquire);
         let stale = hb == 0 || now_ms.wrapping_sub(hb) > STALE_MS;
         if stale {
-            let _ = claimed.compare_exchange(1, 0, Ordering::AcqRel, Ordering::Relaxed);
+            let _ = claimed.compare_exchange(c, 0, Ordering::AcqRel, Ordering::Relaxed);
             c = claimed.load(Ordering::Acquire);
         }
     }
@@ -343,7 +350,11 @@ impl RelayHub {
         let shared = shmem.as_ptr() as *const HubShared;
 
         if is_creator {
+            // Pagefile-backed maps are usually zero, but be explicit so every
+            // claimed/heartbeat starts free — non-zero garbage bricks claims.
             unsafe {
+                let p = shared as *mut u8;
+                std::ptr::write_bytes(p, 0, size);
                 (*shared).version.store(VERSION, Ordering::Release);
                 (*shared).magic.store(MAGIC, Ordering::Release);
             }
@@ -934,6 +945,22 @@ impl RelayHub {
         s.claimed.store(0, Ordering::Release);
     }
 
+    /// True if this consumer slot is claimed and its heartbeat is still fresh.
+    /// Used by Lucent to detect a stale adopted index after SHM recreate / v bump.
+    #[must_use]
+    pub fn consumer_slot_live(&self, slot: u8, now_ms: u64) -> bool {
+        let idx = slot as usize;
+        if idx >= MAX_CONSUMERS {
+            return false;
+        }
+        let s = unsafe { &(*self.shared).consumers[idx] };
+        if s.claimed.load(Ordering::Acquire) == 0 {
+            return false;
+        }
+        let hb = s.heartbeat_ms.load(Ordering::Acquire);
+        hb != 0 && now_ms.wrapping_sub(hb) <= STALE_MS
+    }
+
     /// Publish this consumer's name and refresh its heartbeat.
     ///
     /// Call this on a regular interval (e.g., every 100ms) to keep your name
@@ -963,6 +990,10 @@ impl RelayHub {
             return;
         }
         let s = unsafe { &(*self.shared).consumers[idx] };
+
+        // Self-heal: a writer with a valid slot index owns this entry even if
+        // `claimed` was never set (adopted atomics after reload) or was cleared.
+        s.claimed.store(1, Ordering::Release);
 
         let seq0 = seqlock_begin(&s.seq);
         unsafe {
