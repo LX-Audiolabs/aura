@@ -89,6 +89,20 @@ We stand on the shoulders of that work (and permissive crates like CLAP bindings
 
 ---
 
+## Acknowledgments
+
+`aura-dsp` benefited from several open-source DSP projects whose code, concepts, and signal-flow models directly shaped our designs:
+
+| Project | Link | What we learned |
+|---------|------|-----------------|
+| **naad** (rust-old) | [MacCracken/naad](https://github.com/MacCracken/naad/tree/main/rust-old) | Node-based DSP graph, real-time safe wiring, Faust-like operator composition |
+| **fundsp** | [SamiPerttu/fundsp](https://github.com/SamiPerttu/fundsp) | Composable signal graphs, SIMD-friendly `AudioUnit` traits, declarative DSP in Rust |
+| **infinitedsp** | [infinitedsp](https://github.com/infinitedsp/infinitedsp) | Type-level DSP, compile-time graph verification, zero-cost abstraction patterns |
+
+Thanks to the maintainers of these projects — your work directly influenced our DSP layer.
+
+---
+
 ## License
 
 Copyright © 2026 LX Audiolabs  
