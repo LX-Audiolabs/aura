@@ -14,12 +14,12 @@ Runtime + formats + build + CLI live here. Agent orientation: **[agal](https://g
 
 | | |
 |--|--|
-| **Status** | **0.6.x** — basis complete; used in production LX plugins (private product repo) |
+| **Status** | **0.6.x** — basis complete; used in production LX plugins ([lx-audiolabs-plugins](https://github.com/LX-Audiolabs/lx-audiolabs-plugins)) |
 | **Dependency** | path / git deps today (`publish = false`); crates.io later |
 | **License** | [GPL-3.0-or-later](./LICENSE) — see [docs/licensing-compliance.md](./docs/licensing-compliance.md) |
 | **Rust** | 1.97+ (pinned in `rust-toolchain.toml`), edition 2024 |
 
-Commercial LX product plugins (aether, lucent, meridian, …) are **not** in this repository. They live in a separate private catalog. This repo is the **framework only** — smoke examples prove the ship path.
+Commercial LX product plugins (aether, lucent, meridian, …) are **not** in this repository. The official public catalog is **[lx-audiolabs-plugins](https://github.com/LX-Audiolabs/lx-audiolabs-plugins)**. This repo is the **framework only** — smoke examples prove the ship path.
 
 ---
 
