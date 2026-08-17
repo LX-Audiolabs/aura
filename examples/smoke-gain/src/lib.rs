@@ -70,6 +70,21 @@ impl PluginLogic for SmokeGain {
         DspState
     }
 
+    fn factory_presets() -> &'static [FactoryPreset] {
+        &[
+            FactoryPreset {
+                key: "unity",
+                name: "Unity",
+                state: FactoryPresetState::Values(&[(1, 0.0)]),
+            },
+            FactoryPreset {
+                key: "hot",
+                name: "Hot",
+                state: FactoryPresetState::Values(&[(1, 6.0)]),
+            },
+        ]
+    }
+
     fn reset(_state: &mut Self::DspState, _params: &Self::Params, _config: &AudioConfig) {}
 
     fn process(

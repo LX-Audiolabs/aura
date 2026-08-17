@@ -10,7 +10,7 @@ CLAP format wrapper for AURA.
 |-------|------|
 | **Spec / ABI** | free-audio/clap (`CLAP_VERSION` on their `main` / releases) |
 | **Rust bindings** | [`clap-sys`](https://crates.io/crates/clap-sys) — C layout + constants from those headers |
-| **Our code** | `export!`, factory, process, audio-ports (+ config, sidechain), note-ports, params (sample-accurate + mono mod), state, GUI, remote-controls, latency, tail, render |
+| **Our code** | `export!`, factory, process, audio-ports (+ config, sidechain), note-ports, params (sample-accurate + mono mod), state, GUI, remote-controls, latency, tail, render, **preset-load** (+ discovery when factory presets exist) |
 
 Rules:
 
@@ -41,7 +41,7 @@ aura::export!(MyPlugin);
 
 ## Status
 
-Entry, factory, audio-ports (mono/stereo + optional sidechain), audio-ports-config, note-ports, params, process, state, GUI, remote-controls, latency, **tail**, **render**.
+Entry, factory, audio-ports (mono/stereo + optional sidechain), audio-ports-config, note-ports, params, process, state, GUI, remote-controls, latency, **tail**, **render**, **preset-load**.
 
 **Layouts:** `PluginLogic::bus_layouts()` — default stereo. Override with `BusLayout::mono()`, `stereo_and_mono()`, or `.with_sidechain(…)`. Host switches via `clap.audio-ports-config` when more than one layout is declared.
 
@@ -54,6 +54,8 @@ Entry, factory, audio-ports (mono/stereo + optional sidechain), audio-ports-conf
 **Tail:** override `PluginLogic::tail_length(&state) -> u32`. Via `clap.tail` (+ VST3 `getTailSamples`).
 
 **Render:** `clap.render` sets `ProcessContext.process_mode` (`Realtime` / `Offline`).
+
+**Preset load:** `clap.preset-load/2` (compat `clap.preset-load.draft/2`). FILE location reads a v1 state blob (`PluginLogic::load_preset_from_file`). PLUGIN location looks up `PluginLogic::factory_presets` by `load_key`. Non-empty factory list also exposes `preset-discovery-factory/2` (PLUGIN / factory content).
 
 **Remote-controls:** pages of ≤8 params from `ParamInfo.group`. Empty group = no device page. `"Section/Page"` splits on the first `/`. Hidden/readonly never take a hardware slot.
 
@@ -69,7 +71,7 @@ Ship-capable CLAP core is **done**. Remaining work is **product-driven** or opti
 
 | Item | Gap / notes | Trigger |
 |------|-------------|---------|
-| **`clap.preset-load`** (+ compat id if needed) | G14 rest | Factory presets in host browser / vault ship |
+| ~~**`clap.preset-load`**~~ | landed | `factory_presets` + FILE blob load; vault-format files override `load_preset_from_file` |
 | **Poly param modulation** (`CLAP_PARAM_IS_MODULATABLE_PER_NOTE_ID`) | G18 poly — flag maps to CLAP; process drops `PARAM_MOD` with `note_id ≥ 0` until voice routing | Instrument with per-voice params |
 | **Note expression** (CLAP note expression events) | Not wired to `ProcessContext` | MPE / Bitwig expression pilot |
 | **Multi-out / >1 sidechain** | G12 extension — one optional sidechain only today | Aux buses beyond single SC |

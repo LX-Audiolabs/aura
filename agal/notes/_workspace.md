@@ -14,10 +14,9 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 
 - [x] G12 sidechain (one optional SC) — done 2026-08-11
 - [x] G13 note-ports/MIDI I/O — done 2026-08-11
-- [x] G14 tail + render — done 2026-08-11; **preset-load still open**
+- [x] G14 tail + render + preset-load — load/discovery 2026-08-17
 - [x] G17 sample-accurate + G18 mono mod — done 2026-08-11 (CLAP first-class)
 - [ ] **CLAP outstanding (product-driven)** — list: `crates/aura-clap/README.md`
-  - [ ] `clap.preset-load` when factory presets need host browser
   - [ ] poly mod (`PER_NOTE_ID`) / note expression — instrument pilot
   - [ ] multi-out / >1 sidechain — only if plugin needs
   - [ ] G5 rich state hooks — if host blob > flat params
@@ -38,7 +37,7 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 [ATOM] type=decision | detail=LV2 UI extension done 2026-08-10 — lv2ui_descriptor + Editor bridge + idleInterface; TTL UI triples when plugin has editor
 [ATOM] type=decision | detail=G15 AudioTap landed 2026-08-10 — lock-free SPSC sample ring in aura-params
 [ATOM] type=decision | detail=Basis fertig 2026-08-08 — DoD green; first-class CLAP path 2026-08-11
-[ATOM] type=decision | detail=CLAP outstanding = preset-load / poly-mod / note-expr / multi-out / G5 — see aura-clap README
+[ATOM] type=decision | detail=CLAP outstanding = poly-mod / note-expr / multi-out / G5 — see aura-clap README; preset-load landed
 [ATOM] type=decision | detail=Host panic fence in aura-core + CLAP/VST3/LV2 process+state
 [ATOM] type=decision | detail=aura-test crate: state round-trip + process smoke
 [ATOM] type=constraint | detail=PeakMeter/FFT/Spectrum widgets stay product design system; @aura basics incl XYPad only

@@ -59,6 +59,8 @@ impl PluginLogic for MyPlugin {
 | `process()` | yes | `&mut self, ctx: &mut ProcessCtx, params: &P` — realtime-safe |
 | `editor()` | no | return `AuraSlintEditor` for Slint UI; omit for headless |
 | `activate()` / `deactivate()` | no | optional lifecycle hooks |
+| `factory_presets()` | no | bundled CLAP host-browser presets; empty = no discovery factory |
+| `load_preset_from_file()` | no | default: v1 state blob; override for product vault files |
 
 ## cargo aura CLI
 

@@ -222,7 +222,8 @@ More detail: crate docs (`cargo doc -p aura --open`), [docs/versioning.md](./doc
 | VST3 (Win/mac) | done (host smoke) |
 | LV2 (Linux) process + UI extension | done (UI host smoke depends on host) |
 | crates.io publish | **not yet** — path/git only |
-| Poly mod / note expression / preset-load | open, product-driven |
+| `clap.preset-load` + factory discovery | done (`factory_presets`) |
+| Poly mod / note expression | open, product-driven |
 
 Changelog: [CHANGELOG.md](./CHANGELOG.md). Releases are tagged `vX.Y.Z`.
 
