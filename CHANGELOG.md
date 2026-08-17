@@ -7,6 +7,10 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ## [Unreleased]
 
+### Added
+
+- CLAP `clap.preset-load/2` (+ draft compat id): load a v1 state file, or a bundled factory preset by `load_key`. `PluginLogic::factory_presets` / `load_preset_from_file` (defaults keep existing plugins compiling). Non-empty factory list also registers `preset-discovery-factory/2` so hosts can index PLUGIN-location presets. smoke-gain ships Unity / Hot.
+
 ### Changed
 
 - Drop `zune-core` exact pins (`aura-gui`, `cargo aura new` scaffold). 0.5.2 is yanked; 0.5.3 is the log-macro fix.

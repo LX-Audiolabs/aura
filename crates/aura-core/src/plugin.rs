@@ -9,6 +9,7 @@ use crate::bus::BusLayout;
 use crate::config::AudioConfig;
 use crate::editor::Editor;
 use crate::info::PluginInfo;
+use crate::preset::FactoryPreset;
 use crate::process::{ProcessContext, ProcessStatus};
 
 /// What plugin authors implement for realtime DSP + optional GUI factory.
@@ -76,5 +77,18 @@ pub trait PluginLogic: 'static {
     #[must_use]
     fn supports_in_place() -> bool {
         false
+    }
+
+    /// Bundled factory presets for CLAP host browsers (`preset-discovery`
+    /// + `preset-load` PLUGIN location). Empty = no discovery factory.
+    #[must_use]
+    fn factory_presets() -> &'static [FactoryPreset] {
+        &[]
+    }
+
+    /// Load a host-chosen preset file (CLAP `preset-load` FILE location).
+    /// Default: v1 param blob ([`crate::decode_state`]).
+    fn load_preset_from_file(params: &Self::Params, path: &std::path::Path) -> Result<(), String> {
+        crate::preset::load_preset_file(params, path)
     }
 }

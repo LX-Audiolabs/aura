@@ -10,7 +10,7 @@
 //!
 //! Covers: factory, audio-ports (+ config, sidechain), note-ports, params
 //! (sample-accurate + mono mod), state, GUI, remote-controls, latency, tail,
-//! render.
+//! render, preset-load (+ discovery).
 
 #![allow(clippy::missing_safety_doc)]
 // ponytail: CLAP FFI glue — raw-pointer casts and C-int size conversions are
@@ -98,6 +98,8 @@ use clap_sys::stream::{clap_istream, clap_ostream};
 use clap_sys::string_sizes::{CLAP_NAME_SIZE, CLAP_PATH_SIZE};
 use clap_sys::version::CLAP_VERSION;
 
+mod preset_load;
+
 // ---------------------------------------------------------------------------
 // Export macro
 // ---------------------------------------------------------------------------
@@ -142,6 +144,8 @@ pub unsafe extern "C" fn get_factory<L: PluginLogic>(factory_id: *const c_char) 
     let id = unsafe { CStr::from_ptr(factory_id) };
     if id == CLAP_PLUGIN_FACTORY_ID {
         factory::<L>() as *const clap_plugin_factory as *const c_void
+    } else if preset_load::is_discovery_factory_id(id) && !L::factory_presets().is_empty() {
+        preset_load::discovery_factory::<L>() as *const c_void
     } else {
         ptr::null()
     }
@@ -292,9 +296,9 @@ fn descriptor<L: PluginLogic>() -> &'static clap_plugin_descriptor {
 // Instance
 // ---------------------------------------------------------------------------
 
-struct Instance<L: PluginLogic> {
-    host: *const clap_host,
-    params: Arc<L::Params>,
+pub(crate) struct Instance<L: PluginLogic> {
+    pub(crate) host: *const clap_host,
+    pub(crate) params: Arc<L::Params>,
     /// Created on the main thread in `plugin_init`; `None` = no GUI.
     editor: Option<Box<dyn Editor>>,
     /// GUI → host param events, drained in process/flush.
@@ -354,7 +358,7 @@ impl<L: PluginLogic> Instance<L> {
         old != new
     }
 
-    unsafe fn from_plugin<'a>(plugin: *const clap_plugin) -> Option<&'a mut Self> {
+    pub(crate) unsafe fn from_plugin<'a>(plugin: *const clap_plugin) -> Option<&'a mut Self> {
         if plugin.is_null() {
             return None;
         }
@@ -939,6 +943,9 @@ unsafe extern "C" fn plugin_get_extension<L: PluginLogic>(
     }
     if id == CLAP_EXT_STATE {
         return state_ext::<L>() as *const _ as *const c_void;
+    }
+    if preset_load::is_preset_load_ext(id) {
+        return preset_load::preset_load_ext::<L>() as *const _ as *const c_void;
     }
     if id == CLAP_EXT_GUI {
         // No GUI extension when the plugin has no editor.
@@ -1936,7 +1943,7 @@ unsafe extern "C" fn state_load<L: PluginLogic>(
 
 /// Ask the host to rescan param values (`clap_host_params.rescan`) after a
 /// state load. No-op when the host is null or lacks the params extension.
-unsafe fn request_param_rescan(host: *const clap_host) {
+pub(crate) unsafe fn request_param_rescan(host: *const clap_host) {
     if host.is_null() {
         return;
     }
