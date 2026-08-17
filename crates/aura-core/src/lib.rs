@@ -36,4 +36,4 @@ pub use state::{decode_state, encode_state};
 pub use transport::Transport;
 
 // MIDI types live in `aura-midi`; re-export for process-path convenience.
-pub use aura_midi::{MidiBuffer, MidiEvent, MidiMessage, MidiStatus};
+pub use aura_midi::{MidiBuffer, MidiEvent, MidiMessage, MidiStatus, Ump};

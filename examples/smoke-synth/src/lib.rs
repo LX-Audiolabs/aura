@@ -83,6 +83,9 @@ impl PluginLogic for SmokeSynth {
         info.lv2_uri = "https://lx-audiolabs.com/lv2/smoke-synth";
         info.category = PluginCategory::Instrument;
         info.accepts_midi_in = true;
+        // Advertise MIDI 2 so hosts that speak UMP send CLAP_EVENT_MIDI2;
+        // wrapper down-converts to MidiMessage for process().
+        info.midi_input_dialect = aura::MidiDialect::Midi2;
         info
     }
 

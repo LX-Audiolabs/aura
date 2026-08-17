@@ -5,7 +5,8 @@
 pub enum MidiDialect {
     #[default]
     Midi1,
-    /// Architecture reserved; full UMP later.
+    /// Advertise MIDI 2 on the note port. Process still sees 7-bit [`crate::MidiMessage`];
+    /// CLAP down-converts `CLAP_EVENT_MIDI2` via [`aura_midi::Ump`].
     Midi2,
 }
 

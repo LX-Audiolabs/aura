@@ -8,7 +8,7 @@ id: aura
 group: frameworks
 summary: AURA framework — PluginLogic, #[derive(Params)] with explicit ids, cargo aura CLI, Slint+baseview UI stack, format wrappers.
 triggers: aura, PluginLogic, derive(Params), cargo aura, aura-editor, aura-baseview, aura-build, aura-clap, aura-lv2, aura-vst3, aura-dsp
-verify: Slint+baseview only; formats CLAP/VST3/LV2; derive(Params) with id=N; PluginLogic trait; cargo aura build|install|new|doctor
+verify: Slint+baseview only; formats CLAP/VST3/LV2; derive(Params) with id=N; PluginLogic trait; cargo aura build|install|watch|mesh|new|doctor
 ---
 
 # AURA Framework
@@ -72,6 +72,8 @@ cargo aura build --clap -plug <name>   # build CLAP bundle
 cargo aura install --clap -plug <name> # build + copy .clap to host dir
 cargo aura doctor              # check toolchain + config
 cargo aura preview             # preview .slint UI without compiling plugin
+cargo aura watch --clap        # rebuild + install on src/ui save (host must reload if locked)
+cargo aura mesh                # agal .  (orientation graph; optional)
 
 # Multi-plugin
 cargo aura build --clap -plug aether meridian equilibrium

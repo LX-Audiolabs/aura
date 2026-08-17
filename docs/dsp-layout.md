@@ -5,7 +5,7 @@
 | AURA | JUCE analogue | Role |
 |------|---------------|------|
 | **`aura-dsp`** | `juce_dsp` (+ synthesis bits of `juce_audio_basics`) | Osc, filters, FX, dynamics, analysis maths, voice engines |
-| **`aura-midi`** | `juce_audio_basics/midi` | `MidiMessage`, `MidiBuffer`, note helpers |
+| **`aura-midi`** | `juce_audio_basics/midi` | `MidiMessage`, `MidiBuffer`, note helpers, `Ump` (MIDI 2 stubs) |
 | **`aura-core`** | `juce_audio_processors` (thin) | `PluginLogic`, process, buffer, transport, editor trait |
 | **`aura-params`** | param/automation pieces | Params + host MIDI-learn *hints* (`MidiSource`) |
 | Format crates | format wrappers | CLAP / VST3 / LV2 |
@@ -14,7 +14,7 @@
 crates/
   aura-core/     process API, host fence
   aura-params/   parameters
-  aura-midi/     MidiMessage, MidiBuffer          ← notes / CC stream
+  aura-midi/     MidiMessage, MidiBuffer, Ump     ← notes / CC / MIDI 2 stubs
   aura-dsp/      all signal math + synth + fx     ← sample path
   aura-clap|vst3|lv2/
   aura-editor/ + aura-baseview/ + aura-build/     UI stack

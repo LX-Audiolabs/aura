@@ -39,20 +39,28 @@ After `agal.agent.md` (L2). Escalate L0: `crates/aura-midi` in json / `agal --pl
 
 ## Intent
 
-_Why this crate/plugin exists. Edit freely._
+JUCE `MidiMessage` / `MidiBuffer` analogue. Format wrappers translate host
+events into these types; `PluginLogic::process` reads `ProcessContext::midi`.
+
+MIDI 2 lives here as [`Ump`](../../crates/aura-midi/src/ump.rs) (Universal MIDI
+Packet). Process still sees 7-bit `MidiMessage`. Hosts that send
+`CLAP_EVENT_MIDI2` are down-converted in `aura-clap`.
 
 ## Open
 
-- [ ] 
+- [ ] SysEx8 / Flex Data / UMP stream packets — only if a plugin needs them
+- [ ] Optional `ProcessContext` hi-res / note-id path (product-driven)
 
 ## Decisions
 
-_Architecture choices worth remembering._
+- Keep `MidiMessage` 3-byte channel voice. Do not grow it into UMP.
+- `Ump::to_midi1` on MIDI 2 note-on vel 0 yields vel 1 so MIDI 1 does not treat it as note-off.
+- Voice extras (`pitch_bend`, `brightness`) stay in `aura-dsp::voice`, not here.
 
 ## Atoms (human)
 
-_Graph atoms live **above** in AUTO. Add durable decisions/lessons here:_
-
 ```text
-[ATOM] type=decision|lesson|constraint | detail=…
+[ATOM] type=decision | detail=MidiMessage stays MIDI 1; Ump is the MIDI 2 stub
+[ATOM] type=constraint | detail=no_std-hostile alloc only in MidiBuffer growth
+[ATOM] type=lesson | detail=CLAP_EVENT_MIDI2 data is [u32;4] — Ump::from_words
 ```

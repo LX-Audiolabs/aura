@@ -10,7 +10,7 @@
 //!
 //! Covers: factory, audio-ports (+ config, sidechain), note-ports, params
 //! (sample-accurate + mono mod), state, GUI, remote-controls, latency, tail,
-//! render, preset-load (+ discovery).
+//! render, preset-load (+ discovery), MIDI 2 ingest (`CLAP_EVENT_MIDI2` → MidiMessage).
 
 #![allow(clippy::missing_safety_doc)]
 // ponytail: CLAP FFI glue — raw-pointer casts and C-int size conversions are
@@ -39,17 +39,18 @@ use aura_core::{
     ProcessStatus, TimedParamEvent, apply_at_time, apply_non_chunked, host_callback,
     host_callback_with, layout_at, split_points,
 };
-use aura_core::{MidiBuffer, MidiMessage, MidiStatus};
+use aura_core::{MidiBuffer, MidiMessage, MidiStatus, Ump};
 use aura_params::{ParamFlags, ParamInfo, ParamRange, Params};
 use clap_sys::events::{
-    CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_IS_LIVE, CLAP_EVENT_MIDI, CLAP_EVENT_NOTE_CHOKE,
-    CLAP_EVENT_NOTE_OFF, CLAP_EVENT_NOTE_ON, CLAP_EVENT_PARAM_GESTURE_BEGIN,
+    CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_IS_LIVE, CLAP_EVENT_MIDI, CLAP_EVENT_MIDI2,
+    CLAP_EVENT_NOTE_CHOKE, CLAP_EVENT_NOTE_OFF, CLAP_EVENT_NOTE_ON, CLAP_EVENT_PARAM_GESTURE_BEGIN,
     CLAP_EVENT_PARAM_GESTURE_END, CLAP_EVENT_PARAM_MOD, CLAP_EVENT_PARAM_VALUE,
     CLAP_TRANSPORT_HAS_BEATS_TIMELINE, CLAP_TRANSPORT_HAS_SECONDS_TIMELINE,
     CLAP_TRANSPORT_HAS_TEMPO, CLAP_TRANSPORT_HAS_TIME_SIGNATURE, CLAP_TRANSPORT_IS_LOOP_ACTIVE,
     CLAP_TRANSPORT_IS_PLAYING, CLAP_TRANSPORT_IS_RECORDING, clap_event_header, clap_event_midi,
-    clap_event_note, clap_event_param_gesture, clap_event_param_mod, clap_event_param_value,
-    clap_event_transport, clap_event_type, clap_input_events, clap_output_events,
+    clap_event_midi2, clap_event_note, clap_event_param_gesture, clap_event_param_mod,
+    clap_event_param_value, clap_event_transport, clap_event_type, clap_input_events,
+    clap_output_events,
 };
 use clap_sys::ext::audio_ports::{
     CLAP_AUDIO_PORT_IS_MAIN, CLAP_EXT_AUDIO_PORTS, CLAP_PORT_MONO, CLAP_PORT_STEREO,
@@ -747,6 +748,12 @@ unsafe fn collect_input_events(
                     MidiMessage::raw(m.data[0], m.data[1], m.data[2]),
                 );
             }
+            CLAP_EVENT_MIDI2 => {
+                let m = unsafe { &*(hdr as *const clap_event_midi2) };
+                if let Some(msg) = Ump::from_words(m.data).to_midi1() {
+                    midi.push(header.time, msg);
+                }
+            }
             _ => {}
         }
     }
@@ -1087,7 +1094,10 @@ unsafe extern "C" fn note_ports_get<L: PluginLogic>(
     let out = unsafe { &mut *info };
     out.id = u32::from(!is_input);
     out.supported_dialects = dialects;
-    out.preferred_dialect = CLAP_NOTE_DIALECT_MIDI;
+    out.preferred_dialect = match dialect {
+        aura_core::info::MidiDialect::Midi2 => CLAP_NOTE_DIALECT_MIDI2,
+        aura_core::info::MidiDialect::Midi1 => CLAP_NOTE_DIALECT_MIDI,
+    };
     write_name(&mut out.name, if is_input { "Note In" } else { "Note Out" });
     true
 }

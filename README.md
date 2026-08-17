@@ -95,8 +95,14 @@ cd my-plugin
 # 4) Build & install into the host search path
 cargo aura install --clap --release
 
+# 4b) Or stay in the loop: rebuild + reinstall on save
+cargo aura watch --clap
+
 # 5) Optional: clap-validator on the installed .clap
 clap-validator validate path/to/my-plugin.clap
+
+# 6) Optional: regenerate the agal orientation mesh
+cargo aura mesh
 ```
 
 ### In-repo smoke examples

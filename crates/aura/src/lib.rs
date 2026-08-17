@@ -43,7 +43,7 @@ pub use aura_core::{
     AudioBuffer, AudioConfig, BusLayout, ChannelConfig, Editor, EditorBridge, FactoryPreset,
     FactoryPresetState, IntoEditor, MidiBuffer, MidiDialect, MidiEvent, MidiMessage, MidiStatus,
     ParamEvent, ParamEventQueue, PluginCategory, PluginContext, PluginInfo, PluginLogic,
-    ProcessContext, ProcessMode, ProcessStatus, RawWindowHandle, Transport,
+    ProcessContext, ProcessMode, ProcessStatus, RawWindowHandle, Transport, Ump,
 };
 
 // --- params surface ---

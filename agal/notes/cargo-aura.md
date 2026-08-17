@@ -32,20 +32,25 @@ After `agal.agent.md` (L2). Escalate L0: `tools/cargo-aura` in json / `agal --pl
 
 ## Intent
 
-_Why this crate/plugin exists. Edit freely._
+Author CLI: scaffold, build, install, doctor. GUI (`aura-gui`) is sugar over
+the same paths. Orientation mesh is `cargo aura mesh` → `agal` (optional).
 
 ## Open
 
-- [ ] 
+- [ ] In-host binary swap (Windows file lock) — host must unload today
+- [ ] `aura-gui` identity pass (Stage 6 UI, later)
 
 ## Decisions
 
-_Architecture choices worth remembering._
+- `watch` polls mtimes with std only (no `notify` dep). `preview` already uses `notify` for Slint.
+- Default watch format is `--clap`. `--no-install` builds without copying.
+- `mesh` is not a doctor gate. Builds work without agal.
+- Install copy retries when the host still maps the `.clap`.
 
 ## Atoms (human)
 
-_Graph atoms live **above** in AUTO. Add durable decisions/lessons here:_
-
 ```text
-[ATOM] type=decision|lesson|constraint | detail=…
+[ATOM] type=decision | detail=watch = rebuild+install loop; preview = Slint interpreter
+[ATOM] type=constraint | detail=cargo-aura stays dep-free
+[ATOM] type=decision | detail=mesh wraps agal; agal_optional
 ```

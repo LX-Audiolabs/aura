@@ -9,12 +9,15 @@
 //!   cargo aura build [--clap|--vst3|--lv2]
 //!   cargo aura install [--clap|--vst3|--lv2]
 //!   cargo aura preview [path] [--no-watch]
+//!   cargo aura watch [--clap|--vst3|--lv2] [--release] [-plug …] [--no-install]
+//!   cargo aura mesh [agal-args…]
 //!   cargo aura doctor
 
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
+use std::time::{Duration, UNIX_EPOCH};
 
 mod scaffold;
 
@@ -36,6 +39,8 @@ fn main() -> ExitCode {
         "build" => cmd_build(&args[1..]),
         "install" => cmd_install(&args[1..]),
         "preview" => cmd_preview(&args[1..]),
+        "watch" => cmd_watch(&args[1..]),
+        "mesh" => cmd_mesh(&args[1..]),
         "gui" => cmd_gui(),
         "doctor" => cmd_doctor(),
         "help" | "--help" | "-h" => {
@@ -80,6 +85,11 @@ Commands:
                           (-plug installs each selected plugin in turn)
   preview [path] [--component N] [--no-watch]
                           hot-reload the plugin .slint UI (default ui/main.slint)
+  watch [--clap|--vst3|--lv2] [--release] [-plug <crate>…] [--no-install]
+                          rebuild (+ install) when src/ui/Cargo.toml change
+                          default format: --clap. Host must reload the binary
+                          if it already has the plugin loaded (Windows lock)
+  mesh [agal-args…]       run `agal` (default: `agal .`) — orientation mesh
   gui                     Open the visual project console (aura-gui)
   doctor                  Check toolchain / AURA path / clap-validator
   help                    This message
@@ -587,6 +597,189 @@ fn cmd_preview(args: &[String]) -> ExitCode {
     }
 }
 
+/// `cargo aura watch` — rebuild (+ install) when plugin sources change.
+/// Slint-only preview stays `cargo aura preview`. This loop is for DSP/Rust.
+fn cmd_watch(args: &[String]) -> ExitCode {
+    let mut no_install = false;
+    let mut filtered = Vec::new();
+    for a in args {
+        if a == "--no-install" {
+            no_install = true;
+        } else {
+            filtered.push(a.clone());
+        }
+    }
+
+    let mut parsed = match parse_build_args(&filtered) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("error: {e}");
+            eprintln!(
+                "usage: cargo aura watch [--clap|--vst3|--lv2] [--release] [-plug <crate>…] [--no-install]"
+            );
+            return ExitCode::FAILURE;
+        }
+    };
+    if parsed.formats.is_empty() {
+        parsed.formats.push("clap".into());
+    }
+
+    let cwd = match env::current_dir() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("cwd: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    eprintln!(
+        "watching {} — Ctrl+C to stop ({})",
+        cwd.display(),
+        if no_install {
+            "build only"
+        } else {
+            "build + install"
+        }
+    );
+    eprintln!(
+        "note: if a host already loaded the plugin, unload it so the copy can replace the file."
+    );
+
+    let mut stamp = watch_stamp(&cwd);
+    let mut first = true;
+    loop {
+        if first || watch_stamp(&cwd) != stamp {
+            if !first {
+                // debounce burst saves (rust-analyzer + editor)
+                std::thread::sleep(Duration::from_millis(250));
+            }
+            first = false;
+            let pass = rebuild_args(&parsed);
+            let code = if no_install {
+                cmd_build(&pass)
+            } else {
+                cmd_install(&pass)
+            };
+            if code == ExitCode::SUCCESS {
+                eprintln!("watch: ready");
+            } else {
+                eprintln!("watch: build failed — still watching");
+            }
+            stamp = watch_stamp(&cwd);
+        }
+        std::thread::sleep(Duration::from_millis(400));
+    }
+}
+
+fn rebuild_args(p: &BuildArgs) -> Vec<String> {
+    let mut a = Vec::new();
+    for f in &p.formats {
+        a.push(format!("--{f}"));
+    }
+    if p.release {
+        a.push("--release".into());
+    }
+    if !p.plugins.is_empty() {
+        a.push("-plug".into());
+        a.extend(p.plugins.iter().cloned());
+    }
+    a.extend(p.rest.iter().cloned());
+    a
+}
+
+/// FNV-1a-ish mix of watched file (path, size, mtime).
+fn watch_stamp(root: &Path) -> u64 {
+    let mut acc = 2_166_136_261u64;
+    visit_watch(root, &mut acc);
+    acc
+}
+
+fn visit_watch(dir: &Path, acc: &mut u64) {
+    let Ok(rd) = fs::read_dir(dir) else {
+        return;
+    };
+    for ent in rd.flatten() {
+        let name = ent.file_name();
+        let name = name.to_string_lossy();
+        if skip_watch_dir(&name) {
+            continue;
+        }
+        let path = ent.path();
+        let Ok(meta) = ent.metadata() else {
+            continue;
+        };
+        if meta.is_dir() {
+            visit_watch(&path, acc);
+            continue;
+        }
+        if !watch_file(&path) {
+            continue;
+        }
+        let ms = meta
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+            .map_or(0, |d| d.as_secs().saturating_mul(1000));
+        mix(acc, path.to_string_lossy().as_bytes());
+        mix(acc, &meta.len().to_le_bytes());
+        mix(acc, &ms.to_le_bytes());
+    }
+}
+
+fn skip_watch_dir(name: &str) -> bool {
+    matches!(
+        name,
+        "target" | ".git" | "agal" | "node_modules" | ".idea" | ".vscode"
+    ) || name.starts_with("target-")
+}
+
+fn watch_file(path: &Path) -> bool {
+    let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+        return false;
+    };
+    if matches!(
+        name,
+        "Cargo.toml" | "Cargo.lock" | "aura.toml" | "build.rs" | "lib.rs" | "main.rs"
+    ) {
+        return true;
+    }
+    matches!(
+        path.extension().and_then(|e| e.to_str()),
+        Some("rs" | "slint" | "toml" | "ttl" | "ttf")
+    )
+}
+
+fn mix(acc: &mut u64, bytes: &[u8]) {
+    for &b in bytes {
+        *acc ^= u64::from(b);
+        *acc = acc.wrapping_mul(16_777_619);
+    }
+}
+
+/// `cargo aura mesh [args…]` — thin wrapper over `agal`. Default: `agal .`.
+fn cmd_mesh(args: &[String]) -> ExitCode {
+    let Some(agal) = which("agal") else {
+        eprintln!("agal not on PATH — orientation mesh skipped");
+        eprintln!("install: https://github.com/LX-Audiolabs/agal");
+        eprintln!("builds do not need agal (agal_optional)");
+        return ExitCode::FAILURE;
+    };
+    let mut cmd = Command::new(agal);
+    if args.is_empty() {
+        cmd.arg(".");
+    } else {
+        cmd.args(args);
+    }
+    match cmd.status() {
+        Ok(s) if s.success() => ExitCode::SUCCESS,
+        Ok(s) => ExitCode::from(u8::try_from(s.code().unwrap_or(1)).unwrap_or(1)),
+        Err(e) => {
+            eprintln!("failed to run agal: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // build / install
 // ---------------------------------------------------------------------------
@@ -806,11 +999,31 @@ fn install_clap(pkg: &str, target_dir: &Path, profile: &str) -> Result<(), Strin
         if dest.is_dir() {
             remove_path_all(&dest)?;
         }
-        fs::copy(src, &dest)
-            .map_err(|e| format!("copy {} → {}: {e}", src.display(), dest.display()))?;
+        copy_replace(src, &dest)?;
         println!("installed {}", dest.display());
         Ok(())
     }
+}
+
+/// Copy `src` over `dest`, retrying if the host still has the binary mapped
+/// (common on Windows while a DAW holds the .clap).
+fn copy_replace(src: &Path, dest: &Path) -> Result<(), String> {
+    const TRIES: u32 = 8;
+    let mut last = String::new();
+    for i in 0..TRIES {
+        match fs::copy(src, dest) {
+            Ok(_) => return Ok(()),
+            Err(e) => {
+                last = format!("copy {} → {}: {e}", src.display(), dest.display());
+                if i + 1 < TRIES {
+                    std::thread::sleep(std::time::Duration::from_millis(250));
+                }
+            }
+        }
+    }
+    Err(format!(
+        "{last} — host probably still has the plugin loaded; unload or retry"
+    ))
 }
 
 /// Minimal loadable-bundle Info.plist for a macOS `.clap`.
@@ -1832,5 +2045,31 @@ category = "analyzer"
         let p = clap_macos_info_plist("a&b<c>");
         assert!(p.contains("a&amp;b&lt;c&gt;"), "{p}");
         assert!(!p.contains("a&b<c>"), "{p}");
+    }
+
+    #[test]
+    fn watch_file_picks_rust_and_slint() {
+        assert!(watch_file(Path::new("src/lib.rs")));
+        assert!(watch_file(Path::new("ui/main.slint")));
+        assert!(watch_file(Path::new("Cargo.toml")));
+        assert!(!watch_file(Path::new("README.md")));
+        assert!(skip_watch_dir("target"));
+        assert!(skip_watch_dir("target-check"));
+        assert!(!skip_watch_dir("src"));
+    }
+
+    #[test]
+    fn rebuild_args_roundtrip() {
+        let p = parse_build_args(&[
+            "--clap".into(),
+            "--release".into(),
+            "-plug".into(),
+            "smoke-gain".into(),
+        ])
+        .unwrap();
+        assert_eq!(
+            rebuild_args(&p),
+            vec!["--clap", "--release", "-plug", "smoke-gain"]
+        );
     }
 }

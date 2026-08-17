@@ -23,7 +23,8 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
   - [ ] optional Bitwig host proofs (pages, latency, automation, mod, offline)
 - [x] LV2 UI extension — done 2026-08-10 (host smoke pending suitable LV2 host)
 - [x] F1 split aura-derive — done 2026-08-10
-- [ ] Stage 6 optional: richer agal mesh / hot-reload / MIDI 2.0 stubs
+- [x] Stage 6 author loop (2026-08-17) — `cargo aura watch` · UMP stubs + CLAP MIDI2 ingest · `cargo aura mesh`
+- [ ] Stage 6 UI — `aura-gui` / `@aura` identity (after author loop)
 - [ ] crates.io publish when ready (`publish = false` today)
 
 ## Decisions
@@ -38,6 +39,9 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 [ATOM] type=decision | detail=G15 AudioTap landed 2026-08-10 — lock-free SPSC sample ring in aura-params
 [ATOM] type=decision | detail=Basis fertig 2026-08-08 — DoD green; first-class CLAP path 2026-08-11
 [ATOM] type=decision | detail=CLAP outstanding = poly-mod / note-expr / multi-out / G5 — see aura-clap README; preset-load landed
+[ATOM] type=decision | detail=Process MIDI stays 7-bit MidiMessage; Ump is additive; CLAP_EVENT_MIDI2 down-converts
+[ATOM] type=decision | detail=cargo aura watch = rebuild+install poll (no notify dep); preview stays Slint-only
+[ATOM] type=decision | detail=cargo aura mesh wraps agal; never a build gate (agal_optional)
 [ATOM] type=decision | detail=Host panic fence in aura-core + CLAP/VST3/LV2 process+state
 [ATOM] type=decision | detail=aura-test crate: state round-trip + process smoke
 [ATOM] type=constraint | detail=PeakMeter/FFT/Spectrum widgets stay product design system; @aura basics incl XYPad only
