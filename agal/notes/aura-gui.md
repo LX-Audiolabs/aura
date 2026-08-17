@@ -8,8 +8,8 @@
 | kind | `member` |
 | path | `tools/aura-gui` |
 | description | Visual AURA project console — thin Slint shell over `cargo aura` CLI |
-| frameworks | slint |
-| generated | `2026-08-10T16:45:08Z` |
+| frameworks | aura, slint |
+| generated | `2026-08-17T17:38:48Z` |
 
 ## Graph atoms (auto)
 
@@ -17,9 +17,13 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 
 ```text
 [ATOM] type=fact | detail=kind=member id=tools/aura-gui
-[ATOM] type=fact | detail=frameworks=slint
+[ATOM] type=fact | detail=frameworks=aura+slint
 [ATOM] type=fact | detail=roles=build+entry+manifest+slint
+[ATOM] type=fact | detail=depends_on=aura-build
 ```
+
+## deps (workspace)
+- `aura-build`
 
 ## structure
 - roles: build, entry, manifest, slint

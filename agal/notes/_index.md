@@ -19,6 +19,7 @@ Auto-generated. Per-node notes for focus work.
 - [aura-editor](aura-editor.md) — `crates/aura-editor`
 - [aura-example-open-parented](aura-example-open-parented.md) — `crates/aura-baseview/examples/open_parented`
 - [aura-example-render-femtovg](aura-example-render-femtovg.md) — `crates/aura-baseview/examples/render_femtovg`
+- [aura-hot](aura-hot.md) — `crates/aura-hot`
 - [aura-lv2](aura-lv2.md) — `crates/aura-lv2`
 - [aura-midi](aura-midi.md) — `crates/aura-midi`
 - [aura-params](aura-params.md) — `crates/aura-params`
@@ -32,4 +33,6 @@ Auto-generated. Per-node notes for focus work.
 - [aura-preview](aura-preview.md) — `tools/aura-preview`
 - [cargo-aura](cargo-aura.md) — `tools/cargo-aura`
 - [smoke-gain](smoke-gain.md) — `examples/smoke-gain`
+- [smoke-midi-fx](smoke-midi-fx.md) — `examples/smoke-midi-fx`
+- [smoke-sidechain](smoke-sidechain.md) — `examples/smoke-sidechain`
 - [smoke-synth](smoke-synth.md) — `examples/smoke-synth`

@@ -9,7 +9,7 @@
 | path | `crates/aura-clap` |
 | description | CLAP format wrapper for AURA — free-audio/clap via clap-sys (minimal v1) |
 | frameworks | aura, clap |
-| generated | `2026-08-10T16:45:08Z` |
+| generated | `2026-08-17T17:38:48Z` |
 
 ## Graph atoms (auto)
 
@@ -18,7 +18,7 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 ```text
 [ATOM] type=fact | detail=kind=crate id=crates/aura-clap
 [ATOM] type=fact | detail=frameworks=aura+clap
-[ATOM] type=fact | detail=roles=entry+manifest
+[ATOM] type=fact | detail=roles=entry+manifest+state
 [ATOM] type=fact | detail=depends_on=aura-core
 [ATOM] type=fact | detail=depends_on=aura-params
 [ATOM] type=fact | detail=used_by=aura via depends_on
@@ -32,8 +32,15 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 - `aura` --depends_on--> `aura-clap`
 
 ## structure
-- public_api symbols: 3 (see json)
-- roles: entry, manifest
+- public_api symbols: 6 (see json)
+- roles: entry, manifest, state
+
+## api surface
+- `fn entry_deinit()` · `src/lib.rs`
+- `fn entry_init(_plugin_path: *const c_char) -> bool` · `src/lib.rs`
+- `fn get_factory<L>(factory_id: *const c_char) -> *const c_void` · `src/lib.rs`
+- `impl EditorBridge for ClapBridge` · `src/lib.rs`
+- … +2 more public symbols
 
 ## agent focus
 **L1:** scan **Graph atoms** above first, then human body below HUMAN.  

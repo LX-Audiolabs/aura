@@ -9,7 +9,7 @@
 | path | `crates/aura` |
 | description | AURA — Audio Unified Rust Architecture (umbrella crate) |
 | frameworks | aura, clap, lv2, vst3 |
-| generated | `2026-08-10T16:45:08Z` |
+| generated | `2026-08-17T17:38:48Z` |
 
 ## Graph atoms (auto)
 
@@ -23,7 +23,8 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 [ATOM] type=fact | detail=depends_on=aura-core
 [ATOM] type=fact | detail=depends_on=aura-derive
 [ATOM] type=fact | detail=used_by=examples/smoke-gain via depends_on
-[ATOM] type=fact | detail=used_by=examples/smoke-synth via depends_on
+[ATOM] type=fact | detail=used_by=examples/smoke-midi-fx via depends_on
+[ATOM] type=fact | detail=used_by=examples/smoke-sidechain via depends_on
 ```
 
 ## deps (workspace)
@@ -38,14 +39,22 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 
 ## dependents (inbound)
 - `examples/smoke-gain` --depends_on--> `aura`
+- `examples/smoke-midi-fx` --depends_on--> `aura`
+- `examples/smoke-sidechain` --depends_on--> `aura`
 - `examples/smoke-synth` --depends_on--> `aura`
+- `aura-lv2` --dev_depends_on--> `aura`
 
 ## structure
 - params: CollidingParams (1 fields)
+- params: GainParams (4 fields)
 - params: SubParams (1 fields)
 - params: TapParams (1 fields)
 - params: TestParams (5 fields)
+- public_api symbols: 1 (see json)
 - roles: entry, manifest
+
+## api surface
+- `pub mod prelude` · `src/lib.rs`
 
 ## agent focus
 **L1:** scan **Graph atoms** above first, then human body below HUMAN.  

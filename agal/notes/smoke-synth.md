@@ -7,9 +7,9 @@
 |---|---|
 | kind | `member` |
 | path | `examples/smoke-synth` |
-| description | AURA in-tree CLAP smoke — monophonic synth (Oscillator + Adsr via context.midi) |
+| description | AURA in-tree CLAP smoke — monophonic synth (notes + MIDI fallback) |
 | frameworks | aura |
-| generated | `2026-08-10T16:45:08Z` |
+| generated | `2026-08-17T17:38:48Z` |
 
 ## Graph atoms (auto)
 
@@ -31,6 +31,12 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 - params: SynthParams (1 fields)
 - process: PluginLogic::process @ src/lib.rs
 - roles: entry, manifest
+
+## api surface
+- `struct DspState { … }` · `src/lib.rs`
+- `struct SmokeSynth` · `src/lib.rs`
+- `struct SynthParams { gain: FloatParam }` · `src/lib.rs`
+- `impl PluginLogic for SmokeSynth` · `src/lib.rs`
 
 ## agent focus
 **L1:** scan **Graph atoms** above first, then human body below HUMAN.  

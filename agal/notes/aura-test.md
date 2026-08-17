@@ -9,7 +9,7 @@
 | path | `crates/aura-test` |
 | description | Test helpers for AURA plugins (state round-trip, process smoke) |
 | frameworks | aura |
-| generated | `2026-08-10T16:45:08Z` |
+| generated | `2026-08-17T17:38:48Z` |
 
 ## Graph atoms (auto)
 
@@ -35,8 +35,15 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 - process: PluginLogic::process @ src/lib.rs
 - editor: yes
 - process methods (DSP): 1
-- public_api symbols: 12 (see json)
+- public_api symbols: 16 (see json)
 - roles: entry, manifest
+
+## api surface
+- `fn assert_corrupt_state_no_crash<L>()` · `src/lib.rs`
+- `fn assert_empty_state_no_crash<L>()` · `src/lib.rs`
+- `fn assert_no_duplicate_param_ids<L>()` · `src/lib.rs`
+- `fn assert_no_nans(channels: &[Vec<f32>])` · `src/lib.rs`
+- … +12 more public symbols
 
 ## findings
 - [info] **crate_no_dependents**: aura-test has no inbound workspace edges — unused or only path-included? · `crates/aura-test` · fix: wire `aura-test` as a path dep from a plugin/crate, or remove from workspace

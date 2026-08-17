@@ -1,14 +1,14 @@
 <!-- AGAL:AUTO-START -->
-# smoke-gain
+# smoke-sidechain
 
 > Auto-generated from workspace scan. Do not edit between AUTO markers.
 
 | | |
 |---|---|
 | kind | `member` |
-| path | `examples/smoke-gain` |
-| description | AURA in-tree CLAP smoke — stereo gain |
-| frameworks | aura, aura-editor, slint |
+| path | `examples/smoke-sidechain` |
+| description | AURA in-tree CLAP smoke — stereo FX with mono sidechain |
+| frameworks | aura |
 | generated | `2026-08-17T17:38:48Z` |
 
 ## Graph atoms (auto)
@@ -16,37 +16,31 @@
 _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 
 ```text
-[ATOM] type=fact | detail=kind=member id=examples/smoke-gain
-[ATOM] type=fact | detail=frameworks=aura+aura-editor+slint
-[ATOM] type=fact | detail=roles=build+entry+manifest+slint
+[ATOM] type=fact | detail=kind=member id=examples/smoke-sidechain
+[ATOM] type=fact | detail=frameworks=aura
+[ATOM] type=fact | detail=roles=entry+manifest
 [ATOM] type=fact | detail=has_process=true
-[ATOM] type=fact | detail=has_editor=true
 [ATOM] type=fact | detail=depends_on=aura
-[ATOM] type=fact | detail=depends_on=aura-build
-[ATOM] type=fact | detail=depends_on=aura-editor
 ```
 
 ## deps (workspace)
 - `aura`
-- `aura-build`
-- `aura-editor`
 
 ## structure
-- logic: SmokeGain
-- params: GainParams (1 fields)
+- logic: SmokeSidechain
+- params: SidechainParams (1 fields)
 - process: PluginLogic::process @ src/lib.rs
-- editor: yes
-- roles: build, entry, manifest, slint
+- roles: entry, manifest
 
 ## api surface
 - `struct DspState` · `src/lib.rs`
-- `struct GainParams { gain: FloatParam }` · `src/lib.rs`
-- `struct SmokeGain` · `src/lib.rs`
-- `impl PluginLogic for SmokeGain` · `src/lib.rs`
+- `struct SidechainParams { amount: FloatParam }` · `src/lib.rs`
+- `struct SmokeSidechain` · `src/lib.rs`
+- `impl PluginLogic for SmokeSidechain` · `src/lib.rs`
 
 ## agent focus
 **L1:** scan **Graph atoms** above first, then human body below HUMAN.  
-After `agal.agent.md` (L2). Escalate L0: `examples/smoke-gain` in json / `agal --plugin smoke-gain .`
+After `agal.agent.md` (L2). Escalate L0: `examples/smoke-sidechain` in json / `agal --plugin smoke-sidechain .`
 
 <!-- AGAL:AUTO-END -->
 

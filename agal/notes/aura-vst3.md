@@ -9,7 +9,7 @@
 | path | `crates/aura-vst3` |
 | description | AURA VST3 format wrapper (thin, over PluginLogic) |
 | frameworks | aura, vst3 |
-| generated | `2026-08-10T16:45:08Z` |
+| generated | `2026-08-17T17:38:48Z` |
 
 ## Graph atoms (auto)
 
@@ -34,8 +34,15 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 
 ## structure
 - process methods (DSP): 1
-- public_api symbols: 2 (see json)
+- public_api symbols: 17 (see json)
 - roles: entry, manifest, source
+
+## api surface
+- `fn plugin_factory<L>() -> *mut IPluginFactory` · `src/lib.rs`
+- `fn tuid_bytes(id: &str) -> [u8]` · `src/lib.rs`
+- `impl Class for PlugView` · `src/gui.rs`
+- `impl EditorBridge for Vst3Bridge` · `src/gui.rs`
+- … +13 more public symbols
 
 ## agent focus
 **L1:** scan **Graph atoms** above first, then human body below HUMAN.  

@@ -9,7 +9,7 @@
 | path | `crates/aura-baseview/examples/open_parented` |
 | version | 0.1.0 |
 | frameworks | aura-baseview, baseview, slint |
-| generated | `2026-08-10T16:45:08Z` |
+| generated | `2026-08-17T17:38:48Z` |
 
 ## Graph atoms (auto)
 
@@ -26,7 +26,11 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 - `aura-baseview`
 
 ## structure
+- public_api symbols: 1 (see json)
 - roles: build, entry, manifest, slint, source
+
+## api surface
+- `impl WindowHandler for ParentWindowHandler` · `src/main.rs`
 
 ## agent focus
 **L1:** scan **Graph atoms** above first, then human body below HUMAN.  

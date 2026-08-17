@@ -8,7 +8,7 @@
 | kind | `crate` |
 | path | `crates/aura-params` |
 | description | AURA parameter system (ranges, smoothers, atomic params) |
-| generated | `2026-08-10T16:45:08Z` |
+| generated | `2026-08-17T17:38:48Z` |
 
 ## Graph atoms (auto)
 
@@ -33,8 +33,15 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 - `aura-vst3` --depends_on--> `aura-params`
 
 ## structure
-- public_api symbols: 24 (see json)
+- public_api symbols: 41 (see json)
 - roles: entry, manifest, source
+
+## api surface
+- `trait Params` · `src/lib.rs`
+- `trait Sealed` · `src/lib.rs`
+- `trait Float` · `src/sample.rs`
+- `trait Sample` · `src/sample.rs`
+- … +38 more public symbols
 
 ## agent focus
 **L1:** scan **Graph atoms** above first, then human body below HUMAN.  

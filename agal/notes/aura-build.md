@@ -9,7 +9,7 @@
 | path | `crates/aura-build` |
 | description | AURA build helper: @aura Slint widgets + bundled fonts for slint-build 1.17.1 |
 | frameworks | slint |
-| generated | `2026-08-10T16:45:08Z` |
+| generated | `2026-08-17T17:38:48Z` |
 
 ## Graph atoms (auto)
 
@@ -20,16 +20,25 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 [ATOM] type=fact | detail=frameworks=slint
 [ATOM] type=fact | detail=roles=entry+manifest+slint
 [ATOM] type=fact | detail=used_by=examples/smoke-gain via build_depends_on
+[ATOM] type=fact | detail=used_by=tools/aura-gui via build_depends_on
 [ATOM] type=fact | detail=used_by=tools/aura-preview via depends_on
 ```
 
 ## dependents (inbound)
 - `examples/smoke-gain` --build_depends_on--> `aura-build`
+- `tools/aura-gui` --build_depends_on--> `aura-build`
 - `tools/aura-preview` --depends_on--> `aura-build`
 
 ## structure
-- public_api symbols: 4 (see json)
+- public_api symbols: 7 (see json)
 - roles: entry, manifest, slint
+
+## api surface
+- `struct AssetPaths { … }` · `src/lib.rs`
+- `enum CompileError` · `src/lib.rs`
+- `fn compile(slint_entry: impl AsRef<Path>) -> Result<(),CompileError>` · `src/lib.rs`
+- `fn materialize_assets(dir: &Path) -> Result<AssetPaths,CompileError>` · `src/lib.rs`
+- … +3 more public symbols
 
 ## agent focus
 **L1:** scan **Graph atoms** above first, then human body below HUMAN.  
