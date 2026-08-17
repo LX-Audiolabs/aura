@@ -51,18 +51,27 @@ pub struct SynthParams {
 pub struct SmokeSynth;
 
 pub struct DspState {
-    osc: Oscillator,
+    osc_sine: Oscillator,
+    osc_saw: Oscillator,
     env: Adsr,
     note_id: i32,
     key: i16,
     tuning_semis: f32,
+    /// CLAP note-on velocity 0..1.
+    velocity: f32,
+    /// CLAP volume expression: 0..4, 1 = 0 dB (Bitwig "Gain").
+    volume: f32,
+    /// CLAP brightness 0..1 (Bitwig "Timbre"): sine → saw.
+    timbre: f32,
     pressure: f32,
     gain_mod: f64,
+    /// Per-note absolute Gain (`PARAM_VALUE`); `None` = use knob + mod.
+    gain_plain: Option<f64>,
 }
 
-fn make_osc(freq: f32, sample_rate: f32) -> Oscillator {
-    Oscillator::new(Waveform::Sine, freq, sample_rate)
-        .unwrap_or_else(|_| Oscillator::new(Waveform::Sine, 440.0, 44_100.0).unwrap())
+fn make_osc(wave: Waveform, freq: f32, sample_rate: f32) -> Oscillator {
+    Oscillator::new(wave, freq, sample_rate)
+        .unwrap_or_else(|_| Oscillator::new(wave, 440.0, 44_100.0).unwrap())
 }
 
 fn make_env(sample_rate: f32) -> Adsr {
@@ -107,21 +116,27 @@ impl PluginLogic for SmokeSynth {
         #[allow(clippy::cast_possible_truncation)]
         let sr = sample_rate as f32;
         DspState {
-            osc: make_osc(440.0, sr),
+            osc_sine: make_osc(Waveform::Sine, 440.0, sr),
+            osc_saw: make_osc(Waveform::Saw, 440.0, sr),
             env: make_env(sr),
             note_id: -1,
             key: 69,
             tuning_semis: 0.0,
+            velocity: 1.0,
+            volume: 1.0,
+            timbre: 0.0,
             pressure: 1.0,
             gain_mod: 0.0,
+            gain_plain: None,
         }
     }
 
     fn reset(state: &mut Self::DspState, _params: &Self::Params, config: &AudioConfig) {
         #[allow(clippy::cast_possible_truncation)]
         let sr = config.sample_rate as f32;
-        // Rebuild both at the (possibly new) sample rate; keep current pitch.
-        state.osc = make_osc(state.osc.frequency(), sr);
+        let hz = state.osc_sine.frequency();
+        state.osc_sine = make_osc(Waveform::Sine, hz, sr);
+        state.osc_saw = make_osc(Waveform::Saw, hz, sr);
         state.env = make_env(sr);
     }
 
@@ -139,9 +154,8 @@ impl PluginLogic for SmokeSynth {
                     if let Some(note) = msg.note_number() {
                         state.key = i16::from(note);
                         state.note_id = -1;
-                        state.tuning_semis = 0.0;
-                        state.pressure = 1.0;
-                        state.gain_mod = 0.0;
+                        reset_voice_expr(state);
+                        state.velocity = f32::from(msg.data2) / 127.0;
                         retune(state);
                         state.env.gate_on();
                     }
@@ -150,19 +164,36 @@ impl PluginLogic for SmokeSynth {
                 }
             }
         } else {
+            // Note-on first so Bitwig expressions in the same block still apply.
             for ev in context.notes.iter() {
-                apply_note(state, ev);
+                if matches!(ev.kind, NoteEventKind::On { .. }) {
+                    apply_note(state, ev);
+                }
+            }
+            for ev in context.notes.iter() {
+                if !matches!(ev.kind, NoteEventKind::On { .. }) {
+                    apply_note(state, ev);
+                }
             }
         }
 
         let n = buffer.num_samples();
         let outs = buffer.num_outputs();
+        let gain_plain = state
+            .gain_plain
+            .unwrap_or_else(|| params.gain.effective_target());
         #[allow(clippy::cast_possible_truncation)]
-        let gain_db = (params.gain.effective_target() + state.gain_mod) as f32;
-        let lin = 10.0f32.powf(gain_db / 20.0) * state.pressure.clamp(0.0, 1.0);
+        let gain_db = (gain_plain + state.gain_mod) as f32;
+        let lin = 10.0f32.powf(gain_db / 20.0)
+            * state.velocity.clamp(0.0, 1.0)
+            * state.volume.clamp(0.0, 4.0)
+            * state.pressure.clamp(0.0, 1.0);
+        let mix = state.timbre.clamp(0.0, 1.0);
 
         for i in 0..n {
-            let s = state.osc.next_sample() * state.env.next_value() * lin;
+            let sine = state.osc_sine.next_sample();
+            let saw = state.osc_saw.next_sample();
+            let s = (sine * (1.0 - mix) + saw * mix) * state.env.next_value() * lin;
             for c in 0..outs {
                 buffer.output(c)[i] = s;
             }
@@ -171,20 +202,40 @@ impl PluginLogic for SmokeSynth {
     }
 }
 
+/// CLAP velocities/expressions are 0..1. Tolerate 0..127 from sloppy hosts.
+fn clap_unit(v: f64) -> f32 {
+    #[allow(clippy::cast_possible_truncation)]
+    if v > 1.0 {
+        (v / 127.0).clamp(0.0, 1.0) as f32
+    } else {
+        v.clamp(0.0, 1.0) as f32
+    }
+}
+
+fn reset_voice_expr(state: &mut DspState) {
+    state.tuning_semis = 0.0;
+    state.velocity = 1.0;
+    state.volume = 1.0;
+    state.timbre = 0.0;
+    state.pressure = 1.0;
+    state.gain_mod = 0.0;
+    state.gain_plain = None;
+}
+
 fn retune(state: &mut DspState) {
     let key = u8::try_from(state.key.clamp(0, 127)).unwrap_or(69);
     let hz = midi_note_to_freq(key) * 2.0f32.powf(state.tuning_semis / 12.0);
-    let _ = state.osc.set_frequency(hz);
+    let _ = state.osc_sine.set_frequency(hz);
+    let _ = state.osc_saw.set_frequency(hz);
 }
 
 fn apply_note(state: &mut DspState, ev: NoteEvent) {
     match ev.kind {
-        NoteEventKind::On { .. } => {
+        NoteEventKind::On { velocity } => {
             state.note_id = ev.note_id;
             state.key = ev.key;
-            state.tuning_semis = 0.0;
-            state.pressure = 1.0;
-            state.gain_mod = 0.0;
+            reset_voice_expr(state);
+            state.velocity = clap_unit(velocity);
             retune(state);
             state.env.gate_on();
         }
@@ -197,26 +248,27 @@ fn apply_note(state: &mut DspState, ev: NoteEvent) {
             if !ev.matches_voice(state.note_id, state.key) {
                 return;
             }
+            #[allow(clippy::cast_possible_truncation)]
+            let v = value as f32;
             match id {
                 NoteExpression::Tuning => {
-                    #[allow(clippy::cast_possible_truncation)]
-                    {
-                        state.tuning_semis = value as f32;
-                    }
+                    state.tuning_semis = v;
                     retune(state);
                 }
-                NoteExpression::Pressure => {
-                    #[allow(clippy::cast_possible_truncation)]
-                    {
-                        state.pressure = value as f32;
-                    }
-                }
+                NoteExpression::Volume => state.volume = v,
+                NoteExpression::Brightness | NoteExpression::Expression => state.timbre = v,
+                NoteExpression::Pressure => state.pressure = v,
                 _ => {}
             }
         }
         NoteEventKind::ParamMod { param_id, amount } => {
             if param_id == 1 && ev.matches_voice(state.note_id, state.key) {
                 state.gain_mod = amount;
+            }
+        }
+        NoteEventKind::ParamValue { param_id, plain } => {
+            if param_id == 1 && ev.matches_voice(state.note_id, state.key) {
+                state.gain_plain = Some(plain);
             }
         }
     }
@@ -231,6 +283,7 @@ mod tests {
         let params = SynthParams::default();
         let mut state = SmokeSynth::init(&params, 44_100.0);
         apply_note(&mut state, NoteEvent::on(0, 3, 60, 0.8));
+        assert!((state.velocity - 0.8).abs() < 1e-6);
         apply_note(
             &mut state,
             NoteEvent {
@@ -246,7 +299,37 @@ mod tests {
             },
         );
         let expect = midi_note_to_freq(60) * 2.0;
-        assert!((state.osc.frequency() - expect).abs() < 0.05);
+        assert!((state.osc_sine.frequency() - expect).abs() < 0.05);
+        apply_note(
+            &mut state,
+            NoteEvent {
+                sample_offset: 1,
+                note_id: 3,
+                port_index: 0,
+                channel: 0,
+                key: 60,
+                kind: NoteEventKind::Expression {
+                    id: NoteExpression::Volume,
+                    value: 0.5,
+                },
+            },
+        );
+        assert!((state.volume - 0.5).abs() < 1e-6);
+        apply_note(
+            &mut state,
+            NoteEvent {
+                sample_offset: 1,
+                note_id: 3,
+                port_index: 0,
+                channel: 0,
+                key: 60,
+                kind: NoteEventKind::Expression {
+                    id: NoteExpression::Brightness,
+                    value: 0.75,
+                },
+            },
+        );
+        assert!((state.timbre - 0.75).abs() < 1e-6);
         apply_note(
             &mut state,
             NoteEvent {

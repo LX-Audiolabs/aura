@@ -32,7 +32,7 @@ pub use host_fence::{host_callback, host_callback_with};
 pub use info::{MidiDialect, PluginCategory, PluginInfo};
 pub use note_events::{
     NOTE_UNSPECIFIED, NoteBuffer, NoteEvent, NoteEventKind, NoteExpression, NoteTarget,
-    route_param_mod,
+    route_param_mod, route_param_value,
 };
 pub use plugin::PluginLogic;
 pub use preset::{FactoryPreset, FactoryPresetState, apply_factory_preset, load_preset_file};

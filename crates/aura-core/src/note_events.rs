@@ -89,6 +89,11 @@ pub enum NoteEventKind {
         param_id: u32,
         amount: f64,
     },
+    /// Per-note `PARAM_VALUE` (`note_id >= 0`). Absolute plain; not the knob.
+    ParamValue {
+        param_id: u32,
+        plain: f64,
+    },
 }
 
 /// One timed note-scoped event inside a process block.
@@ -221,6 +226,33 @@ pub fn route_param_mod(
             sample_offset,
             id: param_id,
             amount,
+        });
+    }
+}
+
+/// Mono `PARAM_VALUE` (`note_id < 0`) → timed params. Per-note → [`NoteBuffer`].
+pub fn route_param_value(
+    timed: &mut Vec<TimedParamEvent>,
+    notes: &mut NoteBuffer,
+    sample_offset: u32,
+    param_id: u32,
+    plain: f64,
+    target: NoteTarget,
+) {
+    if target.note_id >= 0 {
+        notes.push(NoteEvent {
+            sample_offset,
+            note_id: target.note_id,
+            port_index: target.port_index,
+            channel: target.channel,
+            key: target.key,
+            kind: NoteEventKind::ParamValue { param_id, plain },
+        });
+    } else {
+        timed.push(TimedParamEvent::Value {
+            sample_offset,
+            id: param_id,
+            plain,
         });
     }
 }

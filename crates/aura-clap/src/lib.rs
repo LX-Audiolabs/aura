@@ -39,7 +39,7 @@ use aura_core::{
     AudioBuffer, AudioConfig, BusLayout, ChannelConfig, NoteBuffer, NoteEvent, NoteEventKind,
     NoteExpression, NoteTarget, PluginLogic, ProcessContext, ProcessMode, ProcessStatus,
     TimedParamEvent, apply_at_time, apply_non_chunked, host_callback, host_callback_with,
-    layout_at, route_param_mod, split_points,
+    layout_at, route_param_mod, route_param_value, split_points,
 };
 use aura_core::{MidiBuffer, MidiMessage, MidiStatus, Ump};
 use aura_params::{ParamFlags, ParamInfo, ParamRange, Params};
@@ -725,11 +725,19 @@ unsafe fn collect_input_events(
         match header.type_ {
             CLAP_EVENT_PARAM_VALUE => {
                 let pev = unsafe { &*(hdr as *const clap_event_param_value) };
-                timed.push(TimedParamEvent::Value {
-                    sample_offset: header.time,
-                    id: pev.param_id,
-                    plain: pev.value,
-                });
+                route_param_value(
+                    timed,
+                    notes,
+                    header.time,
+                    pev.param_id,
+                    pev.value,
+                    NoteTarget {
+                        note_id: pev.note_id,
+                        port_index: pev.port_index,
+                        channel: pev.channel,
+                        key: pev.key,
+                    },
+                );
             }
             CLAP_EVENT_PARAM_MOD => {
                 let pev = unsafe { &*(hdr as *const clap_event_param_mod) };
