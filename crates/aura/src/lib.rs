@@ -13,7 +13,7 @@
 //! use aura::prelude::*;
 //! ```
 //!
-//! Enable formats with features, same idea as the `truce` umbrella:
+//! Enable formats with features:
 //!
 //! ```toml
 //! aura = { path = "...", features = ["clap", "vst3"] }

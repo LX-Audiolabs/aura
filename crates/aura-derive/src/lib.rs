@@ -10,13 +10,11 @@
 //! - [`#[derive(ParamEnum)`](macro@ParamEnum) generates the
 //!   `aura_params::ParamEnum` impl for a field-less enum.
 //!
-//! Selective port of `truce-derive` (MIT/Apache-2.0) adapted to the
-//! `aura-params` trait surface. Dropped from the reference: the
-//! `plugin_info!` / `truce.toml` machinery, the LV2 metadata sidecars,
-//! `#[derive(State)]`, ID auto-assignment schemes (AURA params pin an
-//! explicit `id = N`), and nested-ID rebasing (AURA nested structs keep
-//! their declared IDs; collisions panic at construction via
-//! `Params::assert_no_id_collisions`).
+//! AURA owns this derive. Param IDs are always explicit (`id = N`);
+//! nested structs keep their declared IDs (collisions panic in `new()`
+//! via `Params::assert_no_id_collisions`). There is no compile-time
+//! `plugin_info!`, no framework `#[derive(State)]`, and no silent
+//! auto-numbering.
 //!
 //! Implementation split across modules ([`parse`] collects fields /
 //! attributes, [`codegen`] turns them into `TokenStream`s, [`params`] and
