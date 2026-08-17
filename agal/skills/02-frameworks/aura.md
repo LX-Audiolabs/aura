@@ -50,7 +50,7 @@ impl PluginLogic for MyPlugin {
 | `#[derive(Params)]` on params struct | generates `<Struct>ParamId` enum + `id()`/`from_id()` |
 | Every field needs `#[param(id = N, …)]` | wire-stable automation / state — AURA **requires** `id` |
 | `id` must be unique within the struct | compile error if duplicate |
-| Missing `id` → compile error | not silently auto-assigned (truce did that) |
+| Missing `id` → compile error | not silently auto-assigned |
 
 ## PluginLogic trait
 
@@ -102,9 +102,8 @@ Portable algorithms only — product infra (`lx-shm`, `lx-vault`) stays in plugi
 | Mistake | Fix |
 |---------|-----|
 | Missing `id = N` on `#[param(…)]` | add explicit, unique `id` |
-| Using truce macros (`truce::plugin!`) in AURA plugin | remove; use `PluginLogic` trait + `cargo aura` |
-| `use truce::*` in AURA workspace | replace with `use aura::prelude::*` |
-| Manual `impl Params` instead of derive | use `#[derive(Params)]` (required for cutover) |
+| Manual `impl Params` instead of derive | use `#[derive(Params)]` |
+| Old-framework imports / `plugin!` macros | `use aura::prelude::*` + `impl PluginLogic` + `aura::export!` (see `aura-migration`) |
 | No `PluginLogic` impl | add `impl PluginLogic for <Type> { fn process(…) { … } }` |
 
 ## Related loadouts

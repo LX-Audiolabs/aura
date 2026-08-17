@@ -1,7 +1,6 @@
 //! Test helpers for AURA plugins.
 //!
-//! Drop-in spirit of product `truce_test` for the AURA cutover: state
-//! round-trip, param sanity, and a small offline process harness.
+//! State round-trip, param sanity, and a small offline process harness.
 //! No host / CLAP load — pure `PluginLogic`.
 //!
 //! ```ignore
