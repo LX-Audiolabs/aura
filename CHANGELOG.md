@@ -15,7 +15,7 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ### Changed
 
-- `baseview` 0.3.0 → **0.3.1** (Win32 destroy, X11 viewable tracking, min/max size, `ParentWindowHandle` Send+Sync). `aura-baseview` now repeats `version = "0.3"` so Dependabot cargo picks up lock patches.
+- Stay on **`baseview` =0.3.0**. 0.3.1 does not compile Linux `--release` (`dbg!(&visibility_state)` vs `Debug` only under `debug_assertions`). Dependabot ignores 0.3.1; `aura-baseview` repeats the version so later patches are visible.
 - `thiserror` 2.0.19 → 2.0.20, `zune-core` =0.5.1 → =0.5.3 (Dependabot #5 / #6).
 - `aura-dsp::analysis`: removed product **vault** (MD frontmatter / `config.json` / AppData paths) and **`product_shared`** types. Those belong in product catalogs, not the framework. Portable SNAP FFT / meters / spectrum stay in AURA.
 - README: public-facing quick start, status, workspace map; product plugins clarified as separate private catalog.

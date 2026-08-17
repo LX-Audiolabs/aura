@@ -13,6 +13,10 @@ updates:
     labels:
       - dependencies
       - rust
+    ignore:
+      # Leftover `dbg!` + Debug only under debug_assertions → Linux --release fail.
+      - dependency-name: "baseview"
+        versions: ["0.3.1"]
     # Group the intentional Slint pin family so one PR bumps all three.
     groups:
       slint:

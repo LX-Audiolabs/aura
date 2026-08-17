@@ -55,7 +55,9 @@ aura-build = { path = "crates/aura-build" }
 aura-test = { path = "crates/aura-test" }
 
 # --- Slint + windowing (pinned with aura-baseview) ---
-baseview = "0.3"
+# 0.3.1 does not compile Linux --release: leftover `dbg!(&visibility_state)`
+# while `Debug` is only derived under `debug_assertions`. Hold until 0.3.2+.
+baseview = "=0.3.0"
 slint = { version = "=1.17.1", default-features = false, features = [
     "std",
     "raw-window-handle-06",
