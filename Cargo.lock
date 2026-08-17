@@ -564,6 +564,7 @@ dependencies = [
  "aura-core",
  "aura-params",
  "baseview",
+ "i-slint-common",
  "log",
  "paste",
  "raw-window-handle",
@@ -6237,8 +6238,7 @@ checksum = "016ccf01d1c58b6f8999612813e17c9b2390f7d70671428869913310f83f54b8"
 dependencies = [
  "cc",
  "downcast-rs",
- "rustix 1.1.4",
- "scoped-tls",
+ "rustix 1.1.45cad"scoped-tls",
  "smallvec",
  "wayland-sys",
 ]

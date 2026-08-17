@@ -18,6 +18,12 @@ raw-window-handle = { workspace = true }
 log = "0.4"
 paste = "1"
 
+# Linux cross-build from Windows: avoid linking host fontconfig.
+# fontique uses dlopen at runtime; RUST_FONTCONFIG_DLOPEN=on is set in
+# .cargo/config.toml [env] so yeslogic-fontconfig-sys skips pkg-config.
+[target.'cfg(target_os = "linux")'.dependencies]
+i-slint-common = { version = "=1.17.1", features = ["fontconfig-dlopen"] }
+
 [features]
 default = ["backend-femtovg"]
 # Pass renderer choice through to the window stack.
