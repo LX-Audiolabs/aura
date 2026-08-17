@@ -7,8 +7,16 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-08-17
+
+### Fixed
+
+- `Cargo.lock`: restore smashed `wayland-backend` dep list (`rustix 1.1.4` / `scoped-tls`) so cargo can parse the lockfile again (CI on `main` was red).
+
 ### Changed
 
+- Stay on **`baseview` =0.3.0**. 0.3.1 does not compile Linux `--release` (`dbg!(&visibility_state)` vs `Debug` only under `debug_assertions`). Dependabot ignores 0.3.1; `aura-baseview` repeats the version so later patches are visible.
+- `thiserror` 2.0.19 → 2.0.20, `zune-core` =0.5.1 → =0.5.3 (Dependabot #5 / #6).
 - `aura-dsp::analysis`: removed product **vault** (MD frontmatter / `config.json` / AppData paths) and **`product_shared`** types. Those belong in product catalogs, not the framework. Portable SNAP FFT / meters / spectrum stay in AURA.
 - README: public-facing quick start, status, workspace map; product plugins clarified as separate private catalog.
 - Docs: hide internal DSP roadmap; drop broken links to private planning docs; rephrase product-boundary sections without private repo paths.
@@ -162,7 +170,8 @@ this release records what `main` contains after the multi-format + UI pass.
 - Still open for “Basis fertig”: VST3/LV2 real-host smoke; optional LV2 UI; product cutover later
 - Crates not published to crates.io (`publish = false`)
 
-[Unreleased]: https://github.com/LX-Audiolabs/aura/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/LX-Audiolabs/aura/compare/v0.6.3...HEAD
+[0.6.3]: https://github.com/LX-Audiolabs/aura/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/LX-Audiolabs/aura/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/LX-Audiolabs/aura/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/LX-Audiolabs/aura/compare/v0.5.0...v0.6.0
