@@ -72,7 +72,7 @@ cargo aura build --clap -plug <name>   # build CLAP bundle
 cargo aura install --clap -plug <name> # build + copy .clap to host dir
 cargo aura doctor              # check toolchain + config
 cargo aura preview             # preview .slint UI without compiling plugin
-cargo aura watch --clap        # rebuild + install on src/ui save (host must reload if locked)
+cargo aura watch --clap --hot  # proxy .clap + replaceable .impl (re-add instance to swap DSP)
 cargo aura mesh                # agal .  (orientation graph; optional)
 
 # Multi-plugin

@@ -2,7 +2,8 @@
 //!
 //! Process still speaks [`MidiMessage`] (7-bit channel voice). These types let
 //! authors encode/decode UMP and let format wrappers ingest `CLAP_EVENT_MIDI2`.
-//! Full UMP stream / `SysEx8` / Flex Data stay out until a plugin needs them.
+//! `SysEx8` and Flex Data packets are encoded here; process still does not
+//! see them until a plugin asks for a typed path.
 
 use crate::message::{MidiMessage, MidiStatus};
 
@@ -50,6 +51,70 @@ impl Ump {
     #[must_use]
     pub const fn midi2_note_off(group: u8, channel: u8, note: u8, velocity: u16) -> Self {
         midi2_note(0x8, group, channel, note, velocity)
+    }
+
+    /// Max payload bytes in one complete `SysEx8` packet (stream ID uses one slot).
+    pub const SYSEX8_MAX_PAYLOAD: usize = 13;
+
+    /// Complete `SysEx8` packet (type 0x5, status 0x0). `payload` max 13 bytes.
+    #[must_use]
+    pub fn sysex8(group: u8, stream_id: u8, payload: &[u8]) -> Option<Self> {
+        Self::sysex8_packet(0x0, group, stream_id, payload)
+    }
+
+    /// `SysEx8` start / continue / end (`status` 0x1 / 0x2 / 0x3).
+    #[must_use]
+    pub fn sysex8_packet(status: u8, group: u8, stream_id: u8, payload: &[u8]) -> Option<Self> {
+        if payload.len() > Self::SYSEX8_MAX_PAYLOAD {
+            return None;
+        }
+        let nbytes = u32::try_from(payload.len()).ok()? + 1; // include stream ID
+        let mut words = [0u32; 4];
+        words[0] = (0x5u32 << 28)
+            | ((u32::from(group) & 0xF) << 24)
+            | ((u32::from(status) & 0xF) << 20)
+            | (nbytes << 16)
+            | (u32::from(stream_id) << 8);
+        // First payload byte sits in word0 low 8 bits; rest pack big-endian across words 1–3.
+        if let Some(&b0) = payload.first() {
+            words[0] |= u32::from(b0);
+        }
+        for (i, &b) in payload.iter().skip(1).enumerate() {
+            let word = 1 + i / 4;
+            let shift = 24 - 8 * (i % 4);
+            words[word] |= u32::from(b) << shift;
+        }
+        Some(Self { words, len: 4 })
+    }
+
+    /// Flex Data packet (type 0xD, 4 words). `form`: 0 complete, 1 start, 2 cont, 3 end.
+    #[must_use]
+    pub const fn flex_data(
+        group: u8,
+        form: u8,
+        addr: u8,
+        channel: u8,
+        status_bank: u8,
+        status: u8,
+        data: [u32; 3],
+    ) -> Self {
+        let w0 = (0xDu32 << 28)
+            | ((group as u32 & 0xF) << 24)
+            | ((form as u32 & 0x3) << 22)
+            | ((addr as u32 & 0x3) << 20)
+            | ((channel as u32 & 0xF) << 16)
+            | ((status_bank as u32) << 8)
+            | (status as u32);
+        Self {
+            words: [w0, data[0], data[1], data[2]],
+            len: 4,
+        }
+    }
+
+    /// Flex Data "set tempo": 10 ns ticks per quarter note in word 1.
+    #[must_use]
+    pub const fn flex_set_tempo(group: u8, ten_ns_per_quarter: u32) -> Self {
+        Self::flex_data(group, 0, 1, 0, 0x00, 0x00, [ten_ns_per_quarter, 0, 0])
     }
 
     /// MIDI 2.0 per-note pitch bend (status 0x6). `value` is 32-bit, center `0x8000_0000`.
@@ -144,6 +209,26 @@ impl Ump {
         match self.to_midi1() {
             Some(m) => m.is_note_off(),
             None => false,
+        }
+    }
+
+    #[must_use]
+    pub const fn is_sysex8(self) -> bool {
+        self.message_type() == 0x5 && matches!((self.words[0] >> 20) & 0xF, 0x0..=0x3)
+    }
+
+    #[must_use]
+    pub const fn is_flex_data(self) -> bool {
+        self.message_type() == 0xD
+    }
+
+    /// `SysEx8` stream ID (second byte of word 0).
+    #[must_use]
+    pub const fn sysex8_stream_id(self) -> Option<u8> {
+        if self.is_sysex8() {
+            Some(((self.words[0] >> 8) & 0xFF) as u8)
+        } else {
+            None
         }
     }
 }
@@ -263,5 +348,25 @@ mod tests {
         let again = Ump::from_words(u.words());
         assert_eq!(again, u);
         assert_eq!(again.group(), 2);
+    }
+
+    #[test]
+    fn sysex8_complete_roundtrip() {
+        let u = Ump::sysex8(1, 0x42, &[0xF0, 0x7E, 0x00]).unwrap();
+        assert!(u.is_sysex8());
+        assert_eq!(u.word_count(), 4);
+        assert_eq!(u.group(), 1);
+        assert_eq!(u.sysex8_stream_id(), Some(0x42));
+        assert_eq!(u.to_midi1(), None);
+        assert!(Ump::sysex8(0, 0, &[0; 14]).is_none());
+    }
+
+    #[test]
+    fn flex_tempo() {
+        let u = Ump::flex_set_tempo(0, 500_000_000);
+        assert!(u.is_flex_data());
+        assert_eq!(u.message_type(), 0xD);
+        assert_eq!(u.words()[1], 500_000_000);
+        assert_eq!(u.to_midi1(), None);
     }
 }

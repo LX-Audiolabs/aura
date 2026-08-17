@@ -1,0 +1,18 @@
+[package]
+name = "aura-hot"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "CLAP hot-reload proxy — host maps this .clap; DSP lives in a sibling .impl that watch can replace"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+clap-sys = "0.5"
+
+[lints]
+workspace = true

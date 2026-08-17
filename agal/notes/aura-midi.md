@@ -48,8 +48,8 @@ Packet). Process still sees 7-bit `MidiMessage`. Hosts that send
 
 ## Open
 
-- [ ] SysEx8 / Flex Data / UMP stream packets — only if a plugin needs them
-- [ ] Optional `ProcessContext` hi-res / note-id path (product-driven)
+- [x] `SysEx8` / Flex Data packet stubs (2026-08-17)
+- [ ] Optional `ProcessContext` hi-res / note-id / SysEx typed path (product-driven)
 
 ## Decisions
 

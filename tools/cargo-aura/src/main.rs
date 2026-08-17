@@ -80,15 +80,17 @@ Commands:
   build [--clap|--vst3|--lv2] [--release] [-plug <crate> [<crate>...]]
                           cargo build with format feature(s)
                           (-plug builds each selected workspace member in turn)
-  install [--clap|--vst3|--lv2] [--release] [-plug <crate> [<crate>...]]
+  install [--clap|--vst3|--lv2] [--release] [--hot] [-plug <crate> [<crate>...]]
                           build + copy artifact into host search path
                           (-plug installs each selected plugin in turn)
+                          --hot: CLAP proxy + sibling .impl (see watch)
   preview [path] [--component N] [--no-watch]
                           hot-reload the plugin .slint UI (default ui/main.slint)
-  watch [--clap|--vst3|--lv2] [--release] [-plug <crate>…] [--no-install]
+  watch [--clap|--vst3|--lv2] [--release] [-plug <crate>…] [--no-install] [--hot]
                           rebuild (+ install) when src/ui/Cargo.toml change
-                          default format: --clap. Host must reload the binary
-                          if it already has the plugin loaded (Windows lock)
+                          default format: --clap. --hot writes a proxy .clap
+                          the host keeps mapped and a sibling .impl the watch
+                          can replace (re-add instance to pick up new DSP)
   mesh [agal-args…]       run `agal` (default: `agal .`) — orientation mesh
   gui                     Open the visual project console (aura-gui)
   doctor                  Check toolchain / AURA path / clap-validator
@@ -136,6 +138,7 @@ fn cmd_doctor() -> ExitCode {
                 "crates/aura-baseview",
                 "crates/aura-editor",
                 "crates/aura-build",
+                "crates/aura-hot",
             ] {
                 let p = root.join(need);
                 if p.is_dir() || p.join("Cargo.toml").is_file() {
@@ -615,7 +618,7 @@ fn cmd_watch(args: &[String]) -> ExitCode {
         Err(e) => {
             eprintln!("error: {e}");
             eprintln!(
-                "usage: cargo aura watch [--clap|--vst3|--lv2] [--release] [-plug <crate>…] [--no-install]"
+                "usage: cargo aura watch [--clap|--vst3|--lv2] [--release] [-plug <crate>…] [--no-install] [--hot]"
             );
             return ExitCode::FAILURE;
         }
@@ -641,9 +644,16 @@ fn cmd_watch(args: &[String]) -> ExitCode {
             "build + install"
         }
     );
-    eprintln!(
-        "note: if a host already loaded the plugin, unload it so the copy can replace the file."
-    );
+    if parsed.hot {
+        eprintln!(
+            "hot: host keeps Name.clap; watch replaces Name.impl.* — re-add the instance to swap DSP"
+        );
+    } else {
+        eprintln!(
+            "note: if a host already loaded the plugin, unload it so the copy can replace the file."
+        );
+        eprintln!("hint: cargo aura watch --hot avoids the Windows file lock (proxy + .impl)");
+    }
 
     let mut stamp = watch_stamp(&cwd);
     let mut first = true;
@@ -678,6 +688,9 @@ fn rebuild_args(p: &BuildArgs) -> Vec<String> {
     }
     if p.release {
         a.push("--release".into());
+    }
+    if p.hot {
+        a.push("--hot".into());
     }
     if !p.plugins.is_empty() {
         a.push("-plug".into());
@@ -892,7 +905,7 @@ fn cmd_install(args: &[String]) -> ExitCode {
                 eprintln!("hint: run from a plugin crate, or use -plug <crate> [<crate>...]");
                 return ExitCode::FAILURE;
             };
-            return install_formats(&pkg, &target_dir, profile, &parsed.formats);
+            return install_formats(&pkg, &target_dir, profile, &parsed.formats, parsed.hot);
         }
         workspace_plugins
     } else {
@@ -911,17 +924,25 @@ fn cmd_install(args: &[String]) -> ExitCode {
         if cmd_build(&build_args) != ExitCode::SUCCESS {
             return ExitCode::FAILURE;
         }
-        if install_formats(plugin, &target_dir, profile, &parsed.formats) != ExitCode::SUCCESS {
+        if install_formats(plugin, &target_dir, profile, &parsed.formats, parsed.hot)
+            != ExitCode::SUCCESS
+        {
             return ExitCode::FAILURE;
         }
     }
     ExitCode::SUCCESS
 }
 
-fn install_formats(pkg: &str, target_dir: &Path, profile: &str, features: &[String]) -> ExitCode {
+fn install_formats(
+    pkg: &str,
+    target_dir: &Path,
+    profile: &str,
+    features: &[String],
+    hot: bool,
+) -> ExitCode {
     for feat in features {
         let res = match feat.as_str() {
-            "clap" => install_clap(pkg, target_dir, profile),
+            "clap" => install_clap(pkg, target_dir, profile, hot),
             "vst3" => install_vst3(pkg, target_dir, profile),
             "lv2" => install_lv2(pkg, target_dir, profile),
             _ => Ok(()),
@@ -934,7 +955,7 @@ fn install_formats(pkg: &str, target_dir: &Path, profile: &str, features: &[Stri
     ExitCode::SUCCESS
 }
 
-fn install_clap(pkg: &str, target_dir: &Path, profile: &str) -> Result<(), String> {
+fn install_clap(pkg: &str, target_dir: &Path, profile: &str, hot: bool) -> Result<(), String> {
     let dir = target_dir.join(profile);
     if !dir.is_dir() {
         return Err(format!("no build dir {}", dir.display()));
@@ -963,6 +984,11 @@ fn install_clap(pkg: &str, target_dir: &Path, profile: &str) -> Result<(), Strin
     })?;
 
     let display = plugin_display_name(pkg);
+
+    if hot {
+        return install_clap_hot(src, &dest_root, &display, profile);
+    }
+
     let dest = dest_root.join(format!("{display}.clap"));
 
     // macOS hosts / clap-validator load CLAP via CFBundle ("Could not open bundle"
@@ -1023,6 +1049,107 @@ fn copy_replace(src: &Path, dest: &Path) -> Result<(), String> {
     }
     Err(format!(
         "{last} — host probably still has the plugin loaded; unload or retry"
+    ))
+}
+
+/// Host-mapped proxy + sibling impl. Watch overwrites the impl; re-add the
+/// instance in the DAW to pick up new DSP (existing instances keep their gen).
+fn install_clap_hot(
+    src: &Path,
+    dest_root: &Path,
+    display: &str,
+    profile: &str,
+) -> Result<(), String> {
+    let impl_dest = dest_root.join(format!("{display}{}", hot_impl_suffix()));
+    if impl_dest.is_dir() {
+        remove_path_all(&impl_dest)?;
+    }
+    copy_replace(src, &impl_dest)?;
+    println!("installed impl {}", impl_dest.display());
+
+    let proxy_src = build_aura_hot(profile == "release")?;
+    let dest = dest_root.join(format!("{display}.clap"));
+
+    #[cfg(target_os = "macos")]
+    {
+        remove_path_all(&dest)?;
+        let macos_dir = dest.join("Contents").join("MacOS");
+        fs::create_dir_all(&macos_dir)
+            .map_err(|e| format!("create_dir_all {}: {e}", macos_dir.display()))?;
+        let binary = macos_dir.join(display);
+        fs::copy(&proxy_src, &binary)
+            .map_err(|e| format!("copy {} → {}: {e}", proxy_src.display(), binary.display()))?;
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let meta = fs::metadata(&binary).map_err(|e| e.to_string())?;
+            let mut perms = meta.permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&binary, perms).map_err(|e| e.to_string())?;
+        }
+        let plist = clap_macos_info_plist(display);
+        let plist_path = dest.join("Contents").join("Info.plist");
+        fs::write(&plist_path, plist)
+            .map_err(|e| format!("write {}: {e}", plist_path.display()))?;
+        println!("installed proxy {} (macOS bundle)", dest.display());
+        return Ok(());
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        if dest.is_dir() {
+            remove_path_all(&dest)?;
+        }
+        copy_replace(&proxy_src, &dest)?;
+        println!("installed proxy {}", dest.display());
+        Ok(())
+    }
+}
+
+fn hot_impl_suffix() -> &'static str {
+    if cfg!(windows) {
+        ".impl.dll"
+    } else if cfg!(target_os = "macos") {
+        ".impl.dylib"
+    } else {
+        ".impl.so"
+    }
+}
+
+fn build_aura_hot(release: bool) -> Result<PathBuf, String> {
+    let root = aura_root()?;
+    let mut cmd = Command::new("cargo");
+    cmd.arg("build")
+        .arg("-p")
+        .arg("aura-hot")
+        .arg("--manifest-path")
+        .arg(root.join("Cargo.toml"));
+    if release {
+        cmd.arg("--release");
+    }
+    eprintln!("--- cargo build -p aura-hot ---");
+    let st = cmd
+        .status()
+        .map_err(|e| format!("failed to run cargo: {e}"))?;
+    if !st.success() {
+        return Err("cargo build -p aura-hot failed".into());
+    }
+    let profile = if release { "release" } else { "debug" };
+    let dir = root.join("target").join(profile);
+    for name in [
+        "aura_hot.dll",
+        "libaura_hot.so",
+        "libaura_hot.dylib",
+        "aura_hot.so",
+        "aura_hot.dylib",
+    ] {
+        let p = dir.join(name);
+        if p.is_file() {
+            return Ok(p);
+        }
+    }
+    Err(format!(
+        "aura-hot artifact missing in {} — crate-type cdylib",
+        dir.display()
     ))
 }
 
@@ -1696,7 +1823,10 @@ fn find_plugin_artifacts(dir: &Path) -> Result<Vec<PathBuf>, String> {
         if matches!(ext.as_deref(), Some("clap" | "dll" | "so" | "dylib")) {
             // Heuristic: skip known non-plugin names
             let lower = name.to_ascii_lowercase();
-            if lower.contains("cargo_aura") || lower.starts_with("std-") {
+            if lower.contains("cargo_aura")
+                || lower.contains("aura_hot")
+                || lower.starts_with("std-")
+            {
                 continue;
             }
             out.push(p);
@@ -1768,6 +1898,9 @@ fn metadata_target_dir() -> Option<PathBuf> {
 struct BuildArgs {
     formats: Vec<String>,
     release: bool,
+    /// CLAP proxy + sibling `.impl` so watch can replace DSP while the host
+    /// keeps `Name.clap` mapped.
+    hot: bool,
     /// Plugins selected via `-plug <name> [<name> ...]`. Empty means
     /// "current crate" (legacy single-crate behaviour).
     plugins: Vec<String>,
@@ -1782,6 +1915,7 @@ struct BuildArgs {
 fn parse_build_args(args: &[String]) -> Result<BuildArgs, String> {
     let mut formats = Vec::new();
     let mut release = false;
+    let mut hot = false;
     let mut plugins = Vec::new();
     let mut rest = Vec::new();
 
@@ -1793,6 +1927,7 @@ fn parse_build_args(args: &[String]) -> Result<BuildArgs, String> {
             "--vst3" => formats.push("vst3".into()),
             "--lv2" => formats.push("lv2".into()),
             "--release" => release = true,
+            "--hot" => hot = true,
             "-plug" => {
                 i += 1;
                 let start = i;
@@ -1813,6 +1948,7 @@ fn parse_build_args(args: &[String]) -> Result<BuildArgs, String> {
     Ok(BuildArgs {
         formats,
         release,
+        hot,
         plugins,
         rest,
     })
@@ -2063,13 +2199,15 @@ category = "analyzer"
         let p = parse_build_args(&[
             "--clap".into(),
             "--release".into(),
+            "--hot".into(),
             "-plug".into(),
             "smoke-gain".into(),
         ])
         .unwrap();
+        assert!(p.hot);
         assert_eq!(
             rebuild_args(&p),
-            vec!["--clap", "--release", "-plug", "smoke-gain"]
+            vec!["--clap", "--release", "--hot", "-plug", "smoke-gain"]
         );
     }
 }

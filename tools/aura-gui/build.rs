@@ -1,3 +1,3 @@
 fn main() {
-    slint_build::compile("ui/main.slint").expect("slint compile");
+    aura_build::compile("ui/main.slint").expect("slint compile");
 }

@@ -96,7 +96,7 @@ cd my-plugin
 cargo aura install --clap --release
 
 # 4b) Or stay in the loop: rebuild + reinstall on save
-cargo aura watch --clap
+cargo aura watch --clap --hot
 
 # 5) Optional: clap-validator on the installed .clap
 clap-validator validate path/to/my-plugin.clap

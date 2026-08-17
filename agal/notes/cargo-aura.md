@@ -44,6 +44,7 @@ the same paths. Orientation mesh is `cargo aura mesh` → `agal` (optional).
 
 - `watch` polls mtimes with std only (no `notify` dep). `preview` already uses `notify` for Slint.
 - Default watch format is `--clap`. `--no-install` builds without copying.
+- `--hot` installs `aura-hot` as `Name.clap` and the real plugin as `Name.impl.*`. Host never maps the impl, so watch can overwrite it. Re-add instance to run new DSP.
 - `mesh` is not a doctor gate. Builds work without agal.
 - Install copy retries when the host still maps the `.clap`.
 

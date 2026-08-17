@@ -17,7 +17,7 @@ path = "src/main.rs"
 slint = { version = "=1.17.1", default-features = true, features = ["backend-winit", "renderer-femtovg", "compat-1-2"] }
 
 [build-dependencies]
-slint-build = { workspace = true }
+aura-build = { workspace = true }
 
 [lints]
 workspace = true

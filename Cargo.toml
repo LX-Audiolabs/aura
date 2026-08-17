@@ -15,6 +15,7 @@ members = [
     "crates/aura-shm",
     "crates/aura-build",
     "crates/aura-test",
+    "crates/aura-hot",
     "tools/cargo-aura",
     "tools/aura-preview",
     "tools/aura-gui",

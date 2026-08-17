@@ -597,8 +597,15 @@ dependencies = [
 name = "aura-gui"
 version = "0.7.0"
 dependencies = [
+ "aura-build",
  "slint",
- "slint-build",
+]
+
+[[package]]
+name = "aura-hot"
+version = "0.7.0"
+dependencies = [
+ "clap-sys",
 ]
 
 [[package]]

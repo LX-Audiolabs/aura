@@ -11,8 +11,10 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 - `cargo aura watch` — poll `src` / `ui` / manifests and rebuild (+ install). Default format `--clap`. `--no-install` skips the host copy. Install copy retries when a host still maps the binary.
 - `cargo aura mesh` — thin wrapper over `agal` (default `agal .`). Optional; builds do not need it.
-- `aura-midi::Ump` — MIDI 2.0 Universal MIDI Packet stubs (MIDI 1 CV, MIDI 2 note on/off, per-note pitch bend, lossy `to_midi1`).
+- `aura-midi::Ump` — MIDI 2.0 Universal MIDI Packet stubs (MIDI 1 CV, MIDI 2 note on/off, per-note pitch bend, `SysEx8`, Flex Data, lossy `to_midi1`).
 - CLAP: ingest `CLAP_EVENT_MIDI2` (down-convert to `MidiMessage`). `MidiDialect::Midi2` now prefers the MIDI 2 note-port dialect. smoke-synth advertises MIDI 2 in.
+- `aura-hot` CLAP proxy: `cargo aura install --hot` / `watch --hot` writes `Name.clap` (host-mapped) + `Name.impl.*` (replaced on each watch). Re-add the instance to pick up new DSP.
+- AURA identity tokens: aurora teal on ink in `@aura` `AuraTheme`; `aura-gui` uses the same chrome (wordmark, card, mesh / hot).
 
 ## [0.7.0] - 2026-08-17
 

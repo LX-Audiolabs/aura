@@ -57,7 +57,9 @@ Entry, factory, audio-ports (mono/stereo + optional sidechain), audio-ports-conf
 
 **Preset load:** `clap.preset-load/2` (compat `clap.preset-load.draft/2`). FILE location reads a v1 state blob (`PluginLogic::load_preset_from_file`). PLUGIN location looks up `PluginLogic::factory_presets` by `load_key`. Non-empty factory list also exposes `preset-discovery-factory/2` (PLUGIN / factory content).
 
-**MIDI 2:** set `PluginInfo.midi_input_dialect = MidiDialect::Midi2` to prefer `CLAP_NOTE_DIALECT_MIDI2` (MIDI 1 still advertised). Incoming `CLAP_EVENT_MIDI2` is down-converted via `aura_midi::Ump` into `ProcessContext::midi`. Process stays 7-bit until a plugin needs hi-res / note-id on the context.
+**MIDI 2:** set `PluginInfo.midi_input_dialect = MidiDialect::Midi2` to prefer `CLAP_NOTE_DIALECT_MIDI2` (MIDI 1 still advertised). Incoming `CLAP_EVENT_MIDI2` is down-converted via `aura_midi::Ump` into `ProcessContext::midi`. Process stays 7-bit until a plugin needs hi-res / note-id on the context. `Ump` also encodes `SysEx8` and Flex Data (not yet a typed process path).
+
+**Hot reload:** `cargo aura watch --hot` installs `aura-hot` as `Name.clap` and the real plugin as `Name.impl.dll` (or `.so` / `.dylib`). The host keeps the proxy mapped; watch overwrites the impl. Re-add the instance to run the new DSP.
 
 **Remote-controls:** pages of ≤8 params from `ParamInfo.group`. Empty group = no device page. `"Section/Page"` splits on the first `/`. Hidden/readonly never take a hardware slot.
 

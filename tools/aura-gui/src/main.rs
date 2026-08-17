@@ -100,6 +100,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let busy = Arc::clone(&busy);
         ui.on_run_doctor(move || spawn_job(ui_w.clone(), Arc::clone(&busy), Arc::clone(&b)));
     }
+    {
+        let b = job_builder(|s| Ok((s.project_dir.clone(), vec!["mesh".into()])));
+        let ui_w = ui_weak.clone();
+        let busy = Arc::clone(&busy);
+        ui.on_run_mesh(move || spawn_job(ui_w.clone(), Arc::clone(&busy), Arc::clone(&b)));
+    }
 
     invoke_log(&ui_weak, &format!("AURA root hint: {}\n", aura_root_hint()));
     ui.run()?;
@@ -163,6 +169,7 @@ struct UiState {
     format_clap: bool,
     format_vst3: bool,
     format_lv2: bool,
+    format_hot: bool,
     release_build: bool,
 }
 
@@ -174,6 +181,7 @@ fn snapshot(ui: &AppWindow) -> UiState {
         format_clap: ui.get_format_clap(),
         format_vst3: ui.get_format_vst3(),
         format_lv2: ui.get_format_lv2(),
+        format_hot: ui.get_format_hot(),
         release_build: ui.get_release_build(),
     }
 }
@@ -220,6 +228,9 @@ fn push_build_flags(args: &mut Vec<String>, s: &UiState) {
     }
     if s.release_build {
         args.push("--release".into());
+    }
+    if s.format_hot {
+        args.push("--hot".into());
     }
 }
 

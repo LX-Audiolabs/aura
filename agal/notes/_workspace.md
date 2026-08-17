@@ -24,7 +24,9 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 - [x] LV2 UI extension — done 2026-08-10 (host smoke pending suitable LV2 host)
 - [x] F1 split aura-derive — done 2026-08-10
 - [x] Stage 6 author loop (2026-08-17) — `cargo aura watch` · UMP stubs + CLAP MIDI2 ingest · `cargo aura mesh`
-- [ ] Stage 6 UI — `aura-gui` / `@aura` identity (after author loop)
+- [x] Stage 6 DLL swap — `aura-hot` proxy + `--hot` impl sidecar
+- [x] Stage 6 UMP `SysEx8` / Flex Data packets (process still 7-bit)
+- [x] Stage 6 UI identity — aurora teal `AuraTheme` + restyled `aura-gui`
 - [ ] crates.io publish when ready (`publish = false` today)
 
 ## Decisions

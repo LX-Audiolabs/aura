@@ -1,32 +1,31 @@
-// Material Design 3–aligned tokens for @aura audio widgets.
+// AURA identity tokens for @aura audio widgets.
 //
-// Palette numbers match Slint's official Material 3 **dark** scheme
-// (ui-libraries/material, MIT). We do **not** ship the full @material
-// component set into every plugin — only tokens + audio controls.
-// Full Material chrome is for aura-gui / product design systems, not @aura basics.
+// Surfaces follow Material 3 dark structure (spacing / elevation).
+// Brand is aurora teal on ink — not truce/egui blue, not stock M3 primary.
+// Full Material chrome is optional for product design systems, not @aura basics.
 //
 // Usage in a plugin:
 //   import { Knob, AuraTheme } from "@aura";
 //   background: AuraTheme.surface;
 
 export global AuraTheme {
-    // --- surfaces (M3 dark) ---
-    out property <color> surface: #111318;
-    out property <color> surface-container-lowest: #0c0e13;
-    out property <color> surface-container-low: #1a1b20;
-    out property <color> surface-container: #1e1f25;
-    out property <color> surface-container-high: #282a2f;
-    out property <color> surface-container-highest: #33353a;
-    out property <color> on-surface: #e2e2e9;
-    out property <color> on-surface-variant: #c4c6d0;
-    out property <color> outline: #8e9099;
-    out property <color> outline-variant: #44474f;
+    // --- surfaces (ink) ---
+    out property <color> surface: #0c1014;
+    out property <color> surface-container-lowest: #07090c;
+    out property <color> surface-container-low: #14191e;
+    out property <color> surface-container: #1a2026;
+    out property <color> surface-container-high: #242b32;
+    out property <color> surface-container-highest: #2e363e;
+    out property <color> on-surface: #e6eef2;
+    out property <color> on-surface-variant: #a8b4bc;
+    out property <color> outline: #6d7a82;
+    out property <color> outline-variant: #3a444c;
 
-    // --- brand (M3 dark primary — soft blue, not truce neon) ---
-    out property <color> primary: #adc6ff;
-    out property <color> on-primary: #112f60;
-    out property <color> primary-container: #2b4678;
-    out property <color> on-primary-container: #d8e2ff;
+    // --- brand (aurora teal) ---
+    out property <color> primary: #5ee6c8;
+    out property <color> on-primary: #00382f;
+    out property <color> primary-container: #0e4f45;
+    out property <color> on-primary-container: #9ff5e0;
 
     // --- secondary / error ---
     out property <color> secondary: #bfc6dc;
