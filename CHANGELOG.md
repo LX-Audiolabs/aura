@@ -7,6 +7,8 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-17
+
 ### Added
 
 - CLAP `clap.preset-load/2` (+ draft compat id): load a v1 state file, or a bundled factory preset by `load_key`. `PluginLogic::factory_presets` / `load_preset_from_file` (defaults keep existing plugins compiling). Non-empty factory list also registers `preset-discovery-factory/2` so hosts can index PLUGIN-location presets. smoke-gain ships Unity / Hot.
@@ -14,6 +16,7 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 ### Changed
 
 - Drop `zune-core` exact pins (`aura-gui`, `cargo aura new` scaffold). 0.5.2 is yanked; 0.5.3 is the log-macro fix.
+- Crate docs / `frameworks/aura` skill: AURA-owned derive identity (no truce branding on the author surface).
 
 ## [0.6.3] - 2026-08-17
 
@@ -178,7 +181,8 @@ this release records what `main` contains after the multi-format + UI pass.
 - Still open for “Basis fertig”: VST3/LV2 real-host smoke; optional LV2 UI; product cutover later
 - Crates not published to crates.io (`publish = false`)
 
-[Unreleased]: https://github.com/LX-Audiolabs/aura/compare/v0.6.3...HEAD
+[Unreleased]: https://github.com/LX-Audiolabs/aura/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/LX-Audiolabs/aura/compare/v0.6.3...v0.7.0
 [0.6.3]: https://github.com/LX-Audiolabs/aura/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/LX-Audiolabs/aura/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/LX-Audiolabs/aura/compare/v0.6.0...v0.6.1
