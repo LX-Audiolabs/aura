@@ -476,7 +476,7 @@ dependencies = [
 
 [[package]]
 name = "aura"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "aura-clap",
  "aura-core",
@@ -490,7 +490,7 @@ dependencies = [
 
 [[package]]
 name = "aura-baseview"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "baseview",
  "copypasta",
@@ -504,7 +504,7 @@ dependencies = [
 
 [[package]]
 name = "aura-build"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "slint-build",
  "slint-interpreter",
@@ -513,7 +513,7 @@ dependencies = [
 
 [[package]]
 name = "aura-clap"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "aura-core",
  "aura-params",
@@ -522,7 +522,7 @@ dependencies = [
 
 [[package]]
 name = "aura-core"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "aura-midi",
  "aura-params",
@@ -530,7 +530,7 @@ dependencies = [
 
 [[package]]
 name = "aura-derive"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -539,7 +539,7 @@ dependencies = [
 
 [[package]]
 name = "aura-dsp"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "atomic_float",
  "aura-params",
@@ -558,7 +558,7 @@ dependencies = [
 
 [[package]]
 name = "aura-editor"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "aura-baseview",
  "aura-core",
@@ -595,7 +595,7 @@ dependencies = [
 
 [[package]]
 name = "aura-gui"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "slint",
  "slint-build",
@@ -604,7 +604,7 @@ dependencies = [
 
 [[package]]
 name = "aura-lv2"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "aura",
  "aura-core",
@@ -615,18 +615,18 @@ dependencies = [
 
 [[package]]
 name = "aura-midi"
-version = "0.6.2"
+version = "0.6.3"
 
 [[package]]
 name = "aura-params"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "bitflags 2.13.1",
 ]
 
 [[package]]
 name = "aura-preview"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "aura-build",
  "notify",
@@ -636,14 +636,14 @@ dependencies = [
 
 [[package]]
 name = "aura-shm"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "shared_memory",
 ]
 
 [[package]]
 name = "aura-test"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "aura-core",
  "aura-params",
@@ -651,7 +651,7 @@ dependencies = [
 
 [[package]]
 name = "aura-vst3"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "aura-core",
  "aura-params",
@@ -727,9 +727,9 @@ checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
 name = "baseview"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41e90905c0b6f990fc4e8aff1eea97c40dc3e77cbc337e2d6fee1581585ed7bb"
+checksum = "44fd6d0034f02225d7b83b248b536b06c90959af871f5fac88067e93e9b36c4e"
 dependencies = [
  "block2 0.6.2",
  "bytemuck",
@@ -970,7 +970,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-aura"
-version = "0.6.2"
+version = "0.6.3"
 
 [[package]]
 name = "cast"
@@ -1602,7 +1602,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3390,7 +3390,7 @@ dependencies = [
  "once_cell",
  "png",
  "thiserror 2.0.20",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -3564,7 +3564,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4922,7 +4922,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5356,7 +5356,7 @@ dependencies = [
 
 [[package]]
 name = "smoke-gain"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "aura",
  "aura-build",
@@ -5366,21 +5366,21 @@ dependencies = [
 
 [[package]]
 name = "smoke-midi-fx"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "aura",
 ]
 
 [[package]]
 name = "smoke-sidechain"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "aura",
 ]
 
 [[package]]
 name = "smoke-synth"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "aura",
 ]
@@ -5622,7 +5622,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.4",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5957,7 +5957,7 @@ checksum = "f2f6fb2847f6742cd76af783a2a2c49e9375d0a111c7bef6f71cd9e738c72d6e"
 dependencies = [
  "memoffset 0.9.1",
  "tempfile",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -6238,7 +6238,8 @@ checksum = "016ccf01d1c58b6f8999612813e17c9b2390f7d70671428869913310f83f54b8"
 dependencies = [
  "cc",
  "downcast-rs",
- "rustix 1.1.45cad"scoped-tls",
+ "rustix 1.1.4",
+ "scoped-tls",
  "smallvec",
  "wayland-sys",
 ]
@@ -6550,7 +6551,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
