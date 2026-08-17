@@ -36,3 +36,7 @@ updates:
     labels:
       - dependencies
       - ci
+    ignore:
+      # Action tags are rustc versions. CI must match rust-toolchain.toml
+      # (pinned stable 1.97.1). Do not let Dependabot jump the compiler.
+      - dependency-name: "dtolnay/rust-toolchain"
