@@ -15,8 +15,6 @@ path = "src/main.rs"
 [dependencies]
 # Desktop tool: full Slint (not the plugin-minimal feature set).
 slint = { version = "=1.17.1", default-features = true, features = ["backend-winit", "renderer-femtovg", "compat-1-2"] }
-# Workaround: empty log macros in zune-core 0.5.2 break zune-jpeg via slint.
-zune-core = "=0.5.3"
 
 [build-dependencies]
 slint-build = { workspace = true }

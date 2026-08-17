@@ -599,7 +599,6 @@ version = "0.6.3"
 dependencies = [
  "slint",
  "slint-build",
- "zune-core",
 ]
 
 [[package]]

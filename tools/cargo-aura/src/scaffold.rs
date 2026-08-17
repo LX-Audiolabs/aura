@@ -146,9 +146,6 @@ crate-type = ["cdylib", "lib"]
 aura = {{ path = "{}/crates/aura" }}
 aura-editor = {{ path = "{}/crates/aura-editor", features = ["backend-femtovg"] }}
 slint = {{ version = "=1.17.1", default-features = false, features = ["std", "compat-1-2"] }}
-# Workaround: zune-core 0.5.2 ships empty log macros that break zune-jpeg 0.5.15
-# (pulled via slint-build). Pin until fixed upstream, then delete this line.
-zune-core = "=0.5.1"
 
 [build-dependencies]
 aura-build = {{ path = "{}/crates/aura-build" }}
