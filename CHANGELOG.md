@@ -7,6 +7,10 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ## [Unreleased]
 
+### Changed
+
+- Drop `zune-core` exact pins (`aura-gui`, `cargo aura new` scaffold). 0.5.2 is yanked; 0.5.3 is the log-macro fix.
+
 ## [0.6.3] - 2026-08-17
 
 ### Fixed
