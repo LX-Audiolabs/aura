@@ -17,7 +17,7 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 - [x] G14 tail + render + preset-load — load/discovery 2026-08-17
 - [x] G17 sample-accurate + G18 mono mod — done 2026-08-11 (CLAP first-class)
 - [ ] **CLAP outstanding (product-driven)** — list: `crates/aura-clap/README.md`
-  - [ ] poly mod (`PER_NOTE_ID`) / note expression — instrument pilot
+  - [x] poly mod (`PER_NOTE_ID`) / note expression — `ProcessContext.notes` (2026-08-17)
   - [ ] multi-out / >1 sidechain — only if plugin needs
   - [ ] G5 rich state hooks — if host blob > flat params
   - [ ] optional Bitwig host proofs (pages, latency, automation, mod, offline)
@@ -27,7 +27,8 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 - [x] Stage 6 DLL swap — `aura-hot` proxy + `--hot` impl sidecar
 - [x] Stage 6 UMP `SysEx8` / Flex Data packets (process still 7-bit)
 - [x] Stage 6 UI identity — aurora teal `AuraTheme` + restyled `aura-gui`
-- [ ] crates.io publish when ready (`publish = false` today)
+- [ ] **Framework test pass** (before any crates.io) — CI smokes + Bitwig host proofs
+- [ ] crates.io publish — **last**, after framework test pass (`publish = false` today)
 
 ## Decisions
 
@@ -40,7 +41,7 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 [ATOM] type=decision | detail=LV2 UI extension done 2026-08-10 — lv2ui_descriptor + Editor bridge + idleInterface; TTL UI triples when plugin has editor
 [ATOM] type=decision | detail=G15 AudioTap landed 2026-08-10 — lock-free SPSC sample ring in aura-params
 [ATOM] type=decision | detail=Basis fertig 2026-08-08 — DoD green; first-class CLAP path 2026-08-11
-[ATOM] type=decision | detail=CLAP outstanding = poly-mod / note-expr / multi-out / G5 — see aura-clap README; preset-load landed
+[ATOM] type=decision | detail=CLAP outstanding = multi-out / G5 — see aura-clap README; poly-mod + note-expr land on ProcessContext.notes (plugin voice table)
 [ATOM] type=decision | detail=Process MIDI stays 7-bit MidiMessage; Ump is additive; CLAP_EVENT_MIDI2 down-converts
 [ATOM] type=decision | detail=cargo aura watch = rebuild+install poll (no notify dep); preview stays Slint-only
 [ATOM] type=decision | detail=cargo aura mesh wraps agal; never a build gate (agal_optional)
@@ -52,4 +53,5 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 [ATOM] type=decision | detail=Portable DSP algos land under aura-dsp modules (docs/dsp-layout.md)
 [ATOM] type=decision | detail=ProcessContext.midi / midi_out wired across CLAP/VST3/LV2
 [ATOM] type=decision | detail=AURA state = flat param blob (truce-like); no vault/MD/SNAP migration tools in framework core
+[ATOM] type=decision | detail=crates.io last — only after framework test pass (CI smokes + host proofs); keep publish = false
 ```

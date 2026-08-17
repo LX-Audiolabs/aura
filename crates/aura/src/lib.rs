@@ -42,8 +42,9 @@ pub use aura_lv2 as lv2;
 pub use aura_core::{
     AudioBuffer, AudioConfig, BusLayout, ChannelConfig, Editor, EditorBridge, FactoryPreset,
     FactoryPresetState, IntoEditor, MidiBuffer, MidiDialect, MidiEvent, MidiMessage, MidiStatus,
-    ParamEvent, ParamEventQueue, PluginCategory, PluginContext, PluginInfo, PluginLogic,
-    ProcessContext, ProcessMode, ProcessStatus, RawWindowHandle, Transport, Ump,
+    NOTE_UNSPECIFIED, NoteBuffer, NoteEvent, NoteEventKind, NoteExpression, NoteTarget, ParamEvent,
+    ParamEventQueue, PluginCategory, PluginContext, PluginInfo, PluginLogic, ProcessContext,
+    ProcessMode, ProcessStatus, RawWindowHandle, Transport, Ump,
 };
 
 // --- params surface ---
@@ -77,9 +78,10 @@ pub mod prelude {
     pub use crate::{
         AudioBuffer, AudioConfig, AudioTap, BoolParam, BusLayout, ChannelConfig, Editor, EnumParam,
         FactoryPreset, FactoryPresetState, FloatParam, FloatParamReadF32, IntParam, IntoEditor,
-        MeterSlot, MidiBuffer, MidiMessage, ParamEnum, ParamInfo, ParamRange, ParamUnit,
-        ParamValueKind, Params, PluginCategory, PluginContext, PluginInfo, PluginLogic,
-        ProcessContext, ProcessMode, ProcessStatus, RawWindowHandle, SmoothingStyle,
+        MeterSlot, MidiBuffer, MidiMessage, NoteBuffer, NoteEvent, NoteEventKind, NoteExpression,
+        NoteTarget, ParamEnum, ParamInfo, ParamRange, ParamUnit, ParamValueKind, Params,
+        PluginCategory, PluginContext, PluginInfo, PluginLogic, ProcessContext, ProcessMode,
+        ProcessStatus, RawWindowHandle, SmoothingStyle,
     };
     // FloatParamReadF64 available as `aura::FloatParamReadF64` — not in prelude
     // (same method name as F32 → E0034 if both imported).

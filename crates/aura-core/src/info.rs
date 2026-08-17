@@ -8,6 +8,10 @@ pub enum MidiDialect {
     /// Advertise MIDI 2 on the note port. Process still sees 7-bit [`crate::MidiMessage`];
     /// CLAP down-converts `CLAP_EVENT_MIDI2` via [`aura_midi::Ump`].
     Midi2,
+    /// Prefer native CLAP notes (`CLAP_NOTE_DIALECT_CLAP`) so hosts send
+    /// `CLAP_EVENT_NOTE_*` + note expressions + per-note `PARAM_MOD`.
+    /// MIDI 1/2 stay supported; process MIDI is still filled as 7-bit.
+    Clap,
 }
 
 /// Broad plugin category for host browsers.

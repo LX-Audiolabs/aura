@@ -136,8 +136,9 @@ bitflags::bitflags! {
         const MODULATABLE = 0b10_0000;
         /// Per-note-id (polyphonic) modulation: implies
         /// [`Self::MODULATABLE`] and maps to
-        /// `CLAP_PARAM_IS_MODULATABLE_PER_NOTE_ID`. Mono mod path
-        /// ignores `note_id` until poly voice routing lands.
+        /// `CLAP_PARAM_IS_MODULATABLE_PER_NOTE_ID`. Mono `PARAM_MOD`
+        /// (`note_id < 0`) still hits [`crate::Params::set_mod`];
+        /// per-note mods arrive on `ProcessContext.notes`.
         const MODULATABLE_PER_NOTE = 0b100_0000;
     }
 }

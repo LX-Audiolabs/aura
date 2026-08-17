@@ -12,6 +12,7 @@ pub mod editor;
 pub mod events;
 pub mod host_fence;
 pub mod info;
+pub mod note_events;
 pub mod plugin;
 pub mod preset;
 pub mod process;
@@ -29,6 +30,10 @@ pub use editor::{Editor, EditorBridge, IntoEditor, PluginContext, RawWindowHandl
 pub use events::{ParamEvent, ParamEventQueue};
 pub use host_fence::{host_callback, host_callback_with};
 pub use info::{MidiDialect, PluginCategory, PluginInfo};
+pub use note_events::{
+    NOTE_UNSPECIFIED, NoteBuffer, NoteEvent, NoteEventKind, NoteExpression, NoteTarget,
+    route_param_mod,
+};
 pub use plugin::PluginLogic;
 pub use preset::{FactoryPreset, FactoryPresetState, apply_factory_preset, load_preset_file};
 pub use process::{ProcessContext, ProcessStatus};

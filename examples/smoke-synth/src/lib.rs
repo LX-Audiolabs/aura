@@ -1,5 +1,6 @@
-//! Minimal monophonic synth — proves `context.midi` + `aura-dsp` voice path
-//! (Oscillator + Adsr) end-to-end through the format wrappers.
+//! Minimal monophonic synth — proves `context.notes` (CLAP note-id,
+//! expressions, per-note `PARAM_MOD`) plus MIDI fallback + `aura-dsp`
+//! (Oscillator + Adsr) through the format wrappers.
 //!
 //! Headless on purpose: `PluginLogic::editor` defaults to `None`, hosts show
 //! their own generic parameter UI.
@@ -37,7 +38,8 @@ pub struct SynthParams {
         name = "Gain",
         range = "linear(-24, 24)",
         default = 0.0,
-        unit = "db"
+        unit = "db",
+        flags = "automatable | modulatable | modulatable_per_note"
     )]
     pub gain: FloatParam,
 }
@@ -51,6 +53,11 @@ pub struct SmokeSynth;
 pub struct DspState {
     osc: Oscillator,
     env: Adsr,
+    note_id: i32,
+    key: i16,
+    tuning_semis: f32,
+    pressure: f32,
+    gain_mod: f64,
 }
 
 fn make_osc(freq: f32, sample_rate: f32) -> Oscillator {
@@ -83,9 +90,8 @@ impl PluginLogic for SmokeSynth {
         info.lv2_uri = "https://lx-audiolabs.com/lv2/smoke-synth";
         info.category = PluginCategory::Instrument;
         info.accepts_midi_in = true;
-        // Advertise MIDI 2 so hosts that speak UMP send CLAP_EVENT_MIDI2;
-        // wrapper down-converts to MidiMessage for process().
-        info.midi_input_dialect = aura::MidiDialect::Midi2;
+        // Prefer native CLAP notes so Bitwig sends expressions + per-note mod.
+        info.midi_input_dialect = aura::MidiDialect::Clap;
         info
     }
 
@@ -103,6 +109,11 @@ impl PluginLogic for SmokeSynth {
         DspState {
             osc: make_osc(440.0, sr),
             env: make_env(sr),
+            note_id: -1,
+            key: 69,
+            tuning_semis: 0.0,
+            pressure: 1.0,
+            gain_mod: 0.0,
         }
     }
 
@@ -120,25 +131,35 @@ impl PluginLogic for SmokeSynth {
         buffer: &mut AudioBuffer<'_, f32>,
         context: &mut ProcessContext,
     ) -> ProcessStatus {
-        // Block-accurate note handling is fine for the smoke test (last note
-        // wins, monophonic); sample_offset is intentionally ignored.
-        for ev in context.midi.iter() {
-            let msg = ev.message;
-            if msg.is_note_on() {
-                if let Some(note) = msg.note_number() {
-                    let _ = state.osc.set_frequency(midi_note_to_freq(note));
-                    state.env.gate_on();
+        if context.notes.is_empty() {
+            // VST3 / LV2 / MIDI-only hosts — last note wins, monophonic.
+            for ev in context.midi.iter() {
+                let msg = ev.message;
+                if msg.is_note_on() {
+                    if let Some(note) = msg.note_number() {
+                        state.key = i16::from(note);
+                        state.note_id = -1;
+                        state.tuning_semis = 0.0;
+                        state.pressure = 1.0;
+                        state.gain_mod = 0.0;
+                        retune(state);
+                        state.env.gate_on();
+                    }
+                } else if msg.is_note_off() {
+                    state.env.gate_off();
                 }
-            } else if msg.is_note_off() {
-                state.env.gate_off();
+            }
+        } else {
+            for ev in context.notes.iter() {
+                apply_note(state, ev);
             }
         }
 
         let n = buffer.num_samples();
         let outs = buffer.num_outputs();
         #[allow(clippy::cast_possible_truncation)]
-        let gain_db = params.gain.raw_target() as f32;
-        let lin = 10.0f32.powf(gain_db / 20.0);
+        let gain_db = (params.gain.effective_target() + state.gain_mod) as f32;
+        let lin = 10.0f32.powf(gain_db / 20.0) * state.pressure.clamp(0.0, 1.0);
 
         for i in 0..n {
             let s = state.osc.next_sample() * state.env.next_value() * lin;
@@ -147,6 +168,116 @@ impl PluginLogic for SmokeSynth {
             }
         }
         ProcessStatus::Continue
+    }
+}
+
+fn retune(state: &mut DspState) {
+    let key = u8::try_from(state.key.clamp(0, 127)).unwrap_or(69);
+    let hz = midi_note_to_freq(key) * 2.0f32.powf(state.tuning_semis / 12.0);
+    let _ = state.osc.set_frequency(hz);
+}
+
+fn apply_note(state: &mut DspState, ev: NoteEvent) {
+    match ev.kind {
+        NoteEventKind::On { .. } => {
+            state.note_id = ev.note_id;
+            state.key = ev.key;
+            state.tuning_semis = 0.0;
+            state.pressure = 1.0;
+            state.gain_mod = 0.0;
+            retune(state);
+            state.env.gate_on();
+        }
+        NoteEventKind::Off { .. } | NoteEventKind::Choke => {
+            if ev.matches_voice(state.note_id, state.key) {
+                state.env.gate_off();
+            }
+        }
+        NoteEventKind::Expression { id, value } => {
+            if !ev.matches_voice(state.note_id, state.key) {
+                return;
+            }
+            match id {
+                NoteExpression::Tuning => {
+                    #[allow(clippy::cast_possible_truncation)]
+                    {
+                        state.tuning_semis = value as f32;
+                    }
+                    retune(state);
+                }
+                NoteExpression::Pressure => {
+                    #[allow(clippy::cast_possible_truncation)]
+                    {
+                        state.pressure = value as f32;
+                    }
+                }
+                _ => {}
+            }
+        }
+        NoteEventKind::ParamMod { param_id, amount } => {
+            if param_id == 1 && ev.matches_voice(state.note_id, state.key) {
+                state.gain_mod = amount;
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn notes_drive_tuning_and_poly_mod() {
+        let params = SynthParams::default();
+        let mut state = SmokeSynth::init(&params, 44_100.0);
+        apply_note(&mut state, NoteEvent::on(0, 3, 60, 0.8));
+        apply_note(
+            &mut state,
+            NoteEvent {
+                sample_offset: 1,
+                note_id: 3,
+                port_index: 0,
+                channel: 0,
+                key: 60,
+                kind: NoteEventKind::Expression {
+                    id: NoteExpression::Tuning,
+                    value: 12.0,
+                },
+            },
+        );
+        let expect = midi_note_to_freq(60) * 2.0;
+        assert!((state.osc.frequency() - expect).abs() < 0.05);
+        apply_note(
+            &mut state,
+            NoteEvent {
+                sample_offset: 2,
+                note_id: 3,
+                port_index: 0,
+                channel: 0,
+                key: 60,
+                kind: NoteEventKind::ParamMod {
+                    param_id: 1,
+                    amount: 6.0,
+                },
+            },
+        );
+        assert!((state.gain_mod - 6.0).abs() < 1e-12);
+        // Other note_id must not steal the voice.
+        apply_note(
+            &mut state,
+            NoteEvent {
+                sample_offset: 3,
+                note_id: 99,
+                port_index: 0,
+                channel: 0,
+                key: 64,
+                kind: NoteEventKind::ParamMod {
+                    param_id: 1,
+                    amount: -12.0,
+                },
+            },
+        );
+        assert!((state.gain_mod - 6.0).abs() < 1e-12);
     }
 }
 

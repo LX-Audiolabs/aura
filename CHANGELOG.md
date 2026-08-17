@@ -9,6 +9,7 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ### Added
 
+- CLAP poly `PARAM_MOD` (`note_id ≥ 0`) and `CLAP_EVENT_NOTE_EXPRESSION` → `ProcessContext.notes` (`NoteEvent` / `NoteBuffer`). Mono mods still hit `Params::set_mod`. `MidiDialect::Clap` prefers `CLAP_NOTE_DIALECT_CLAP`. smoke-synth consumes note-id, tuning, pressure, per-note Gain.
 - `cargo aura watch` — poll `src` / `ui` / manifests and rebuild (+ install). Default format `--clap`. `--no-install` skips the host copy. Install copy retries when a host still maps the binary.
 - `cargo aura mesh` — thin wrapper over `agal` (default `agal .`). Optional; builds do not need it.
 - `aura-midi::Ump` — MIDI 2.0 Universal MIDI Packet stubs (MIDI 1 CV, MIDI 2 note on/off, per-note pitch bend, `SysEx8`, Flex Data, lossy `to_midi1`).

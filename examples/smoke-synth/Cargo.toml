@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish = false
-description = "AURA in-tree CLAP smoke — monophonic synth (Oscillator + Adsr via context.midi)"
+description = "AURA in-tree CLAP smoke — monophonic synth (notes + MIDI fallback)"
 
 [lib]
 crate-type = ["cdylib", "lib"]

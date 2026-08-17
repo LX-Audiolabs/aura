@@ -47,7 +47,9 @@ Entry, factory, audio-ports (mono/stereo + optional sidechain), audio-ports-conf
 
 **Sample-accurate automation:** host `PARAM_VALUE` / `PARAM_MOD` with `time > 0` split the block for params with `ParamFlags::CHUNKED` (default). Opt out with `#[param(chunk = false)]`. See `aura_core::chunked_process`.
 
-**Modulation:** `#[param(flags = "modulatable")]` → `CLAP_PARAM_IS_MODULATABLE`. Host `PARAM_MOD` is a non-destructive offset; DSP reads `clamp(base + mod)` via smoothers; host UI/`get` stays on base. Mono first; per-note id is accepted only for mono (`note_id < 0`).
+**Modulation:** `#[param(flags = "modulatable")]` → `CLAP_PARAM_IS_MODULATABLE`. Host `PARAM_MOD` is a non-destructive offset; DSP reads `clamp(base + mod)` via smoothers; host UI/`get` stays on base. `note_id < 0` is mono (params). `note_id ≥ 0` is poly — delivered on `ProcessContext.notes` as `NoteEventKind::ParamMod` (does not overwrite mono `set_mod`). Advertise `#[param(flags = "modulatable | modulatable_per_note")]` so hosts send per-note mods.
+
+**Note events / expressions:** prefer `MidiDialect::Clap` so the note port lists `CLAP_NOTE_DIALECT_CLAP`. Wrapper fills `ProcessContext.notes` with on/off/choke (`note_id`, key, velocity 0..1), `CLAP_EVENT_NOTE_EXPRESSION` (volume/pan/tuning/…), and still mirrors on/off into 7-bit `midi`.
 
 **Latency:** override `PluginLogic::latency(&state) -> u32` (samples). Via `clap.latency`; mid-run changes request host restart for PDC.
 
@@ -57,7 +59,7 @@ Entry, factory, audio-ports (mono/stereo + optional sidechain), audio-ports-conf
 
 **Preset load:** `clap.preset-load/2` (compat `clap.preset-load.draft/2`). FILE location reads a v1 state blob (`PluginLogic::load_preset_from_file`). PLUGIN location looks up `PluginLogic::factory_presets` by `load_key`. Non-empty factory list also exposes `preset-discovery-factory/2` (PLUGIN / factory content).
 
-**MIDI 2:** set `PluginInfo.midi_input_dialect = MidiDialect::Midi2` to prefer `CLAP_NOTE_DIALECT_MIDI2` (MIDI 1 still advertised). Incoming `CLAP_EVENT_MIDI2` is down-converted via `aura_midi::Ump` into `ProcessContext::midi`. Process stays 7-bit until a plugin needs hi-res / note-id on the context. `Ump` also encodes `SysEx8` and Flex Data (not yet a typed process path).
+**MIDI 2:** set `PluginInfo.midi_input_dialect = MidiDialect::Midi2` to prefer `CLAP_NOTE_DIALECT_MIDI2` (CLAP + MIDI 1 still advertised). Incoming `CLAP_EVENT_MIDI2` is down-converted via `aura_midi::Ump` into `ProcessContext::midi`. Native notes / expressions use `MidiDialect::Clap` + `ProcessContext.notes`. `Ump` also encodes `SysEx8` and Flex Data (not yet a typed process path).
 
 **Hot reload:** `cargo aura watch --hot` installs `aura-hot` as `Name.clap` and the real plugin as `Name.impl.dll` (or `.so` / `.dylib`). The host keeps the proxy mapped; watch overwrites the impl. Re-add the instance to run the new DSP.
 
@@ -76,8 +78,8 @@ Ship-capable CLAP core is **done**. Remaining work is **product-driven** or opti
 | Item | Gap / notes | Trigger |
 |------|-------------|---------|
 | ~~**`clap.preset-load`**~~ | landed | `factory_presets` + FILE blob load; vault-format files override `load_preset_from_file` |
-| **Poly param modulation** (`CLAP_PARAM_IS_MODULATABLE_PER_NOTE_ID`) | G18 poly — flag maps to CLAP; process drops `PARAM_MOD` with `note_id ≥ 0` until voice routing | Instrument with per-voice params |
-| **Note expression** (CLAP note expression events) | Not wired to `ProcessContext` | MPE / Bitwig expression pilot |
+| ~~**Poly param modulation**~~ | landed — `note_id ≥ 0` → `ProcessContext.notes` (`ParamMod`); smoke-synth Gain is `modulatable_per_note` | plugin owns voice table |
+| ~~**Note expression**~~ | landed — `CLAP_EVENT_NOTE_EXPRESSION` → `NoteEventKind::Expression`; prefer `MidiDialect::Clap` | Bitwig expression / MPE host proof |
 | **Multi-out / >1 sidechain** | G12 extension — one optional sidechain only today | Aux buses beyond single SC |
 | **Rich state hooks** (host blob > flat params) | G5 | Presets that need non-param bytes in host state |
 | **SysEx** typed path | — | Rare / hardware bridge |

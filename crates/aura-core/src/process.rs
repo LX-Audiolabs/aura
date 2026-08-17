@@ -3,6 +3,7 @@
 use aura_midi::MidiBuffer;
 
 use crate::config::ProcessMode;
+use crate::note_events::NoteBuffer;
 
 /// What the plugin wants after `process`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -21,6 +22,9 @@ pub enum ProcessStatus {
 /// Format wrappers fill [`Self::midi`] from host note/MIDI events (CLAP first;
 /// VST3/LV2 empty until wired). Plugins read sample-accurate messages there.
 ///
+/// CLAP also fills [`Self::notes`] with native note-on/off/choke, note
+/// expressions, and per-note `PARAM_MOD` (`note_id >= 0`). MIDI stays 7-bit.
+///
 /// Plugins that generate or pass through MIDI events push them into
 /// [`Self::midi_out`]; wrappers flush them to the host after `process`.
 #[non_exhaustive]
@@ -34,6 +38,8 @@ pub struct ProcessContext {
     pub midi: MidiBuffer,
     /// Plugin → host MIDI / note events for this block (sorted by sample offset).
     pub midi_out: MidiBuffer,
+    /// CLAP-shaped notes / expressions / poly mods (empty on VST3/LV2 today).
+    pub notes: NoteBuffer,
 }
 
 impl ProcessContext {
@@ -46,6 +52,7 @@ impl ProcessContext {
             transport: None,
             midi: MidiBuffer::new(),
             midi_out: MidiBuffer::new(),
+            notes: NoteBuffer::new(),
         }
     }
 
@@ -70,6 +77,12 @@ impl ProcessContext {
     #[must_use]
     pub fn with_midi_out(mut self, midi_out: MidiBuffer) -> Self {
         self.midi_out = midi_out;
+        self
+    }
+
+    #[must_use]
+    pub fn with_notes(mut self, notes: NoteBuffer) -> Self {
+        self.notes = notes;
         self
     }
 

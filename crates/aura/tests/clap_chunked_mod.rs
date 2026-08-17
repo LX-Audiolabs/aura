@@ -25,6 +25,14 @@ struct GainParams {
         flags = "automatable | modulatable"
     )]
     drive: FloatParam,
+    #[param(
+        id = 4,
+        name = "Voice",
+        range = "linear(0, 1)",
+        default = 0.5,
+        flags = "modulatable_per_note"
+    )]
+    voice: FloatParam,
 }
 
 #[test]
@@ -34,6 +42,11 @@ fn chunked_flag_default_and_opt_out() {
     assert!(infos[0].flags.contains(ParamFlags::CHUNKED));
     assert!(!infos[1].flags.contains(ParamFlags::CHUNKED));
     assert!(infos[2].flags.contains(ParamFlags::MODULATABLE));
+    assert!(
+        infos[3]
+            .flags
+            .contains(ParamFlags::MODULATABLE | ParamFlags::MODULATABLE_PER_NOTE)
+    );
 }
 
 #[test]
