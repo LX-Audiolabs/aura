@@ -11,7 +11,7 @@
 //! Covers: factory, audio-ports (+ config, sidechain), note-ports, params
 //! (sample-accurate + mono + per-note mod), note expressions, state, GUI,
 //! remote-controls, latency, tail, render, preset-load (+ discovery),
-//! MIDI 2 ingest (`CLAP_EVENT_MIDI2` → `MidiMessage`).
+//! MIDI 2 (`CLAP_EVENT_MIDI2` → `ProcessContext.ump`, 7-bit image on `midi`).
 
 #![allow(clippy::missing_safety_doc)]
 // ponytail: CLAP FFI glue — raw-pointer casts and C-int size conversions are
@@ -41,7 +41,7 @@ use aura_core::{
     TimedParamEvent, apply_at_time, apply_non_chunked, host_callback, host_callback_with,
     layout_at, route_param_mod, route_param_value, split_points_into,
 };
-use aura_core::{MidiBuffer, MidiMessage, MidiStatus, Ump};
+use aura_core::{MidiBuffer, MidiMessage, MidiStatus, Ump, UmpBuffer};
 use aura_params::{ParamFlags, ParamInfo, ParamRange, Params};
 use clap_sys::events::{
     CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_IS_LIVE, CLAP_EVENT_MIDI, CLAP_EVENT_MIDI2,
@@ -339,6 +339,9 @@ struct ProcessScratch {
     notes_out: NoteBuffer,
     notes_chunk: NoteBuffer,
     midi_chunk: MidiBuffer,
+    ump: UmpBuffer,
+    ump_out: UmpBuffer,
+    ump_chunk: UmpBuffer,
     splits: Vec<u32>,
     /// Zeroed fallback when a host input pointer is null.
     silence: Vec<f32>,
@@ -358,6 +361,9 @@ impl ProcessScratch {
             notes_out: NoteBuffer::new(),
             notes_chunk: NoteBuffer::new(),
             midi_chunk: MidiBuffer::new(),
+            ump: UmpBuffer::new(),
+            ump_out: UmpBuffer::new(),
+            ump_chunk: UmpBuffer::new(),
             splits: Vec::new(),
             silence: Vec::new(),
         }
@@ -371,6 +377,9 @@ impl ProcessScratch {
         self.notes_out.reserve(256);
         self.notes_chunk.reserve(MAX_NOTE_EVENTS + 128);
         self.midi_chunk.reserve(MAX_NOTE_EVENTS);
+        self.ump.reserve(MAX_NOTE_EVENTS);
+        self.ump_out.reserve(256);
+        self.ump_chunk.reserve(MAX_NOTE_EVENTS);
         self.splits.reserve(64);
         if self.silence.len() < max_frames {
             self.silence.resize(max_frames, 0.0);
@@ -615,6 +624,8 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
         inst.scratch.notes.clear();
         inst.scratch.midi_out.clear();
         inst.scratch.notes_out.clear();
+        inst.scratch.ump.clear();
+        inst.scratch.ump_out.clear();
         if !process.in_events.is_null() {
             unsafe {
                 collect_input_events(
@@ -622,6 +633,7 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
                     &mut inst.scratch.timed,
                     &mut inst.scratch.midi,
                     &mut inst.scratch.notes,
+                    &mut inst.scratch.ump,
                 );
             };
         }
@@ -745,6 +757,9 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
                 inst.scratch
                     .notes_chunk
                     .copy_range_rebased(&inst.scratch.notes, a, b);
+                inst.scratch
+                    .ump_chunk
+                    .copy_range_rebased(&inst.scratch.ump, a, b);
             }
             let midi = if single {
                 std::mem::take(&mut inst.scratch.midi)
@@ -756,12 +771,19 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
             } else {
                 std::mem::take(&mut inst.scratch.notes_chunk)
             };
+            let ump = if single {
+                std::mem::take(&mut inst.scratch.ump)
+            } else {
+                std::mem::take(&mut inst.scratch.ump_chunk)
+            };
             let mut ctx = ProcessContext::new(sample_rate, chunk_len)
                 .with_process_mode(process_mode)
                 .with_midi(midi)
                 .with_notes(notes)
+                .with_ump(ump)
                 .with_midi_out(std::mem::take(&mut inst.scratch.midi_out))
-                .with_notes_out(std::mem::take(&mut inst.scratch.notes_out));
+                .with_notes_out(std::mem::take(&mut inst.scratch.notes_out))
+                .with_ump_out(std::mem::take(&mut inst.scratch.ump_out));
             ctx.transport = transport;
 
             let chunk_status = unsafe {
@@ -782,20 +804,26 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
             if single {
                 inst.scratch.midi = std::mem::take(&mut ctx.midi);
                 inst.scratch.notes = std::mem::take(&mut ctx.notes);
+                inst.scratch.ump = std::mem::take(&mut ctx.ump);
             } else {
                 inst.scratch.midi_chunk = std::mem::take(&mut ctx.midi);
                 inst.scratch.notes_chunk = std::mem::take(&mut ctx.notes);
+                inst.scratch.ump_chunk = std::mem::take(&mut ctx.ump);
                 inst.scratch.midi_chunk.clear();
                 inst.scratch.notes_chunk.clear();
+                inst.scratch.ump_chunk.clear();
             }
             unsafe {
                 emit_midi_events_at(process.out_events, &ctx.midi_out, inst.scratch.splits[si]);
                 emit_note_events_at(process.out_events, &ctx.notes_out, inst.scratch.splits[si]);
+                emit_ump_events_at(process.out_events, &ctx.ump_out, inst.scratch.splits[si]);
             }
             inst.scratch.midi_out = std::mem::take(&mut ctx.midi_out);
             inst.scratch.midi_out.clear();
             inst.scratch.notes_out = std::mem::take(&mut ctx.notes_out);
             inst.scratch.notes_out.clear();
+            inst.scratch.ump_out = std::mem::take(&mut ctx.ump_out);
+            inst.scratch.ump_out.clear();
 
             match chunk_status {
                 ProcessStatus::Error => {
@@ -888,9 +916,11 @@ unsafe fn collect_input_events(
     timed: &mut Vec<TimedParamEvent>,
     midi: &mut MidiBuffer,
     notes: &mut NoteBuffer,
+    ump: &mut UmpBuffer,
 ) {
     midi.clear();
     notes.clear();
+    ump.clear();
     timed.clear();
     let ev = unsafe { &*in_events };
     let Some(size_fn) = ev.size else {
@@ -996,14 +1026,20 @@ unsafe fn collect_input_events(
             }
             CLAP_EVENT_MIDI => {
                 let m = unsafe { &*(hdr as *const clap_event_midi) };
-                midi.push(
-                    header.time,
-                    MidiMessage::raw(m.data[0], m.data[1], m.data[2]),
-                );
+                let msg = MidiMessage::raw(m.data[0], m.data[1], m.data[2]);
+                midi.push(header.time, msg);
+                if accept_note_event(ump.len(), msg.is_note_on() || msg.is_note_off()) {
+                    ump.push(header.time, Ump::from_midi1(msg));
+                }
             }
             CLAP_EVENT_MIDI2 => {
                 let m = unsafe { &*(hdr as *const clap_event_midi2) };
-                if let Some(msg) = Ump::from_words(m.data).to_midi1() {
+                let packet = Ump::from_words(m.data);
+                let essential = packet.is_note_on() || packet.is_note_off();
+                if accept_note_event(ump.len(), essential) {
+                    ump.push(header.time, packet);
+                }
+                if let Some(msg) = packet.to_midi1() {
                     midi.push(header.time, msg);
                 }
             }
@@ -1020,8 +1056,9 @@ unsafe fn apply_input_events(
 ) {
     let mut timed = Vec::new();
     let mut notes = NoteBuffer::new();
-    unsafe { collect_input_events(in_events, &mut timed, midi, &mut notes) };
-    let _ = notes; // ponytail: flush has no process() to consume poly events
+    let mut ump = UmpBuffer::new();
+    unsafe { collect_input_events(in_events, &mut timed, midi, &mut notes, &mut ump) };
+    let _ = (notes, ump); // ponytail: flush has no process() to consume poly / UMP
     for ev in timed {
         aura_core::apply_event(params, ev);
     }
@@ -1155,6 +1192,25 @@ unsafe fn emit_note_events_at(out: *const clap_output_events, notes: &NoteBuffer
             }
             NoteEventKind::ParamMod { .. } | NoteEventKind::ParamValue { .. } => {}
         }
+    }
+}
+
+/// Push plugin-generated UMP from [`ProcessContext::ump_out`] as `CLAP_EVENT_MIDI2`.
+unsafe fn emit_ump_events_at(out: *const clap_output_events, ump: &UmpBuffer, base: u32) {
+    if out.is_null() || ump.is_empty() {
+        return;
+    }
+    let Some(try_push) = (unsafe { &*out }).try_push else {
+        return;
+    };
+    for ev in ump.iter() {
+        let mut e = clap_event_midi2 {
+            header: event_header(CLAP_EVENT_MIDI2, size_of::<clap_event_midi2>() as u32),
+            port_index: 0,
+            data: ev.packet.words(),
+        };
+        e.header.time = ev.sample_offset.saturating_add(base);
+        unsafe { try_push(out, &e as *const _ as *const clap_event_header) };
     }
 }
 
@@ -2486,6 +2542,32 @@ mod process_scratch_tests {
         };
         assert_eq!(t(NoteEventKind::End), CLAP_EVENT_NOTE_END);
         assert_eq!(t(NoteEventKind::On { velocity: 1.0 }), CLAP_EVENT_NOTE_ON);
+    }
+
+    #[test]
+    fn ump_out_is_clap_midi2() {
+        use std::mem::size_of;
+
+        use clap_sys::events::{
+            CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_MIDI2, clap_event_header, clap_event_midi2,
+        };
+
+        let u = aura_core::Ump::midi2_per_note_pitch_bend(0, 0, 60, 0x8000_0000);
+        assert!(u.is_per_note_pitch_bend());
+        assert!(u.to_midi1().is_none());
+        let e = clap_event_midi2 {
+            header: clap_event_header {
+                size: size_of::<clap_event_midi2>() as u32,
+                time: 0,
+                space_id: CLAP_CORE_EVENT_SPACE_ID,
+                type_: CLAP_EVENT_MIDI2,
+                flags: 0,
+            },
+            port_index: 0,
+            data: u.words(),
+        };
+        assert_eq!(e.header.type_, CLAP_EVENT_MIDI2);
+        assert_eq!(e.data, u.words());
     }
 }
 

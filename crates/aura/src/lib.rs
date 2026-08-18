@@ -42,9 +42,10 @@ pub use aura_lv2 as lv2;
 pub use aura_core::{
     AudioBuffer, AudioConfig, BusLayout, ChannelConfig, Editor, EditorBridge, FactoryPreset,
     FactoryPresetState, IntoEditor, MidiBuffer, MidiDialect, MidiEvent, MidiMessage, MidiStatus,
-    NOTE_UNSPECIFIED, NoteBuffer, NoteEvent, NoteEventKind, NoteExpression, NoteTarget, ParamEvent,
-    ParamEventQueue, PluginCategory, PluginContext, PluginInfo, PluginLogic, ProcessContext,
-    ProcessMode, ProcessStatus, RawWindowHandle, Transport, Ump, append_notes_as_midi,
+    NOTE_UNSPECIFIED, NoteBuffer, NoteEvent, NoteEventKind, NoteExpression, NoteTarget, NoteVoice,
+    NoteVoiceTable, ParamEvent, ParamEventQueue, PluginCategory, PluginContext, PluginInfo,
+    PluginLogic, ProcessContext, ProcessMode, ProcessStatus, RawWindowHandle, Transport, Ump,
+    UmpBuffer, UmpEvent, append_midi_as_ump, append_notes_as_midi, append_ump_as_midi,
 };
 
 // --- params surface ---
@@ -79,9 +80,10 @@ pub mod prelude {
         AudioBuffer, AudioConfig, AudioTap, BoolParam, BusLayout, ChannelConfig, Editor, EnumParam,
         FactoryPreset, FactoryPresetState, FloatParam, FloatParamReadF32, IntParam, IntoEditor,
         MeterSlot, MidiBuffer, MidiMessage, NoteBuffer, NoteEvent, NoteEventKind, NoteExpression,
-        NoteTarget, ParamEnum, ParamInfo, ParamRange, ParamUnit, ParamValueKind, Params,
-        PluginCategory, PluginContext, PluginInfo, PluginLogic, ProcessContext, ProcessMode,
-        ProcessStatus, RawWindowHandle, SmoothingStyle,
+        NoteTarget, NoteVoice, NoteVoiceTable, ParamEnum, ParamInfo, ParamRange, ParamUnit,
+        ParamValueKind, Params, PluginCategory, PluginContext, PluginInfo, PluginLogic,
+        ProcessContext, ProcessMode, ProcessStatus, RawWindowHandle, SmoothingStyle, Ump,
+        UmpBuffer,
     };
     // FloatParamReadF64 available as `aura::FloatParamReadF64` — not in prelude
     // (same method name as F32 → E0034 if both imported).

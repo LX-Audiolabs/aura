@@ -13,6 +13,7 @@ pub mod events;
 pub mod host_fence;
 pub mod info;
 pub mod note_events;
+pub mod note_voices;
 pub mod plugin;
 pub mod preset;
 pub mod process;
@@ -35,6 +36,7 @@ pub use note_events::{
     NOTE_UNSPECIFIED, NoteBuffer, NoteEvent, NoteEventKind, NoteExpression, NoteTarget,
     append_notes_as_midi, route_param_mod, route_param_value,
 };
+pub use note_voices::{NoteVoice, NoteVoiceTable};
 pub use plugin::PluginLogic;
 pub use preset::{FactoryPreset, FactoryPresetState, apply_factory_preset, load_preset_file};
 pub use process::{ProcessContext, ProcessStatus};
@@ -42,4 +44,7 @@ pub use state::{decode_state, encode_state};
 pub use transport::Transport;
 
 // MIDI types live in `aura-midi`; re-export for process-path convenience.
-pub use aura_midi::{MidiBuffer, MidiEvent, MidiMessage, MidiStatus, Ump};
+pub use aura_midi::{
+    MidiBuffer, MidiEvent, MidiMessage, MidiStatus, Ump, UmpBuffer, UmpEvent, append_midi_as_ump,
+    append_ump_as_midi,
+};

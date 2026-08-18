@@ -131,6 +131,54 @@ impl Ump {
         }
     }
 
+    /// Channel nibble for MIDI 1 CV (type 0x2) or MIDI 2 CV (type 0x4).
+    #[must_use]
+    pub const fn channel(self) -> Option<u8> {
+        match self.message_type() {
+            0x2 | 0x4 => Some(((self.words[0] >> 16) & 0x0F) as u8),
+            _ => None,
+        }
+    }
+
+    /// Note number for note-on/off, poly AT, or per-note pitch bend.
+    #[must_use]
+    pub const fn note(self) -> Option<u8> {
+        match self.message_type() {
+            0x2 => {
+                let status = ((self.words[0] >> 16) & 0xF0) as u8;
+                if matches!(status, 0x80 | 0x90 | 0xA0) {
+                    Some(((self.words[0] >> 8) & 0x7F) as u8)
+                } else {
+                    None
+                }
+            }
+            0x4 => {
+                let status = ((self.words[0] >> 20) & 0xF) as u8;
+                if matches!(status, 0x8 | 0x9 | 0xA | 0x6) {
+                    Some(((self.words[0] >> 8) & 0x7F) as u8)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub const fn is_per_note_pitch_bend(self) -> bool {
+        self.message_type() == 0x4 && ((self.words[0] >> 20) & 0xF) == 0x6
+    }
+
+    /// Raw 32-bit per-note pitch bend (center `0x8000_0000`).
+    #[must_use]
+    pub const fn per_note_pitch_bend_raw(self) -> Option<u32> {
+        if self.is_per_note_pitch_bend() {
+            Some(self.words[1])
+        } else {
+            None
+        }
+    }
+
     #[must_use]
     pub const fn message_type(self) -> u8 {
         ((self.words[0] >> 28) & 0xF) as u8
@@ -368,5 +416,15 @@ mod tests {
         assert_eq!(u.message_type(), 0xD);
         assert_eq!(u.words()[1], 500_000_000);
         assert_eq!(u.to_midi1(), None);
+    }
+
+    #[test]
+    fn per_note_pitch_bend_stays_native() {
+        let u = Ump::midi2_per_note_pitch_bend(0, 2, 64, 0xC000_0000);
+        assert!(u.is_per_note_pitch_bend());
+        assert_eq!(u.channel(), Some(2));
+        assert_eq!(u.note(), Some(64));
+        assert_eq!(u.per_note_pitch_bend_raw(), Some(0xC000_0000));
+        assert!(u.to_midi1().is_none());
     }
 }

@@ -7,8 +7,8 @@
 //! DSP (oscillators, voices, filters) lives in **`aura-dsp`**, not here.
 //! Param host-learn hints stay in **`aura-params::MidiSource`**.
 //!
-//! MIDI 2.0: [`Ump`] encodes Universal MIDI Packets. `ProcessContext` still
-//! carries 7-bit [`MidiMessage`]; wrappers down-convert `CLAP_EVENT_MIDI2`.
+//! MIDI 2.0: [`Ump`] / [`UmpBuffer`] are first-class on `ProcessContext`
+//! (`ump` / `ump_out`). 7-bit [`MidiMessage`] stays as the fallback image.
 
 #![forbid(unsafe_code)]
 
@@ -17,7 +17,9 @@ mod message;
 mod note;
 mod ump;
 
-pub use buffer::{MidiBuffer, MidiEvent};
+pub use buffer::{
+    MidiBuffer, MidiEvent, UmpBuffer, UmpEvent, append_midi_as_ump, append_ump_as_midi,
+};
 pub use message::{MidiMessage, MidiStatus};
 pub use note::{midi_note_to_freq, midi_note_to_freq_a4, note_name};
 pub use ump::Ump;

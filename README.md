@@ -229,7 +229,8 @@ More detail: crate docs (`cargo doc -p aura --open`), [docs/versioning.md](./doc
 | LV2 (Linux) process + UI extension | done (UI host smoke depends on host) |
 | crates.io publish | **last** — after framework test pass; path/git only until then |
 | `clap.preset-load` + factory discovery | done (`factory_presets`) |
-| Poly mod / note expression | done (CLAP → `ProcessContext.notes`; plugin routes voices) |
+| Poly mod / note expression | done (CLAP → `ProcessContext.notes`; `NoteVoiceTable` + `NOTE_END`) |
+| Native MIDI 2 process | done (`ProcessContext.ump` / `ump_out`; 7-bit `midi` remains) |
 
 Changelog: [CHANGELOG.md](./CHANGELOG.md). Releases are tagged `vX.Y.Z`.
 

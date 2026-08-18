@@ -56,8 +56,8 @@ use std::sync::{Arc, OnceLock};
 use aura_core::info::PluginInfo;
 use aura_core::{
     AudioBuffer, AudioConfig, BusLayout, MidiBuffer, MidiMessage, MidiStatus, NoteBuffer,
-    PluginLogic, ProcessContext, ProcessMode, append_notes_as_midi, decode_state, encode_state,
-    host_callback, host_callback_with, layout_at,
+    PluginLogic, ProcessContext, ProcessMode, UmpBuffer, append_midi_as_ump, append_notes_as_midi,
+    append_ump_as_midi, decode_state, encode_state, host_callback, host_callback_with, layout_at,
 };
 use aura_params::Params;
 use lv2_sys::{
@@ -170,6 +170,8 @@ struct ProcessScratch {
     midi: MidiBuffer,
     midi_out: MidiBuffer,
     notes_out: NoteBuffer,
+    ump: UmpBuffer,
+    ump_out: UmpBuffer,
     silence: Vec<f32>,
 }
 
@@ -184,6 +186,8 @@ impl ProcessScratch {
             midi: MidiBuffer::new(),
             midi_out: MidiBuffer::new(),
             notes_out: NoteBuffer::new(),
+            ump: UmpBuffer::new(),
+            ump_out: UmpBuffer::new(),
             silence: Vec::new(),
         }
     }
@@ -192,6 +196,8 @@ impl ProcessScratch {
         self.midi.reserve(MAX_MIDI_EVENTS + 128);
         self.midi_out.reserve(256);
         self.notes_out.reserve(256);
+        self.ump.reserve(MAX_MIDI_EVENTS);
+        self.ump_out.reserve(256);
         if self.silence.len() < max_frames {
             self.silence.resize(max_frames, 0.0);
         }
@@ -414,7 +420,13 @@ unsafe extern "C" fn run<L: PluginLogic>(instance: LV2_Handle, sample_count: u32
         inst.scratch.midi.clear();
         inst.scratch.midi_out.clear();
         inst.scratch.notes_out.clear();
+        inst.scratch.ump.clear();
+        inst.scratch.ump_out.clear();
         read_midi(inst, n);
+        {
+            let scratch = &mut inst.scratch;
+            append_midi_as_ump(&mut scratch.ump, &scratch.midi);
+        }
         if inst.state.is_none() {
             return;
         }
@@ -454,7 +466,9 @@ unsafe extern "C" fn run<L: PluginLogic>(instance: LV2_Handle, sample_count: u32
             .with_process_mode(ProcessMode::Realtime)
             .with_midi(std::mem::take(&mut inst.scratch.midi))
             .with_midi_out(std::mem::take(&mut inst.scratch.midi_out))
-            .with_notes_out(std::mem::take(&mut inst.scratch.notes_out));
+            .with_notes_out(std::mem::take(&mut inst.scratch.notes_out))
+            .with_ump(std::mem::take(&mut inst.scratch.ump))
+            .with_ump_out(std::mem::take(&mut inst.scratch.ump_out));
         let _ = unsafe {
             run_process_chunk::<L>(
                 dsp,
@@ -469,12 +483,16 @@ unsafe extern "C" fn run<L: PluginLogic>(instance: LV2_Handle, sample_count: u32
             )
         };
         inst.scratch.midi = std::mem::take(&mut ctx.midi);
+        append_ump_as_midi(&mut ctx.midi_out, &ctx.ump_out);
         append_notes_as_midi(&mut ctx.midi_out, &ctx.notes_out);
         write_midi(inst, n, &ctx.midi_out);
         inst.scratch.midi_out = std::mem::take(&mut ctx.midi_out);
         inst.scratch.midi_out.clear();
         inst.scratch.notes_out = std::mem::take(&mut ctx.notes_out);
         inst.scratch.notes_out.clear();
+        inst.scratch.ump = std::mem::take(&mut ctx.ump);
+        inst.scratch.ump_out = std::mem::take(&mut ctx.ump_out);
+        inst.scratch.ump_out.clear();
     });
 }
 

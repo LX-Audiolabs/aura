@@ -1,6 +1,6 @@
 //! Per-block process context (minimal).
 
-use aura_midi::MidiBuffer;
+use aura_midi::{MidiBuffer, UmpBuffer};
 
 use crate::config::ProcessMode;
 use crate::note_events::NoteBuffer;
@@ -19,18 +19,17 @@ pub enum ProcessStatus {
 
 /// Per-block context handed to `process()`.
 ///
-/// Format wrappers fill [`Self::midi`] from host note/MIDI events (CLAP first;
-/// VST3/LV2 empty until wired). Plugins read sample-accurate messages there.
+/// Format wrappers fill [`Self::midi`] (7-bit) and [`Self::ump`] (native
+/// packets). CLAP writes `CLAP_EVENT_MIDI2` into `ump` unchanged and still
+/// mirrors a MIDI 1 image into `midi` when one exists. VST3/LV2 lift 7-bit
+/// MIDI into type-0x2 UMP so a plugin can read one buffer.
 ///
 /// CLAP also fills [`Self::notes`] with native note-on/off/choke, note
-/// expressions, and per-note `PARAM_MOD` (`note_id >= 0`). MIDI stays 7-bit.
+/// expressions, and per-note `PARAM_MOD` (`note_id >= 0`).
 ///
-/// Plugins that generate or pass through MIDI events push them into
-/// [`Self::midi_out`]; wrappers flush them to the host after `process`.
-///
-/// CLAP-native notes the plugin generates (arp / seq) or finishes
-/// ([`NoteEventKind::End`]) go to [`Self::notes_out`]. CLAP emits them as
-/// `CLAP_EVENT_NOTE_*`. VST3/LV2 map On/Off/Choke to 7-bit MIDI.
+/// Plugin → host: [`Self::midi_out`] (7-bit), [`Self::ump_out`] (native UMP;
+/// CLAP emits `CLAP_EVENT_MIDI2`), [`Self::notes_out`] (`NOTE_*` / `NOTE_END`).
+/// VST3/LV2 down-convert `ump_out` and On/Off/Choke.
 #[non_exhaustive]
 pub struct ProcessContext {
     pub sample_rate: f64,
@@ -46,6 +45,10 @@ pub struct ProcessContext {
     pub notes: NoteBuffer,
     /// Plugin → host CLAP notes (`NOTE_ON`/`OFF`/`CHOKE`/`END` / expressions).
     pub notes_out: NoteBuffer,
+    /// Host → plugin Universal MIDI Packets (MIDI 2 native + MIDI 1 as type 0x2).
+    pub ump: UmpBuffer,
+    /// Plugin → host UMP. CLAP emits `CLAP_EVENT_MIDI2`; VST3/LV2 down-convert.
+    pub ump_out: UmpBuffer,
 }
 
 impl ProcessContext {
@@ -60,6 +63,8 @@ impl ProcessContext {
             midi_out: MidiBuffer::new(),
             notes: NoteBuffer::new(),
             notes_out: NoteBuffer::new(),
+            ump: UmpBuffer::new(),
+            ump_out: UmpBuffer::new(),
         }
     }
 
@@ -96,6 +101,18 @@ impl ProcessContext {
     #[must_use]
     pub fn with_notes_out(mut self, notes_out: NoteBuffer) -> Self {
         self.notes_out = notes_out;
+        self
+    }
+
+    #[must_use]
+    pub fn with_ump(mut self, ump: UmpBuffer) -> Self {
+        self.ump = ump;
+        self
+    }
+
+    #[must_use]
+    pub fn with_ump_out(mut self, ump_out: UmpBuffer) -> Self {
+        self.ump_out = ump_out;
         self
     }
 

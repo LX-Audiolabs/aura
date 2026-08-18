@@ -61,7 +61,7 @@ Entry, factory, audio-ports (mono/stereo + optional sidechain), audio-ports-conf
 
 **Preset load:** `clap.preset-load/2` (compat `clap.preset-load.draft/2`). FILE location reads a v1 state blob (`PluginLogic::load_preset_from_file`). PLUGIN location looks up `PluginLogic::factory_presets` by `load_key`. Non-empty factory list also exposes `preset-discovery-factory/2` (PLUGIN / factory content).
 
-**MIDI 2:** set `PluginInfo.midi_input_dialect = MidiDialect::Midi2` to prefer `CLAP_NOTE_DIALECT_MIDI2` (CLAP + MIDI 1 still advertised). Incoming `CLAP_EVENT_MIDI2` is down-converted via `aura_midi::Ump` into `ProcessContext::midi`. Native notes / expressions use `MidiDialect::Clap` + `ProcessContext.notes`. `Ump` also encodes `SysEx8` and Flex Data (not yet a typed process path).
+**MIDI 2:** set `PluginInfo.midi_input_dialect = MidiDialect::Midi2` to prefer `CLAP_NOTE_DIALECT_MIDI2` (CLAP + MIDI 1 still advertised). Incoming `CLAP_EVENT_MIDI2` lands on `ProcessContext.ump` as native [`Ump`] packets (per-note pitch bend, SysEx8, Flex included). A 7-bit image is still mirrored to `midi` when `to_midi1` exists. Push generated packets to `ump_out` — CLAP emits `CLAP_EVENT_MIDI2`. Native notes / expressions stay on `MidiDialect::Clap` + `ProcessContext.notes`.
 
 **Hot reload:** `cargo aura watch --hot` installs `aura-hot` as `Name.clap` and the real plugin as `Name.impl.dll` (or `.so` / `.dylib`). The host keeps the proxy mapped; watch overwrites the impl. Re-add the instance to run the new DSP.
 
@@ -82,6 +82,7 @@ Ship-capable CLAP core is **done**. Remaining work is **product-driven** or opti
 | ~~**`clap.preset-load`**~~ | landed | `factory_presets` + FILE blob load; vault-format files override `load_preset_from_file` |
 | ~~**Poly param modulation**~~ | landed — `note_id ≥ 0` → `ProcessContext.notes` (`ParamMod`); smoke-synth Gain is `modulatable_per_note` | plugin owns voice table |
 | ~~**Note expression**~~ | landed — `CLAP_EVENT_NOTE_EXPRESSION` → `NoteEventKind::Expression`; prefer `MidiDialect::Clap` | Bitwig expression / MPE host proof |
+| ~~**Native MIDI 2 process**~~ | landed — `ProcessContext.ump` / `ump_out`; `NoteVoiceTable` + `NOTE_END` | plugin owns envelopes; call `mark_silent` |
 | **Multi-out / >1 sidechain** | G12 extension — one optional sidechain only today | Aux buses beyond single SC |
 | **Rich state hooks** (host blob > flat params) | G5 | Presets that need non-param bytes in host state |
 | **SysEx** typed path | — | Rare / hardware bridge |

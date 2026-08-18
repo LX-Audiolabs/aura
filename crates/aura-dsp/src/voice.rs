@@ -55,6 +55,13 @@ pub struct Voice {
     pub pressure: f32,
     /// Per-note brightness (MIDI 2.0 CC74, 0.0 to 1.0).
     pub brightness: f32,
+    /// CLAP `note_id`, or `-1` when the voice came from 7-bit MIDI only.
+    #[serde(default = "unspecified_note_id")]
+    pub note_id: i32,
+}
+
+fn unspecified_note_id() -> i32 {
+    -1
 }
 
 impl Voice {
@@ -84,6 +91,7 @@ impl Default for Voice {
             pitch_bend: 0.0,
             pressure: 0.0,
             brightness: 0.5,
+            note_id: -1,
         }
     }
 }
@@ -126,48 +134,65 @@ impl VoiceManager {
     /// In Mono/Legato mode: always uses voice 0.
     #[must_use]
     pub fn note_on(&mut self, note: u8, velocity: f32) -> Option<usize> {
+        self.note_on_id(-1, note, velocity)
+    }
+
+    /// Allocate by CLAP `note_id` (retrigger same id; otherwise same steal rules).
+    #[must_use]
+    pub fn note_on_id(&mut self, note_id: i32, note: u8, velocity: f32) -> Option<usize> {
+        if note_id >= 0
+            && let Some(idx) = self
+                .voices
+                .iter()
+                .position(|v| v.active && v.note_id == note_id)
+        {
+            self.start_voice(idx, note_id, note, velocity);
+            return Some(idx);
+        }
         match self.poly_mode {
             PolyMode::Mono | PolyMode::Legato => {
-                let v = &mut self.voices[0];
-                v.active = true;
-                v.note = note;
-                v.velocity = velocity;
-                v.age = 0;
+                self.start_voice(0, note_id, note, velocity);
                 Some(0)
             }
             PolyMode::Poly => {
-                // First: find a free voice
                 if let Some(idx) = self.voices.iter().position(|v| !v.active) {
-                    let v = &mut self.voices[idx];
-                    v.active = true;
-                    v.note = note;
-                    v.velocity = velocity;
-                    v.age = 0;
+                    self.start_voice(idx, note_id, note, velocity);
                     return Some(idx);
                 }
-
-                // All voices busy — steal
                 let idx = self.find_steal_target()?;
-                let v = &mut self.voices[idx];
-                v.active = true;
-                v.note = note;
-                v.velocity = velocity;
-                v.age = 0;
+                self.start_voice(idx, note_id, note, velocity);
                 Some(idx)
             }
         }
+    }
+
+    fn start_voice(&mut self, idx: usize, note_id: i32, note: u8, velocity: f32) {
+        let v = &mut self.voices[idx];
+        v.active = true;
+        v.note = note;
+        v.note_id = note_id;
+        v.velocity = velocity;
+        v.age = 0;
     }
 
     /// Release a voice by note number.
     ///
     /// Returns the index of the released voice, or `None` if not found.
     pub fn note_off(&mut self, note: u8) -> Option<usize> {
-        if let Some(idx) = self.voices.iter().position(|v| v.active && v.note == note) {
-            self.voices[idx].active = false;
-            Some(idx)
+        self.note_off_id(-1, note)
+    }
+
+    /// Release by `note_id` when `note_id >= 0`; otherwise by MIDI note number.
+    pub fn note_off_id(&mut self, note_id: i32, note: u8) -> Option<usize> {
+        let idx = if note_id >= 0 {
+            self.voices
+                .iter()
+                .position(|v| v.active && v.note_id == note_id)
         } else {
-            None
-        }
+            self.voices.iter().position(|v| v.active && v.note == note)
+        }?;
+        self.voices[idx].active = false;
+        Some(idx)
     }
 
     /// Find a voice to steal based on the current steal mode.
@@ -254,7 +279,12 @@ mod tests {
         let idx = vm.note_on(60, 0.8).unwrap();
         assert_eq!(vm.active_count(), 1);
         assert_eq!(vm.voices()[idx].note, 60);
+        assert_eq!(vm.voices()[idx].note_id, -1);
         vm.note_off(60);
+        assert_eq!(vm.active_count(), 0);
+        let idx = vm.note_on_id(7, 64, 0.5).unwrap();
+        assert_eq!(vm.voices()[idx].note_id, 7);
+        assert!(vm.note_off_id(7, 64).is_some());
         assert_eq!(vm.active_count(), 0);
     }
 

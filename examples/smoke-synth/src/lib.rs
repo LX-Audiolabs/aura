@@ -67,6 +67,7 @@ pub struct DspState {
     gain_mod: f64,
     /// Per-note absolute Gain (`PARAM_VALUE`); `None` = use knob + mod.
     gain_plain: Option<f64>,
+    voices: NoteVoiceTable,
 }
 
 fn make_osc(wave: Waveform, freq: f32, sample_rate: f32) -> Oscillator {
@@ -128,6 +129,7 @@ impl PluginLogic for SmokeSynth {
             pressure: 1.0,
             gain_mod: 0.0,
             gain_plain: None,
+            voices: NoteVoiceTable::new(1),
         }
     }
 
@@ -164,6 +166,7 @@ impl PluginLogic for SmokeSynth {
                 }
             }
         } else {
+            state.voices.apply(&context.notes);
             // Note-on first so Bitwig expressions in the same block still apply.
             for ev in context.notes.iter() {
                 if matches!(ev.kind, NoteEventKind::On { .. }) {
@@ -198,6 +201,12 @@ impl PluginLogic for SmokeSynth {
                 buffer.output(c)[i] = s;
             }
         }
+        if !state.env.is_active() {
+            #[allow(clippy::cast_possible_truncation)]
+            let end_at = n.saturating_sub(1) as u32;
+            state.voices.mark_all_silent(end_at);
+        }
+        state.voices.flush_ends(&mut context.notes_out);
         ProcessStatus::Continue
     }
 }
@@ -244,6 +253,7 @@ fn apply_note(state: &mut DspState, ev: NoteEvent) {
                 state.env.gate_off();
             }
         }
+        NoteEventKind::End => {}
         NoteEventKind::Expression { id, value } => {
             if !ev.matches_voice(state.note_id, state.key) {
                 return;

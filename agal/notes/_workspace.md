@@ -18,6 +18,7 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 - [x] G17 sample-accurate + G18 mono mod — done 2026-08-11 (CLAP first-class)
 - [ ] **CLAP outstanding (product-driven)** — list: `crates/aura-clap/README.md`
   - [x] poly mod (`PER_NOTE_ID`) / note expression — `ProcessContext.notes` (2026-08-17)
+  - [x] native MIDI 2 process (`ump` / `ump_out`) + `NoteVoiceTable` — 2026-08-18
   - [ ] multi-out / >1 sidechain — only if plugin needs
   - [ ] G5 rich state hooks — if host blob > flat params
   - [ ] optional Bitwig host proofs (pages, latency, automation, mod, offline)
@@ -25,7 +26,8 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 - [x] F1 split aura-derive — done 2026-08-10
 - [x] Stage 6 author loop (2026-08-17) — `cargo aura watch` · UMP stubs + CLAP MIDI2 ingest · `cargo aura mesh`
 - [x] Stage 6 DLL swap — `aura-hot` proxy + `--hot` impl sidecar
-- [x] Stage 6 UMP `SysEx8` / Flex Data packets (process still 7-bit)
+- [x] Stage 6 UMP `SysEx8` / Flex Data packets — now on `ProcessContext.ump`
+- [x] Native MIDI 2 process + `NoteVoiceTable` (`note_id` / `NOTE_END`) — 2026-08-18
 - [x] Stage 6 UI identity — aurora teal `AuraTheme` + restyled `aura-gui`
 - [ ] **Framework test pass** (before any crates.io) — CI smokes + Bitwig host proofs
 - [ ] crates.io publish — **last**, after framework test pass (`publish = false` today)
@@ -42,7 +44,8 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 [ATOM] type=decision | detail=G15 AudioTap landed 2026-08-10 — lock-free SPSC sample ring in aura-params
 [ATOM] type=decision | detail=Basis fertig 2026-08-08 — DoD green; first-class CLAP path 2026-08-11
 [ATOM] type=decision | detail=CLAP outstanding = multi-out / G5 — see aura-clap README; poly-mod + note-expr land on ProcessContext.notes (plugin voice table)
-[ATOM] type=decision | detail=Process MIDI stays 7-bit MidiMessage; Ump is additive; CLAP_EVENT_MIDI2 down-converts
+[ATOM] type=decision | detail=CLAP first: ProcessContext.ump is native MIDI 2; midi is the 7-bit fallback. VST3/LV2 must not shrink the process API
+[ATOM] type=decision | detail=NoteVoiceTable (note_id + NOTE_END) is the framework voice bookkeeping; plugin still owns oscillators / envelopes
 [ATOM] type=decision | detail=cargo aura watch = rebuild+install poll (no notify dep); preview stays Slint-only
 [ATOM] type=decision | detail=cargo aura mesh wraps agal; never a build gate (agal_optional)
 [ATOM] type=decision | detail=Host panic fence in aura-core + CLAP/VST3/LV2 process+state
