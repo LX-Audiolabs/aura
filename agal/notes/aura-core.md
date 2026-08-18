@@ -9,7 +9,7 @@
 | path | `crates/aura-core` |
 | description | AURA core: process, editor, plugin info (minimal surface) |
 | frameworks | aura |
-| generated | `2026-08-17T17:38:48Z` |
+| generated | `2026-08-18T12:06:01Z` |
 
 ## Graph atoms (auto)
 
@@ -40,7 +40,7 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 
 ## structure
 - params: TwoParams (0 fields)
-- public_api symbols: 61 (see json)
+- public_api symbols: 67 (see json)
 - roles: audio, entry, manifest, source, state, ui
 
 ## api surface
@@ -48,7 +48,7 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 - `trait EditorBridge` · `src/editor.rs`
 - `trait IntoEditor` · `src/editor.rs`
 - `trait PluginLogic` · `src/plugin.rs`
-- … +57 more public symbols
+- … +63 more public symbols
 
 ## agent focus
 **L1:** scan **Graph atoms** above first, then human body below HUMAN.  

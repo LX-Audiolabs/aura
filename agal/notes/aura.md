@@ -9,7 +9,7 @@
 | path | `crates/aura` |
 | description | AURA — Audio Unified Rust Architecture (umbrella crate) |
 | frameworks | aura, clap, lv2, vst3 |
-| generated | `2026-08-17T17:38:48Z` |
+| generated | `2026-08-18T12:06:01Z` |
 
 ## Graph atoms (auto)
 

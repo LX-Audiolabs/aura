@@ -9,7 +9,7 @@
 | path | `tools/aura-gui` |
 | description | Visual AURA project console — thin Slint shell over `cargo aura` CLI |
 | frameworks | aura, slint |
-| generated | `2026-08-17T17:38:48Z` |
+| generated | `2026-08-18T12:06:01Z` |
 
 ## Graph atoms (auto)
 
