@@ -9,7 +9,7 @@
 | path | `crates/aura-dsp` |
 | description | AURA DSP — synthesis, effects, analysis, maths (JUCE juce_dsp analogue; LX FX) |
 | frameworks | aura |
-| generated | `2026-08-18T12:06:01Z` |
+| generated | `2026-08-18T19:22:55Z` |
 
 ## Graph atoms (auto)
 

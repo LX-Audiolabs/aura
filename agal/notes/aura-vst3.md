@@ -9,7 +9,7 @@
 | path | `crates/aura-vst3` |
 | description | AURA VST3 format wrapper (thin, over PluginLogic) |
 | frameworks | aura, vst3 |
-| generated | `2026-08-18T12:06:01Z` |
+| generated | `2026-08-18T19:22:55Z` |
 
 ## Graph atoms (auto)
 
