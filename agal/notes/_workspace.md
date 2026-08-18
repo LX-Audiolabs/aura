@@ -48,6 +48,7 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 [ATOM] type=decision | detail=Host panic fence in aura-core + CLAP/VST3/LV2 process+state
 [ATOM] type=decision | detail=aura-test crate: state round-trip + process smoke
 [ATOM] type=constraint | detail=PeakMeter/FFT/Spectrum widgets stay product design system; @aura basics incl XYPad only
+[ATOM] type=decision | detail=notes_out + NOTE_END are the plugin→host note path (arp/seq + poly-mod teardown); DSP still owns smoothing/routing
 [ATOM] type=lesson | detail=CLAP/VST3/LV2 process must not heap-alloc; Bitwig note-expression flood crashed the host (2026-08-18) — scratch reserved in activate, events capped at 4096
 [ATOM] type=constraint | detail=No AU/egui zoo; product shm/vault/*Shared stay product
 [ATOM] type=decision | detail=JUCE-shaped: aura-dsp (signal) + aura-midi (messages)

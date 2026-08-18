@@ -45,8 +45,9 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 use aura_core::info::PluginCategory;
 use aura_core::transport::Transport;
 use aura_core::{
-    AudioBuffer, AudioConfig, BusLayout, MidiBuffer, MidiMessage, MidiStatus, PluginLogic,
-    ProcessContext, ProcessMode, decode_state, encode_state, host_callback_with, layout_at,
+    AudioBuffer, AudioConfig, BusLayout, MidiBuffer, MidiMessage, MidiStatus, NoteBuffer,
+    PluginLogic, ProcessContext, ProcessMode, append_notes_as_midi, decode_state, encode_state,
+    host_callback_with, layout_at,
 };
 use aura_params::{ParamFlags, ParamInfo, ParamValueKind, Params};
 use gui::GuiState;
@@ -398,6 +399,7 @@ struct Inner<L: PluginLogic> {
 struct ProcessScratch {
     midi: MidiBuffer,
     midi_out: MidiBuffer,
+    notes_out: NoteBuffer,
     silence: Vec<f32>,
 }
 
@@ -409,6 +411,7 @@ impl ProcessScratch {
         Self {
             midi: MidiBuffer::new(),
             midi_out: MidiBuffer::new(),
+            notes_out: NoteBuffer::new(),
             silence: Vec::new(),
         }
     }
@@ -416,6 +419,7 @@ impl ProcessScratch {
     fn prepare(&mut self, max_frames: usize) {
         self.midi.reserve(MAX_MIDI_EVENTS + 128);
         self.midi_out.reserve(256);
+        self.notes_out.reserve(256);
         if self.silence.len() < max_frames {
             self.silence.resize(max_frames, 0.0);
         }
@@ -614,11 +618,13 @@ impl<L: PluginLogic> Component<L> {
 
             inner.scratch.midi.clear();
             inner.scratch.midi_out.clear();
+            inner.scratch.notes_out.clear();
             if L::info().accepts_midi_in && !data.inputEvents.is_null() {
                 unsafe { collect_input_events(data.inputEvents, &mut inner.scratch.midi) };
             }
             let midi = std::mem::take(&mut inner.scratch.midi);
             let midi_out = std::mem::take(&mut inner.scratch.midi_out);
+            let notes_out = std::mem::take(&mut inner.scratch.notes_out);
 
             let mut ctx = {
                 // Distinct fields; raw slice so we can also mut-borrow `state`.
@@ -637,7 +643,8 @@ impl<L: PluginLogic> Component<L> {
                 let mut ctx = ProcessContext::new(sample_rate, frames)
                     .with_process_mode(process_mode)
                     .with_midi(midi)
-                    .with_midi_out(midi_out);
+                    .with_midi_out(midi_out)
+                    .with_notes_out(notes_out);
                 ctx.transport = transport;
                 let _ = unsafe {
                     run_process_chunk::<L>(
@@ -656,11 +663,16 @@ impl<L: PluginLogic> Component<L> {
                 ctx
             };
             inner.scratch.midi = std::mem::take(&mut ctx.midi);
-            if L::info().emits_midi && !ctx.midi_out.is_empty() && !data.outputEvents.is_null() {
-                unsafe { emit_output_events(data.outputEvents, &ctx.midi_out) };
+            if L::info().emits_midi && !data.outputEvents.is_null() {
+                append_notes_as_midi(&mut ctx.midi_out, &ctx.notes_out);
+                if !ctx.midi_out.is_empty() {
+                    unsafe { emit_output_events(data.outputEvents, &ctx.midi_out) };
+                }
             }
             inner.scratch.midi_out = std::mem::take(&mut ctx.midi_out);
             inner.scratch.midi_out.clear();
+            inner.scratch.notes_out = std::mem::take(&mut ctx.notes_out);
+            inner.scratch.notes_out.clear();
             kResultOk
         })
     }

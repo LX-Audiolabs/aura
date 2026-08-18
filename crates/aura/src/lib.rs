@@ -44,7 +44,7 @@ pub use aura_core::{
     FactoryPresetState, IntoEditor, MidiBuffer, MidiDialect, MidiEvent, MidiMessage, MidiStatus,
     NOTE_UNSPECIFIED, NoteBuffer, NoteEvent, NoteEventKind, NoteExpression, NoteTarget, ParamEvent,
     ParamEventQueue, PluginCategory, PluginContext, PluginInfo, PluginLogic, ProcessContext,
-    ProcessMode, ProcessStatus, RawWindowHandle, Transport, Ump,
+    ProcessMode, ProcessStatus, RawWindowHandle, Transport, Ump, append_notes_as_midi,
 };
 
 // --- params surface ---

@@ -45,14 +45,15 @@ use aura_core::{MidiBuffer, MidiMessage, MidiStatus, Ump};
 use aura_params::{ParamFlags, ParamInfo, ParamRange, Params};
 use clap_sys::events::{
     CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_IS_LIVE, CLAP_EVENT_MIDI, CLAP_EVENT_MIDI2,
-    CLAP_EVENT_NOTE_CHOKE, CLAP_EVENT_NOTE_EXPRESSION, CLAP_EVENT_NOTE_OFF, CLAP_EVENT_NOTE_ON,
-    CLAP_EVENT_PARAM_GESTURE_BEGIN, CLAP_EVENT_PARAM_GESTURE_END, CLAP_EVENT_PARAM_MOD,
-    CLAP_EVENT_PARAM_VALUE, CLAP_TRANSPORT_HAS_BEATS_TIMELINE, CLAP_TRANSPORT_HAS_SECONDS_TIMELINE,
-    CLAP_TRANSPORT_HAS_TEMPO, CLAP_TRANSPORT_HAS_TIME_SIGNATURE, CLAP_TRANSPORT_IS_LOOP_ACTIVE,
-    CLAP_TRANSPORT_IS_PLAYING, CLAP_TRANSPORT_IS_RECORDING, clap_event_header, clap_event_midi,
-    clap_event_midi2, clap_event_note, clap_event_note_expression, clap_event_param_gesture,
-    clap_event_param_mod, clap_event_param_value, clap_event_transport, clap_event_type,
-    clap_input_events, clap_output_events,
+    CLAP_EVENT_NOTE_CHOKE, CLAP_EVENT_NOTE_END, CLAP_EVENT_NOTE_EXPRESSION, CLAP_EVENT_NOTE_OFF,
+    CLAP_EVENT_NOTE_ON, CLAP_EVENT_PARAM_GESTURE_BEGIN, CLAP_EVENT_PARAM_GESTURE_END,
+    CLAP_EVENT_PARAM_MOD, CLAP_EVENT_PARAM_VALUE, CLAP_TRANSPORT_HAS_BEATS_TIMELINE,
+    CLAP_TRANSPORT_HAS_SECONDS_TIMELINE, CLAP_TRANSPORT_HAS_TEMPO,
+    CLAP_TRANSPORT_HAS_TIME_SIGNATURE, CLAP_TRANSPORT_IS_LOOP_ACTIVE, CLAP_TRANSPORT_IS_PLAYING,
+    CLAP_TRANSPORT_IS_RECORDING, clap_event_header, clap_event_midi, clap_event_midi2,
+    clap_event_note, clap_event_note_expression, clap_event_param_gesture, clap_event_param_mod,
+    clap_event_param_value, clap_event_transport, clap_event_type, clap_input_events,
+    clap_output_events,
 };
 use clap_sys::ext::audio_ports::{
     CLAP_AUDIO_PORT_IS_MAIN, CLAP_EXT_AUDIO_PORTS, CLAP_PORT_MONO, CLAP_PORT_STEREO,
@@ -335,6 +336,7 @@ struct ProcessScratch {
     midi: MidiBuffer,
     midi_out: MidiBuffer,
     notes: NoteBuffer,
+    notes_out: NoteBuffer,
     notes_chunk: NoteBuffer,
     midi_chunk: MidiBuffer,
     splits: Vec<u32>,
@@ -353,6 +355,7 @@ impl ProcessScratch {
             midi: MidiBuffer::new(),
             midi_out: MidiBuffer::new(),
             notes: NoteBuffer::new(),
+            notes_out: NoteBuffer::new(),
             notes_chunk: NoteBuffer::new(),
             midi_chunk: MidiBuffer::new(),
             splits: Vec::new(),
@@ -365,6 +368,7 @@ impl ProcessScratch {
         self.midi.reserve(MAX_NOTE_EVENTS);
         self.midi_out.reserve(256);
         self.notes.reserve(MAX_NOTE_EVENTS + 128);
+        self.notes_out.reserve(256);
         self.notes_chunk.reserve(MAX_NOTE_EVENTS + 128);
         self.midi_chunk.reserve(MAX_NOTE_EVENTS);
         self.splits.reserve(64);
@@ -610,6 +614,7 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
         inst.scratch.midi.clear();
         inst.scratch.notes.clear();
         inst.scratch.midi_out.clear();
+        inst.scratch.notes_out.clear();
         if !process.in_events.is_null() {
             unsafe {
                 collect_input_events(
@@ -755,7 +760,8 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
                 .with_process_mode(process_mode)
                 .with_midi(midi)
                 .with_notes(notes)
-                .with_midi_out(std::mem::take(&mut inst.scratch.midi_out));
+                .with_midi_out(std::mem::take(&mut inst.scratch.midi_out))
+                .with_notes_out(std::mem::take(&mut inst.scratch.notes_out));
             ctx.transport = transport;
 
             let chunk_status = unsafe {
@@ -784,9 +790,12 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
             }
             unsafe {
                 emit_midi_events_at(process.out_events, &ctx.midi_out, inst.scratch.splits[si]);
+                emit_note_events_at(process.out_events, &ctx.notes_out, inst.scratch.splits[si]);
             }
             inst.scratch.midi_out = std::mem::take(&mut ctx.midi_out);
             inst.scratch.midi_out.clear();
+            inst.scratch.notes_out = std::mem::take(&mut ctx.notes_out);
+            inst.scratch.notes_out.clear();
 
             match chunk_status {
                 ProcessStatus::Error => {
@@ -939,7 +948,10 @@ unsafe fn collect_input_events(
                     },
                 );
             }
-            CLAP_EVENT_NOTE_ON | CLAP_EVENT_NOTE_OFF | CLAP_EVENT_NOTE_CHOKE => {
+            CLAP_EVENT_NOTE_ON
+            | CLAP_EVENT_NOTE_OFF
+            | CLAP_EVENT_NOTE_CHOKE
+            | CLAP_EVENT_NOTE_END => {
                 if !accept_note_event(notes.len(), true) {
                     continue;
                 }
@@ -955,6 +967,7 @@ unsafe fn collect_input_events(
                             velocity: n.velocity,
                         },
                         CLAP_EVENT_NOTE_CHOKE => NoteEventKind::Choke,
+                        CLAP_EVENT_NOTE_END => NoteEventKind::End,
                         _ => NoteEventKind::Off {
                             velocity: n.velocity,
                         },
@@ -1084,6 +1097,63 @@ unsafe fn emit_param_events(queue: &ParamEventQueue, out: *const clap_output_eve
                 };
                 unsafe { try_push(out, &e as *const _ as *const clap_event_header) };
             }
+        }
+    }
+}
+
+/// Push plugin-generated CLAP notes from [`ProcessContext::notes_out`].
+unsafe fn emit_note_events_at(out: *const clap_output_events, notes: &NoteBuffer, base: u32) {
+    if out.is_null() || notes.is_empty() {
+        return;
+    }
+    let Some(try_push) = (unsafe { &*out }).try_push else {
+        return;
+    };
+    for ev in notes.iter() {
+        let time = ev.sample_offset.saturating_add(base);
+        match ev.kind {
+            NoteEventKind::On { .. }
+            | NoteEventKind::Off { .. }
+            | NoteEventKind::Choke
+            | NoteEventKind::End => {
+                let type_ = match ev.kind {
+                    NoteEventKind::On { .. } => CLAP_EVENT_NOTE_ON,
+                    NoteEventKind::Off { .. } => CLAP_EVENT_NOTE_OFF,
+                    NoteEventKind::Choke => CLAP_EVENT_NOTE_CHOKE,
+                    _ => CLAP_EVENT_NOTE_END,
+                };
+                let velocity = match ev.kind {
+                    NoteEventKind::On { velocity } | NoteEventKind::Off { velocity } => velocity,
+                    _ => 0.0,
+                };
+                let mut e = clap_event_note {
+                    header: event_header(type_, size_of::<clap_event_note>() as u32),
+                    note_id: ev.note_id,
+                    port_index: ev.port_index,
+                    channel: ev.channel,
+                    key: ev.key,
+                    velocity,
+                };
+                e.header.time = time;
+                unsafe { try_push(out, &e as *const _ as *const clap_event_header) };
+            }
+            NoteEventKind::Expression { id, value } => {
+                let mut e = clap_event_note_expression {
+                    header: event_header(
+                        CLAP_EVENT_NOTE_EXPRESSION,
+                        size_of::<clap_event_note_expression>() as u32,
+                    ),
+                    expression_id: id.to_clap(),
+                    note_id: ev.note_id,
+                    port_index: ev.port_index,
+                    channel: ev.channel,
+                    key: ev.key,
+                    value,
+                };
+                e.header.time = time;
+                unsafe { try_push(out, &e as *const _ as *const clap_event_header) };
+            }
+            NoteEventKind::ParamMod { .. } | NoteEventKind::ParamValue { .. } => {}
         }
     }
 }
@@ -2397,6 +2467,25 @@ mod process_scratch_tests {
         assert!(!accept_note_event(MAX_NOTE_EVENTS, false));
         assert!(accept_note_event(MAX_NOTE_EVENTS, true));
         assert!(accept_note_event(MAX_NOTE_EVENTS + 50, true));
+    }
+
+    #[test]
+    fn notes_out_maps_end_to_clap_note_end() {
+        use aura_core::NoteEventKind;
+        use clap_sys::events::{
+            CLAP_EVENT_NOTE_CHOKE, CLAP_EVENT_NOTE_END, CLAP_EVENT_NOTE_OFF, CLAP_EVENT_NOTE_ON,
+        };
+        let t = |k: NoteEventKind| -> u16 {
+            match k {
+                NoteEventKind::On { .. } => CLAP_EVENT_NOTE_ON,
+                NoteEventKind::Off { .. } => CLAP_EVENT_NOTE_OFF,
+                NoteEventKind::Choke => CLAP_EVENT_NOTE_CHOKE,
+                NoteEventKind::End => CLAP_EVENT_NOTE_END,
+                _ => 0xFFFF,
+            }
+        };
+        assert_eq!(t(NoteEventKind::End), CLAP_EVENT_NOTE_END);
+        assert_eq!(t(NoteEventKind::On { velocity: 1.0 }), CLAP_EVENT_NOTE_ON);
     }
 }
 

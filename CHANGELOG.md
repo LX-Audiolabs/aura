@@ -9,6 +9,7 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ### Added
 
+- `ProcessContext.notes_out` + `NoteEventKind::End` (`CLAP_EVENT_NOTE_END`). Plugins push generated notes (arp / seq) or voice-end; CLAP emits native note events, VST3/LV2 map On/Off/Choke to MIDI.
 - CLAP poly `PARAM_MOD` / per-note `PARAM_VALUE` (`note_id ≥ 0`) and `CLAP_EVENT_NOTE_EXPRESSION` → `ProcessContext.notes`. Mono events still hit `Params`. `MidiDialect::Clap` prefers `CLAP_NOTE_DIALECT_CLAP`. smoke-synth: velocity, volume (Bitwig Gain), timbre (sine→saw), pressure, tuning, per-note Gain.
 - `cargo aura watch` — poll `src` / `ui` / manifests and rebuild (+ install). Default format `--clap`. `--no-install` skips the host copy. Install copy retries when a host still maps the binary.
 - `cargo aura mesh` — thin wrapper over `agal` (default `agal .`). Optional; builds do not need it.

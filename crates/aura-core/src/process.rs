@@ -27,6 +27,10 @@ pub enum ProcessStatus {
 ///
 /// Plugins that generate or pass through MIDI events push them into
 /// [`Self::midi_out`]; wrappers flush them to the host after `process`.
+///
+/// CLAP-native notes the plugin generates (arp / seq) or finishes
+/// ([`NoteEventKind::End`]) go to [`Self::notes_out`]. CLAP emits them as
+/// `CLAP_EVENT_NOTE_*`. VST3/LV2 map On/Off/Choke to 7-bit MIDI.
 #[non_exhaustive]
 pub struct ProcessContext {
     pub sample_rate: f64,
@@ -40,6 +44,8 @@ pub struct ProcessContext {
     pub midi_out: MidiBuffer,
     /// CLAP-shaped notes / expressions / poly mods (empty on VST3/LV2 today).
     pub notes: NoteBuffer,
+    /// Plugin → host CLAP notes (`NOTE_ON`/`OFF`/`CHOKE`/`END` / expressions).
+    pub notes_out: NoteBuffer,
 }
 
 impl ProcessContext {
@@ -53,6 +59,7 @@ impl ProcessContext {
             midi: MidiBuffer::new(),
             midi_out: MidiBuffer::new(),
             notes: NoteBuffer::new(),
+            notes_out: NoteBuffer::new(),
         }
     }
 
@@ -83,6 +90,12 @@ impl ProcessContext {
     #[must_use]
     pub fn with_notes(mut self, notes: NoteBuffer) -> Self {
         self.notes = notes;
+        self
+    }
+
+    #[must_use]
+    pub fn with_notes_out(mut self, notes_out: NoteBuffer) -> Self {
+        self.notes_out = notes_out;
         self
     }
 

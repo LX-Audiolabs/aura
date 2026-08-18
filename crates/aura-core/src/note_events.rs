@@ -80,6 +80,8 @@ pub enum NoteEventKind {
         velocity: f64,
     },
     Choke,
+    /// Voice finished sounding (`CLAP_EVENT_NOTE_END`). Host drops poly mods.
+    End,
     Expression {
         id: NoteExpression,
         value: f64,
@@ -118,6 +120,59 @@ impl NoteEvent {
             channel: 0,
             key,
             kind: NoteEventKind::On { velocity },
+        }
+    }
+
+    #[must_use]
+    pub fn off(sample_offset: u32, note_id: i32, key: i16, velocity: f64) -> Self {
+        Self {
+            sample_offset,
+            note_id,
+            port_index: 0,
+            channel: 0,
+            key,
+            kind: NoteEventKind::Off { velocity },
+        }
+    }
+
+    /// `CLAP_EVENT_NOTE_END` — voice silent; host can drop per-note modulators.
+    #[must_use]
+    pub fn end(sample_offset: u32, note_id: i32, key: i16) -> Self {
+        Self {
+            sample_offset,
+            note_id,
+            port_index: 0,
+            channel: 0,
+            key,
+            kind: NoteEventKind::End,
+        }
+    }
+
+    /// 7-bit MIDI for VST3/LV2 (On/Off/Choke only). `End` / expressions stay CLAP-native.
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    pub fn to_midi1(self) -> Option<crate::MidiMessage> {
+        use crate::MidiMessage;
+        let key = u8::try_from(self.key.clamp(0, 127)).ok()?;
+        let channel = if self.channel < 0 {
+            0
+        } else {
+            (self.channel as u8) & 0x0F
+        };
+        match self.kind {
+            NoteEventKind::On { velocity } => {
+                let vel = (velocity * 127.0).round().clamp(0.0, 127.0) as u8;
+                Some(MidiMessage::note_on(channel, key, vel.max(1)))
+            }
+            NoteEventKind::Off { velocity } => {
+                let vel = (velocity * 127.0).round().clamp(0.0, 127.0) as u8;
+                Some(MidiMessage::note_off(channel, key, vel))
+            }
+            NoteEventKind::Choke => Some(MidiMessage::note_off(channel, key, 0)),
+            NoteEventKind::End
+            | NoteEventKind::Expression { .. }
+            | NoteEventKind::ParamMod { .. }
+            | NoteEventKind::ParamValue { .. } => None,
         }
     }
 
@@ -210,6 +265,15 @@ impl NoteBuffer {
     #[must_use]
     pub fn as_slice(&self) -> &[NoteEvent] {
         &self.events
+    }
+}
+
+/// Append On/Off/Choke from `notes` as 7-bit MIDI (VST3/LV2 out).
+pub fn append_notes_as_midi(midi: &mut crate::MidiBuffer, notes: &NoteBuffer) {
+    for ev in notes.iter() {
+        if let Some(msg) = ev.to_midi1() {
+            midi.push(ev.sample_offset, msg);
+        }
     }
 }
 
@@ -346,5 +410,24 @@ mod tests {
         assert_eq!(dest.as_slice()[0].sample_offset, 0);
         dest.copy_range_rebased(&notes, 0, 50);
         assert_eq!(dest.len(), 2);
+    }
+
+    #[test]
+    fn end_and_to_midi1() {
+        let end = NoteEvent::end(8, 3, 60);
+        assert!(matches!(end.kind, NoteEventKind::End));
+        assert!(end.to_midi1().is_none());
+        let on = NoteEvent::on(0, 1, 64, 0.5);
+        let msg = on.to_midi1().expect("on");
+        assert!(msg.is_note_on());
+        assert_eq!(msg.note_number(), Some(64));
+        let off = NoteEvent::off(4, 1, 64, 0.0);
+        assert!(off.to_midi1().is_some_and(|m| m.is_note_off()));
+        let mut midi = crate::MidiBuffer::new();
+        let mut notes = NoteBuffer::new();
+        notes.push(on);
+        notes.push(end);
+        append_notes_as_midi(&mut midi, &notes);
+        assert_eq!(midi.len(), 1);
     }
 }

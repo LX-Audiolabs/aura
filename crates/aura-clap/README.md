@@ -51,6 +51,8 @@ Entry, factory, audio-ports (mono/stereo + optional sidechain), audio-ports-conf
 
 **Note events / expressions:** prefer `MidiDialect::Clap` so the note port lists `CLAP_NOTE_DIALECT_CLAP`. Wrapper fills `ProcessContext.notes` with on/off/choke (`note_id`, key, velocity 0..1), `CLAP_EVENT_NOTE_EXPRESSION` (volume/pan/tuning/…), and still mirrors on/off into 7-bit `midi`.
 
+**Note out:** push to `ProcessContext.notes_out`. CLAP emits `NOTE_ON`/`OFF`/`CHOKE`/`END` and expressions. `NOTE_END` (voice silent) needs no output note port — Bitwig can drop poly mods. Generated notes (arp / seq) need `PluginInfo.emits_midi` so a note output port exists. VST3/LV2 map On/Off/Choke to 7-bit MIDI.
+
 **Latency:** override `PluginLogic::latency(&state) -> u32` (samples). Via `clap.latency`; mid-run changes request host restart for PDC.
 
 **Tail:** override `PluginLogic::tail_length(&state) -> u32`. Via `clap.tail` (+ VST3 `getTailSamples`).
