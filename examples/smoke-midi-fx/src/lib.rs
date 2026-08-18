@@ -19,7 +19,34 @@
 //! cargo run -p cargo-aura -- install --lv2 --release
 //! ```
 
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::sync::atomic::{AtomicU32, Ordering};
+
 use aura::prelude::*;
+
+static DEBUG_LEFT: AtomicU32 = AtomicU32::new(24);
+
+fn debug_process(line: &str) {
+    if DEBUG_LEFT.load(Ordering::Relaxed) == 0 {
+        return;
+    }
+    if DEBUG_LEFT.fetch_sub(1, Ordering::Relaxed) == 0 {
+        return;
+    }
+    let Some(local) = std::env::var_os("LOCALAPPDATA") else {
+        return;
+    };
+    let dir = std::path::PathBuf::from(local).join("AURA");
+    let _ = std::fs::create_dir_all(&dir);
+    if let Ok(mut f) = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join("smoke-midi-fx.log"))
+    {
+        let _ = writeln!(f, "{line}");
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Params
@@ -51,7 +78,7 @@ impl PluginLogic for SmokeMidiFx {
 
     fn info() -> PluginInfo {
         let mut info = PluginInfo::new(
-            "AURA Smoke MIDI FX",
+            "AURA Smoke MIDI FX +",
             "LX Audiolabs",
             env!("CARGO_PKG_VERSION"),
             "smoke-midi-fx",
@@ -62,6 +89,9 @@ impl PluginLogic for SmokeMidiFx {
         info.category = PluginCategory::NoteEffect;
         info.accepts_midi_in = true;
         info.emits_midi = true;
+        // Bitwig Note FX forwards the MIDI dialect more reliably than CLAP notes.
+        info.midi_input_dialect = aura::MidiDialect::Midi1;
+        info.midi_output_dialect = aura::MidiDialect::Midi1;
         info
     }
 
@@ -80,32 +110,58 @@ impl PluginLogic for SmokeMidiFx {
         #[allow(clippy::cast_possible_truncation)]
         let transpose = params.transpose.raw_target() as i32;
 
-        // Copy audio input → output unchanged (dry thru).
         let n = buffer.num_samples();
         let ch = buffer.num_outputs().min(buffer.num_inputs());
         for c in 0..ch {
-            let input: Vec<f32> = buffer.input(c).to_vec();
-            let out = buffer.output(c);
-            out[..n].copy_from_slice(&input[..n]);
+            for i in 0..n {
+                let s = buffer.input(c)[i];
+                buffer.output(c)[i] = s;
+            }
         }
         for c in ch..buffer.num_outputs() {
             buffer.output(c).fill(0.0);
         }
 
-        // Transpose note messages and forward everything else as-is.
-        for ev in context.midi.iter() {
-            let msg = ev.message;
-            let out_msg = if msg.is_note_on() || msg.is_note_off() {
-                let note = msg
-                    .note_number()
-                    .map(|n| (n as i32 + transpose).clamp(0, 127) as u8)
-                    .unwrap_or(msg.data1);
-                MidiMessage::raw(msg.status_byte(), note, msg.data2)
-            } else {
-                msg
-            };
-            context.midi_out.push(ev.sample_offset, out_msg);
+        // One dialect only. Emitting CLAP notes *and* MIDI made Bitwig
+        // spawn a second voice that never got a matching off (stuck tail).
+        if context.notes.is_empty() {
+            for ev in context.midi.iter() {
+                let msg = ev.message;
+                let out_msg = if msg.is_note_on() || msg.is_note_off() {
+                    let note = msg
+                        .note_number()
+                        .map(|note| {
+                            u8::try_from((i32::from(note) + transpose).clamp(0, 127)).unwrap_or(0)
+                        })
+                        .unwrap_or(msg.data1);
+                    MidiMessage::raw(msg.status_byte(), note, msg.data2)
+                } else {
+                    msg
+                };
+                context.midi_out.push(ev.sample_offset, out_msg);
+            }
+        } else {
+            for ev in context.notes.iter() {
+                let mut out = ev;
+                if out.key >= 0 {
+                    out.key = i16::try_from((i32::from(out.key) + transpose).clamp(0, 127))
+                        .unwrap_or(0);
+                }
+                context.notes_out.push(out);
+            }
         }
+
+        debug_process(&format!(
+            "frames={} in_n={} in_m={} out_n={} out_m={} audio_in={} audio_out={} xpose={}",
+            n,
+            context.notes.len(),
+            context.midi.len(),
+            context.notes_out.len(),
+            context.midi_out.len(),
+            buffer.num_inputs(),
+            buffer.num_outputs(),
+            transpose
+        ));
 
         ProcessStatus::Continue
     }

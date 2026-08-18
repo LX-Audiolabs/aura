@@ -8,7 +8,7 @@
 | kind | `crate` |
 | path | `crates/aura-midi` |
 | description | AURA MIDI — messages, buffers, note helpers (JUCE juce_audio_basics/midi analogue) |
-| generated | `2026-08-17T17:38:48Z` |
+| generated | `2026-08-18T12:06:01Z` |
 
 ## Graph atoms (auto)
 
@@ -26,15 +26,15 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 - `aura-core` --depends_on--> `aura-midi`
 
 ## structure
-- public_api symbols: 8 (see json)
+- public_api symbols: 12 (see json)
 - roles: entry, manifest, source
 
 ## api surface
 - `struct MidiBuffer { events: Vec<MidiEvent> }` · `src/buffer.rs`
 - `struct MidiEvent { sample_offset: u32, message: MidiMessage }` · `src/buffer.rs`
-- `struct MidiMessage { status: MidiStatus, channel: u8, data1: u8, data2: u8 }` · `src/message.rs`
-- `struct Ump { words: [u32], len: u8 }` · `src/ump.rs`
-- … +4 more public symbols
+- `struct UmpBuffer { events: Vec<UmpEvent> }` · `src/buffer.rs`
+- `struct UmpEvent { sample_offset: u32, packet: Ump }` · `src/buffer.rs`
+- … +8 more public symbols
 
 ## agent focus
 **L1:** scan **Graph atoms** above first, then human body below HUMAN.  

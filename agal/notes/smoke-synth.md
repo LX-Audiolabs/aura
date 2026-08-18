@@ -7,9 +7,9 @@
 |---|---|
 | kind | `member` |
 | path | `examples/smoke-synth` |
-| description | AURA in-tree CLAP smoke — monophonic synth (notes + MIDI fallback) |
+| description | AURA in-tree CLAP smoke — 8-voice synth (NoteVoiceTable + NOTE_END) |
 | frameworks | aura |
-| generated | `2026-08-17T17:38:48Z` |
+| generated | `2026-08-18T12:06:01Z` |
 
 ## Graph atoms (auto)
 
@@ -55,7 +55,7 @@ plus MIDI fallback. Headless. Proves the wrapper, not a product synth.
 
 - [x] Mono Osc + Adsr through CLAP — Bitwig stable after v0.7.1 scratch fix
 - [x] `NoteVoiceTable` + `NOTE_END` when envelope idle (v0.7.2)
-- [ ] Polyphony (`NoteVoiceTable` + `VoiceManager`, >1 voice)
+- [x] 8-voice poly — same table + per-voice osc/env (2026-08-18)
 - [ ] Sample-accurate smoothing / expression→knob — later, on a real synth 
 
 ## Decisions

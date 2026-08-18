@@ -24,6 +24,13 @@ impl NoteTarget {
         channel: -1,
         key: -1,
     };
+
+    /// Host scoped this event to a voice (`note_id`, key, or channel set).
+    /// Unspecified (`-1`) everywhere is mono (knob / `Params`).
+    #[must_use]
+    pub const fn is_voice_scoped(self) -> bool {
+        self.note_id >= 0 || self.key >= 0 || self.channel >= 0
+    }
 }
 
 /// CLAP note-expression id (`clap_note_expression`). Unknown values stay raw.
@@ -286,7 +293,7 @@ pub fn route_param_mod(
     amount: f64,
     target: NoteTarget,
 ) {
-    if target.note_id >= 0 {
+    if target.is_voice_scoped() {
         notes.push(NoteEvent {
             sample_offset,
             note_id: target.note_id,
@@ -313,7 +320,7 @@ pub fn route_param_value(
     plain: f64,
     target: NoteTarget,
 ) {
-    if target.note_id >= 0 {
+    if target.is_voice_scoped() {
         notes.push(NoteEvent {
             sample_offset,
             note_id: target.note_id,
@@ -353,7 +360,21 @@ mod tests {
             },
         );
         route_param_mod(&mut timed, &mut notes, 0, 1, 0.1, NoteTarget::UNSPECIFIED);
+        route_param_mod(
+            &mut timed,
+            &mut notes,
+            4,
+            1,
+            0.5,
+            NoteTarget {
+                note_id: -1,
+                port_index: -1,
+                channel: -1,
+                key: 60,
+            },
+        );
         assert_eq!(timed.len(), 1);
+        assert_eq!(notes.len(), 2);
         assert!(matches!(
             timed[0],
             TimedParamEvent::Mod {
@@ -362,16 +383,22 @@ mod tests {
                 amount: a
             } if (a - 0.1).abs() < 1e-12
         ));
-        assert_eq!(notes.len(), 1);
-        let ev = notes.as_slice()[0];
-        assert_eq!(ev.note_id, 7);
-        assert_eq!(ev.sample_offset, 8);
+        let by_id = notes.iter().find(|e| e.note_id == 7).expect("note_id");
+        assert_eq!(by_id.sample_offset, 8);
         assert!(matches!(
-            ev.kind,
+            by_id.kind,
             NoteEventKind::ParamMod {
                 param_id: 1,
                 amount: a
             } if (a - 0.25).abs() < 1e-12
+        ));
+        let by_key = notes.iter().find(|e| e.note_id < 0 && e.key == 60).expect("key");
+        assert!(matches!(
+            by_key.kind,
+            NoteEventKind::ParamMod {
+                amount: a,
+                ..
+            } if (a - 0.5).abs() < 1e-12
         ));
     }
 

@@ -41,7 +41,7 @@ use aura_core::{
     TimedParamEvent, apply_at_time, apply_non_chunked, host_callback, host_callback_with,
     layout_at, route_param_mod, route_param_value, split_points_into,
 };
-use aura_core::{MidiBuffer, MidiMessage, MidiStatus, Ump, UmpBuffer};
+use aura_core::{MidiBuffer, MidiMessage, Ump, UmpBuffer};
 use aura_params::{ParamFlags, ParamInfo, ParamRange, Params};
 use clap_sys::events::{
     CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_IS_LIVE, CLAP_EVENT_MIDI, CLAP_EVENT_MIDI2,
@@ -71,10 +71,17 @@ use clap_sys::ext::note_ports::{
     CLAP_EXT_NOTE_PORTS, CLAP_NOTE_DIALECT_CLAP, CLAP_NOTE_DIALECT_MIDI, CLAP_NOTE_DIALECT_MIDI2,
     clap_note_port_info, clap_plugin_note_ports,
 };
+use clap_sys::ext::voice_info::{
+    CLAP_EXT_VOICE_INFO, CLAP_VOICE_INFO_SUPPORTS_OVERLAPPING_NOTES, clap_plugin_voice_info,
+    clap_voice_info,
+};
 use clap_sys::ext::params::{
-    CLAP_EXT_PARAMS, CLAP_PARAM_IS_AUTOMATABLE, CLAP_PARAM_IS_BYPASS, CLAP_PARAM_IS_HIDDEN,
-    CLAP_PARAM_IS_MODULATABLE, CLAP_PARAM_IS_MODULATABLE_PER_NOTE_ID, CLAP_PARAM_IS_READONLY,
-    CLAP_PARAM_IS_STEPPED, CLAP_PARAM_RESCAN_VALUES, clap_host_params, clap_param_info,
+    CLAP_EXT_PARAMS, CLAP_PARAM_IS_AUTOMATABLE, CLAP_PARAM_IS_AUTOMATABLE_PER_CHANNEL,
+    CLAP_PARAM_IS_AUTOMATABLE_PER_KEY, CLAP_PARAM_IS_AUTOMATABLE_PER_NOTE_ID,
+    CLAP_PARAM_IS_BYPASS, CLAP_PARAM_IS_HIDDEN, CLAP_PARAM_IS_MODULATABLE,
+    CLAP_PARAM_IS_MODULATABLE_PER_CHANNEL, CLAP_PARAM_IS_MODULATABLE_PER_KEY,
+    CLAP_PARAM_IS_MODULATABLE_PER_NOTE_ID, CLAP_PARAM_IS_READONLY, CLAP_PARAM_IS_STEPPED,
+    CLAP_PARAM_RESCAN_VALUES, clap_host_params, clap_param_info,
     clap_plugin_params,
 };
 use clap_sys::ext::remote_controls::{
@@ -655,8 +662,8 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
         let main_in_ch = layout.main_input_channels() as usize;
         let sidechain_in_ch = layout.sidechain_input_channels() as usize;
         let total_in_ch = main_in_ch + sidechain_in_ch;
-        let out_ch = layout.main_output_channels() as usize;
-        if !matches!(out_ch, 1 | 2) || total_in_ch > MAX_AUDIO_CH {
+        let mut out_ch = layout.main_output_channels() as usize;
+        if !matches!(out_ch, 0 | 1 | 2) || total_in_ch > MAX_AUDIO_CH {
             return CLAP_PROCESS_ERROR;
         }
 
@@ -695,8 +702,13 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
                 }
             }
         }
+        // Note-FX racks (Bitwig) often pass 0 audio ports. Still process events.
         if filled_out != out_ch {
-            return CLAP_PROCESS_ERROR;
+            if matches!(filled_out, 0 | 1 | 2) {
+                out_ch = filled_out;
+            } else {
+                return CLAP_PROCESS_ERROR;
+            }
         }
 
         // Sample-accurate: non-CHUNKED params apply at block start; CHUNKED
@@ -894,6 +906,19 @@ unsafe fn run_process_chunk<L: PluginLogic>(
             let mut s0 = unsafe { slice_out(out_ptrs[0], t0, chunk_len) };
             let mut s1 = unsafe { slice_out(out_ptrs[1], t0, chunk_len) };
             let mut outs = [&mut s0 as &mut [f32], &mut s1];
+            let mut buffer = unsafe {
+                AudioBuffer::from_slices_with_sidechain_unchecked(
+                    in_refs,
+                    &mut outs,
+                    chunk_len,
+                    main_in_ch,
+                    sidechain_in_ch,
+                )
+            };
+            L::process(state, params, &mut buffer, ctx)
+        }
+        0 => {
+            let mut outs: [&mut [f32]; 0] = [];
             let mut buffer = unsafe {
                 AudioBuffer::from_slices_with_sidechain_unchecked(
                     in_refs,
@@ -1166,7 +1191,7 @@ unsafe fn emit_note_events_at(out: *const clap_output_events, notes: &NoteBuffer
                 let mut e = clap_event_note {
                     header: event_header(type_, size_of::<clap_event_note>() as u32),
                     note_id: ev.note_id,
-                    port_index: ev.port_index,
+                    port_index: -1,
                     channel: ev.channel,
                     key: ev.key,
                     velocity,
@@ -1225,34 +1250,15 @@ unsafe fn emit_midi_events_at(out: *const clap_output_events, midi: &MidiBuffer,
     };
     for ev in midi.iter() {
         let time = ev.sample_offset.saturating_add(base);
-        match ev.message.status {
-            MidiStatus::NoteOn | MidiStatus::NoteOff => {
-                let type_ = if ev.message.is_note_on() {
-                    CLAP_EVENT_NOTE_ON
-                } else {
-                    CLAP_EVENT_NOTE_OFF
-                };
-                let mut e = clap_event_note {
-                    header: event_header(type_, size_of::<clap_event_note>() as u32),
-                    note_id: -1,
-                    port_index: 0,
-                    channel: i16::from(ev.message.channel),
-                    key: i16::from(ev.message.data1),
-                    velocity: f64::from(ev.message.data2) / 127.0,
-                };
-                e.header.time = time;
-                unsafe { try_push(out, &e as *const _ as *const clap_event_header) };
-            }
-            _ => {
-                let mut e = clap_event_midi {
-                    header: event_header(CLAP_EVENT_MIDI, size_of::<clap_event_midi>() as u32),
-                    port_index: 0,
-                    data: [ev.message.status_byte(), ev.message.data1, ev.message.data2],
-                };
-                e.header.time = time;
-                unsafe { try_push(out, &e as *const _ as *const clap_event_header) };
-            }
-        }
+        // Always raw `CLAP_EVENT_MIDI`. Note FX chains (Bitwig) forward MIDI
+        // dialect; converting On/Off to `CLAP_EVENT_NOTE_*` here dropped them.
+        let mut e = clap_event_midi {
+            header: event_header(CLAP_EVENT_MIDI, size_of::<clap_event_midi>() as u32),
+            port_index: 0,
+            data: [ev.message.status_byte(), ev.message.data1, ev.message.data2],
+        };
+        e.header.time = time;
+        unsafe { try_push(out, &e as *const _ as *const clap_event_header) };
     }
 }
 
@@ -1315,6 +1321,9 @@ unsafe extern "C" fn plugin_get_extension<L: PluginLogic>(
             return note_ports_ext::<L>() as *const _ as *const c_void;
         }
         return ptr::null();
+    }
+    if id == CLAP_EXT_VOICE_INFO && L::info().voice_count > 0 {
+        return voice_info_ext::<L>() as *const _ as *const c_void;
     }
     if id == CLAP_EXT_STATE {
         return state_ext::<L>() as *const _ as *const c_void;
@@ -1462,7 +1471,9 @@ unsafe extern "C" fn note_ports_get<L: PluginLogic>(
         aura_core::info::MidiDialect::Midi1 => CLAP_NOTE_DIALECT_CLAP | CLAP_NOTE_DIALECT_MIDI,
     };
     let out = unsafe { &mut *info };
-    out.id = u32::from(!is_input);
+    // Same id in both directions so output events with port_index 0 match.
+    // Distinct ids (out=1) made Bitwig Note-FX drop our emits.
+    out.id = 0;
     out.supported_dialects = dialects;
     out.preferred_dialect = match dialect {
         aura_core::info::MidiDialect::Clap => CLAP_NOTE_DIALECT_CLAP,
@@ -1470,6 +1481,36 @@ unsafe extern "C" fn note_ports_get<L: PluginLogic>(
         aura_core::info::MidiDialect::Midi1 => CLAP_NOTE_DIALECT_MIDI,
     };
     write_name(&mut out.name, if is_input { "Note In" } else { "Note Out" });
+    true
+}
+
+// ---------------------------------------------------------------------------
+// voice-info (Bitwig Voice Stack / poly-mod needs a voice pool > 1)
+// ---------------------------------------------------------------------------
+
+fn voice_info_ext<L: PluginLogic>() -> &'static clap_plugin_voice_info {
+    static CELL: OnceLock<clap_plugin_voice_info> = OnceLock::new();
+    CELL.get_or_init(|| clap_plugin_voice_info {
+        get: Some(voice_info_get::<L>),
+    })
+}
+
+unsafe extern "C" fn voice_info_get<L: PluginLogic>(
+    _plugin: *const clap_plugin,
+    info: *mut clap_voice_info,
+) -> bool {
+    if info.is_null() {
+        return false;
+    }
+    let meta = L::info();
+    if meta.voice_count == 0 {
+        return false;
+    }
+    let cap = meta.voice_capacity.max(meta.voice_count);
+    let out = unsafe { &mut *info };
+    out.voice_count = meta.voice_count.min(cap);
+    out.voice_capacity = cap;
+    out.flags = CLAP_VOICE_INFO_SUPPORTS_OVERLAPPING_NOTES;
     true
 }
 
@@ -2349,6 +2390,13 @@ fn map_param_flags(flags: ParamFlags, range: &ParamRange) -> u32 {
     let mut f = 0u32;
     if flags.contains(ParamFlags::AUTOMATABLE) {
         f |= CLAP_PARAM_IS_AUTOMATABLE;
+        if flags.contains(ParamFlags::MODULATABLE_PER_NOTE) {
+            // Bitwig Voice Stack binds only when per-note *and* per-key
+            // automation are advertised (clap-saw-demo / Surge set).
+            f |= CLAP_PARAM_IS_AUTOMATABLE_PER_NOTE_ID
+                | CLAP_PARAM_IS_AUTOMATABLE_PER_KEY
+                | CLAP_PARAM_IS_AUTOMATABLE_PER_CHANNEL;
+        }
     }
     if flags.contains(ParamFlags::HIDDEN) {
         f |= CLAP_PARAM_IS_HIDDEN;
@@ -2360,7 +2408,10 @@ fn map_param_flags(flags: ParamFlags, range: &ParamRange) -> u32 {
         f |= CLAP_PARAM_IS_BYPASS;
     }
     if flags.contains(ParamFlags::MODULATABLE_PER_NOTE) {
-        f |= CLAP_PARAM_IS_MODULATABLE | CLAP_PARAM_IS_MODULATABLE_PER_NOTE_ID;
+        f |= CLAP_PARAM_IS_MODULATABLE
+            | CLAP_PARAM_IS_MODULATABLE_PER_NOTE_ID
+            | CLAP_PARAM_IS_MODULATABLE_PER_KEY
+            | CLAP_PARAM_IS_MODULATABLE_PER_CHANNEL;
     } else if flags.contains(ParamFlags::MODULATABLE) {
         f |= CLAP_PARAM_IS_MODULATABLE;
     }
@@ -2568,6 +2619,12 @@ mod process_scratch_tests {
         };
         assert_eq!(e.header.type_, CLAP_EVENT_MIDI2);
         assert_eq!(e.data, u.words());
+    }
+
+    #[test]
+    fn voice_info_overlapping_when_count_set() {
+        use clap_sys::ext::voice_info::CLAP_VOICE_INFO_SUPPORTS_OVERLAPPING_NOTES;
+        assert_ne!(CLAP_VOICE_INFO_SUPPORTS_OVERLAPPING_NOTES, 0);
     }
 }
 

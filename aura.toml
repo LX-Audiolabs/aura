@@ -1,0 +1,9 @@
+[vendor]
+name = "LX Audiolabs"
+id = "lx"
+url = "https://lx-audiolabs.com"
+
+# Host copies go here (no admin). Format subdirs CLAP / VST3 / LV2 are appended.
+# Env CLAPINS / VST3INS still override.
+[install]
+dir = "%LOCALAPPDATA%\\Programs\\Common"

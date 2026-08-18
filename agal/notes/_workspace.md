@@ -17,8 +17,9 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 - [x] v0.7.1 — no per-block heap in process (Bitwig expression-flood crash)
 - [x] v0.7.2 — `notes_out` / `NOTE_END` · `NoteVoiceTable` · native `ProcessContext.ump` / `ump_out`
 - [ ] **CLAP product-driven** — multi-out / >1 SC; G5 rich state — only if a plugin needs it (`crates/aura-clap/README.md`)
-- [ ] **Bitwig host proofs** — remote-controls, latency, mid-block automation, modulator → `modulatable` (+ per-note), expressions, `NOTE_END` teardown, `notes_out` (arp), offline render
-- [ ] **Poly smoke / real synth** — `NoteVoiceTable` + `VoiceManager` (multi-voice); smoothing / expression→knob is DSP, not wrapper
+- [x] Poly smoke — `smoke-synth` 8 voices via `NoteVoiceTable` (2026-08-18)
+- [ ] **Bitwig host proofs** — `crates/aura-clap/README.md` (chord, expressions, poly-mod, MIDI FX → synth, bounce)
+- [ ] Real-synth DSP — smoothing / expression→knob matrix (not a wrapper hole)
 - [ ] **Framework test pass** — CI smokes + host proofs, then crates.io (`publish = false`)
 
 ## Decisions

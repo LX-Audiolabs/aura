@@ -45,6 +45,11 @@ pub struct PluginInfo {
     pub emits_midi: bool,
     pub midi_input_dialect: MidiDialect,
     pub midi_output_dialect: MidiDialect,
+    /// Voices the patch may use. `0` = do not advertise `clap.voice-info`.
+    /// Bitwig Voice Stack needs this (`voice_count > 1`) plus overlapping notes.
+    pub voice_count: u32,
+    /// Allocated voice pool (`voice_count <= voice_capacity`). `0` → same as count.
+    pub voice_capacity: u32,
 }
 
 impl PluginInfo {
@@ -70,6 +75,8 @@ impl PluginInfo {
             emits_midi: false,
             midi_input_dialect: MidiDialect::Midi1,
             midi_output_dialect: MidiDialect::Midi1,
+            voice_count: 0,
+            voice_capacity: 0,
         }
     }
 }

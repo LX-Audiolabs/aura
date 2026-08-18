@@ -51,7 +51,9 @@ Entry, factory, audio-ports (mono/stereo + optional sidechain), audio-ports-conf
 
 **Note events / expressions:** prefer `MidiDialect::Clap` so the note port lists `CLAP_NOTE_DIALECT_CLAP`. Wrapper fills `ProcessContext.notes` with on/off/choke (`note_id`, key, velocity 0..1), `CLAP_EVENT_NOTE_EXPRESSION` (volume/pan/tuning/…), and still mirrors on/off into 7-bit `midi`.
 
-**Note out:** push to `ProcessContext.notes_out`. CLAP emits `NOTE_ON`/`OFF`/`CHOKE`/`END` and expressions. `NOTE_END` (voice silent) needs no output note port — Bitwig can drop poly mods. Generated notes (arp / seq) need `PluginInfo.emits_midi` so a note output port exists. VST3/LV2 map On/Off/Choke to 7-bit MIDI.
+**Note out:** push to `ProcessContext.notes_out`. CLAP emits `NOTE_ON`/`OFF`/`CHOKE`/`END` and expressions. `midi_out` is always raw `CLAP_EVENT_MIDI` (Bitwig Note FX forwards that dialect). `NOTE_END` (voice silent) needs no output note port — Bitwig can drop poly mods. Generated notes (arp / seq) need `PluginInfo.emits_midi` so a note output port exists. VST3/LV2 map On/Off/Choke to 7-bit MIDI.
+
+**Voice info:** set `PluginInfo.voice_count` / `voice_capacity` (`> 0`) to advertise `clap.voice-info` with overlapping notes. Bitwig Voice Stack stays mono-mapped without this.
 
 **Latency:** override `PluginLogic::latency(&state) -> u32` (samples). Via `clap.latency`; mid-run changes request host restart for PDC.
 
@@ -89,12 +91,24 @@ Ship-capable CLAP core is **done**. Remaining work is **product-driven** or opti
 
 ### Host proof (framework landed; DAW re-check recommended)
 
-- [ ] Bitwig: multi-page `remote-controls`, non-zero `latency`, mid-block automation
-- [ ] Modulator → `modulatable` knob (mono) and `modulatable_per_note` (poly)
-- [ ] Note expressions + `NOTE_END` after release (host drops per-note mods)
-- [ ] `notes_out` reaches the next device (arp / seq)
-- [ ] Mono / dual-layout host switch (`audio-ports-config`)
-- [ ] Offline bounce sees `ProcessMode::Offline` (`clap.render`)
+Install: `cargo aura install --clap --release -plug smoke-synth smoke-midi-fx smoke-gain`
+
+- [ ] **Poly** — `AURA Smoke Synth` on an instrument track. Play a chord (4–8 keys). All notes sound. Steal after 8.
+- [ ] **Expressions** — Bitwig note inspector: Gain (volume), Timbre (sine→saw), Pressure. Per-note, not global.
+- [ ] **Poly-mod / Voice Stack** — Bitwig Voice Stack on Gain (per-note). Stacked copies of the same key must differ in level. After release, mods drop (`NOTE_END`).
+- [ ] **Mono-mod** — same modulator without per-note: whole instance Gain moves, UI value stays.
+- [ ] **`notes_out`** — Note FX chain: `AURA Smoke MIDI FX` (Transpose +12) → `AURA Smoke Synth`. Played C sounds as C one octave up.
+- [ ] **Layouts** — switch stereo/mono on the instrument (smoke-synth declares both).
+- [ ] **Offline** — bounce the clip; no hang. (`clap.render` → `ProcessMode::Offline`)
+- [ ] Multi-page `remote-controls` / non-zero `latency` / mid-block automation — use `smoke-gain` + a later product plug; not blocking the note path.
+
+### Bitwig session (copy)
+
+1. Rescan CLAP. Insert **AURA Smoke Synth**. Play a triad — three distinct pitches.
+2. Open the note inspector. Move Gain / Timbre on one note only.
+3. Inspector → Voice Stacking (e.g. 4). Add **Voice Stack** modulator on Gain, spread amount. Stacked copies of one key should be different levels. Re-add the plugin after this rebuild (flags changed).
+4. Insert **AURA Smoke MIDI FX** in the **Note FX** chain (not audio FX) *before* the synth. Transpose 12. Synth plays an octave up. Re-add MIDI FX after this rebuild.
+5. Bounce the clip offline.
 
 ### Spec / bindings (not a ship blocker)
 
