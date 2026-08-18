@@ -48,11 +48,15 @@ After `agal.agent.md` (L2). Escalate L0: `examples/smoke-synth` in json / `agal 
 
 ## Intent
 
-_Why this crate/plugin exists. Edit freely._
+CLAP-first instrument smoke: `ProcessContext.notes` (expressions, poly-mod)
+plus MIDI fallback. Headless. Proves the wrapper, not a product synth.
 
 ## Open
 
-- [ ] 
+- [x] Mono Osc + Adsr through CLAP — Bitwig stable after v0.7.1 scratch fix
+- [x] `NoteVoiceTable` + `NOTE_END` when envelope idle (v0.7.2)
+- [ ] Polyphony (`NoteVoiceTable` + `VoiceManager`, >1 voice)
+- [ ] Sample-accurate smoothing / expression→knob — later, on a real synth 
 
 ## Decisions
 

@@ -231,6 +231,7 @@ More detail: crate docs (`cargo doc -p aura --open`), [docs/versioning.md](./doc
 | `clap.preset-load` + factory discovery | done (`factory_presets`) |
 | Poly mod / note expression | done (CLAP → `ProcessContext.notes`; `NoteVoiceTable` + `NOTE_END`) |
 | Native MIDI 2 process | done (`ProcessContext.ump` / `ump_out`; 7-bit `midi` remains) |
+| notes_out / arp-seq path | done (CLAP native; VST3/LV2 map On/Off/Choke) |
 
 Changelog: [CHANGELOG.md](./CHANGELOG.md). Releases are tagged `vX.Y.Z`.
 

@@ -49,15 +49,17 @@ After `agal.agent.md` (L2). Escalate L0: `crates/aura-midi` in json / `agal --pl
 JUCE `MidiMessage` / `MidiBuffer` analogue. Format wrappers translate host
 events into these types; `PluginLogic::process` reads `ProcessContext::midi`.
 
-MIDI 2 lives here as [`Ump`](../../crates/aura-midi/src/ump.rs) (Universal MIDI
-Packet). Process still sees 7-bit `MidiMessage`. Hosts that send
-`CLAP_EVENT_MIDI2` are down-converted in `aura-clap`.
+MIDI 2 lives here as [`Ump`](../../crates/aura-midi/src/ump.rs) / `UmpBuffer`.
+`ProcessContext.ump` is the native path (v0.7.2). 7-bit `MidiMessage` is the
+fallback image. CLAP writes `CLAP_EVENT_MIDI2` unchanged; VST3/LV2 lift MIDI 1
+into type-0x2 UMP.
 
 ## Open
 
-- [x] `SysEx8` / Flex Data packet stubs (2026-08-17)
-- [x] Note-id / expressions live on `ProcessContext.notes` (CLAP); MIDI stays 7-bit
-- [ ] Optional hi-res / SysEx typed process path (product-driven)
+- [x] `SysEx8` / Flex Data packets (2026-08-17) — on `ProcessContext.ump` since v0.7.2
+- [x] Note-id / expressions on `ProcessContext.notes` (CLAP)
+- [x] Native MIDI 2 process (`ump` / `ump_out`) — v0.7.2
+- [ ] Typed SysEx / Flex decode (product-driven; raw packets already arrive)
 
 ## Decisions
 
@@ -68,7 +70,7 @@ Packet). Process still sees 7-bit `MidiMessage`. Hosts that send
 ## Atoms (human)
 
 ```text
-[ATOM] type=decision | detail=MidiMessage stays MIDI 1; Ump is the MIDI 2 stub
+[ATOM] type=decision | detail=MidiMessage stays MIDI 1; UmpBuffer is the MIDI 2 process path
 [ATOM] type=constraint | detail=no_std-hostile alloc only in MidiBuffer growth
 [ATOM] type=lesson | detail=CLAP_EVENT_MIDI2 data is [u32;4] — Ump::from_words
 ```

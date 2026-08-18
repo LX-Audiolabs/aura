@@ -82,14 +82,17 @@ Ship-capable CLAP core is **done**. Remaining work is **product-driven** or opti
 | ~~**`clap.preset-load`**~~ | landed | `factory_presets` + FILE blob load; vault-format files override `load_preset_from_file` |
 | ~~**Poly param modulation**~~ | landed — `note_id ≥ 0` → `ProcessContext.notes` (`ParamMod`); smoke-synth Gain is `modulatable_per_note` | plugin owns voice table |
 | ~~**Note expression**~~ | landed — `CLAP_EVENT_NOTE_EXPRESSION` → `NoteEventKind::Expression`; prefer `MidiDialect::Clap` | Bitwig expression / MPE host proof |
-| ~~**Native MIDI 2 process**~~ | landed — `ProcessContext.ump` / `ump_out`; `NoteVoiceTable` + `NOTE_END` | plugin owns envelopes; call `mark_silent` |
+| ~~**Native MIDI 2 process**~~ | landed v0.7.2 — `ProcessContext.ump` / `ump_out`; `NoteVoiceTable` + `NOTE_END` | plugin owns envelopes; call `mark_silent` |
 | **Multi-out / >1 sidechain** | G12 extension — one optional sidechain only today | Aux buses beyond single SC |
 | **Rich state hooks** (host blob > flat params) | G5 | Presets that need non-param bytes in host state |
-| **SysEx** typed path | — | Rare / hardware bridge |
+| **SysEx typed decode** | raw `SysEx8` / Flex already on `ump` | hardware bridge that needs a typed API |
 
 ### Host proof (framework landed; DAW re-check recommended)
 
-- [ ] Bitwig: multi-page `remote-controls`, non-zero `latency`, mid-block automation, modulator → `modulatable` param
+- [ ] Bitwig: multi-page `remote-controls`, non-zero `latency`, mid-block automation
+- [ ] Modulator → `modulatable` knob (mono) and `modulatable_per_note` (poly)
+- [ ] Note expressions + `NOTE_END` after release (host drops per-note mods)
+- [ ] `notes_out` reaches the next device (arp / seq)
 - [ ] Mono / dual-layout host switch (`audio-ports-config`)
 - [ ] Offline bounce sees `ProcessMode::Offline` (`clap.render`)
 

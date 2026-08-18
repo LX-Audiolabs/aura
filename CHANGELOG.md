@@ -7,6 +7,8 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ## [Unreleased]
 
+Stage 6 author-loop items below already shipped in **v0.7.1** (0.8.0 tag skipped). Note/MIDI process work is in **v0.7.2**.
+
 ### Added
 
 - CLAP poly `PARAM_MOD` / per-note `PARAM_VALUE` (`note_id ≥ 0`) and `CLAP_EVENT_NOTE_EXPRESSION` → `ProcessContext.notes`. Mono events still hit `Params`. `MidiDialect::Clap` prefers `CLAP_NOTE_DIALECT_CLAP`. smoke-synth: velocity, volume (Bitwig Gain), timbre (sine→saw), pressure, tuning, per-note Gain.

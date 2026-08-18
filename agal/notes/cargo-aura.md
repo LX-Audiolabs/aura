@@ -44,8 +44,8 @@ the same paths. Orientation mesh is `cargo aura mesh` → `agal` (optional).
 
 ## Open
 
-- [ ] In-host binary swap (Windows file lock) — host must unload today
-- [ ] `aura-gui` identity pass (Stage 6 UI, later)
+- [x] In-host swap without unload — `cargo aura watch --hot` (`aura-hot` proxy + `.impl`); re-add instance
+- [x] `aura-gui` identity pass — aurora teal (Stage 6, 2026-08-17)
 
 ## Decisions
 
