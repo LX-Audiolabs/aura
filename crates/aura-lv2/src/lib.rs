@@ -162,6 +162,37 @@ struct Instance<L: PluginLogic> {
     midi_event_type: u32,
     /// URID for `atom:Sequence` (0 when unmapped / no MIDI port).
     sequence_type: u32,
+    scratch: ProcessScratch,
+}
+
+/// Audio-thread working set. Reserved in `activate`.
+struct ProcessScratch {
+    midi: MidiBuffer,
+    midi_out: MidiBuffer,
+    silence: Vec<f32>,
+}
+
+const MAX_AUDIO_CH: usize = 8;
+const MAX_MIDI_EVENTS: usize = 4096;
+/// LV2 has no host max-block; reserve a generous default and grow once if needed.
+const LV2_SCRATCH_FRAMES: usize = 8192;
+
+impl ProcessScratch {
+    fn new() -> Self {
+        Self {
+            midi: MidiBuffer::new(),
+            midi_out: MidiBuffer::new(),
+            silence: Vec::new(),
+        }
+    }
+
+    fn prepare(&mut self, max_frames: usize) {
+        self.midi.reserve(MAX_MIDI_EVENTS + 128);
+        self.midi_out.reserve(256);
+        if self.silence.len() < max_frames {
+            self.silence.resize(max_frames, 0.0);
+        }
+    }
 }
 
 impl<L: PluginLogic> Instance<L> {
@@ -278,6 +309,7 @@ unsafe extern "C" fn instantiate<L: PluginLogic>(
         midi_out_port,
         midi_event_type,
         sequence_type,
+        scratch: ProcessScratch::new(),
     });
     Box::into_raw(inst) as LV2_Handle
 }
@@ -330,6 +362,7 @@ unsafe extern "C" fn activate<L: PluginLogic>(instance: LV2_Handle) {
         .with_sidechain_channels(inst.layout.sidechain_input_channels());
     let mut dsp = L::init(&inst.params, inst.sample_rate);
     L::reset(&mut dsp, &inst.params, &config);
+    inst.scratch.prepare(LV2_SCRATCH_FRAMES);
     inst.state = Some(dsp);
 }
 
@@ -354,6 +387,10 @@ unsafe extern "C" fn run<L: PluginLogic>(instance: LV2_Handle, sample_count: u32
         if n == 0 {
             return;
         }
+        if n > inst.scratch.silence.len() {
+            // Host used a larger block than activate reserved — grow once.
+            inst.scratch.prepare(n);
+        }
 
         // Control ports → params (plain floats).
         let infos = param_list::<L>();
@@ -371,72 +408,118 @@ unsafe extern "C" fn run<L: PluginLogic>(instance: LV2_Handle, sample_count: u32
             }
         }
 
-        // MIDI atom input → MidiBuffer (before the mutable dsp borrow).
-        let midi = read_midi(inst, n);
-
-        let Some(dsp) = inst.state.as_mut() else {
+        inst.scratch.midi.clear();
+        inst.scratch.midi_out.clear();
+        read_midi(inst, n);
+        if inst.state.is_none() {
             return;
-        };
+        }
 
         let in_ch = inst.layout.main_input_channels() as usize;
         let sidechain_ch = inst.layout.sidechain_input_channels() as usize;
         let total_in_ch = in_ch + sidechain_ch;
         let out_ch = inst.layout.main_output_channels() as usize;
-        if out_ch == 0 {
+        if !matches!(out_ch, 1 | 2) || total_in_ch > MAX_AUDIO_CH {
             return;
         }
 
-        // Copy host inputs (or silence) into owned buffers.
-        let mut owned_in: Vec<Vec<f32>> = Vec::with_capacity(total_in_ch.max(out_ch));
-        for c in 0..total_in_ch {
-            if let Some(s) = port_audio(inst.ports.get(c).copied(), n) {
-                owned_in.push(s.to_vec());
-            } else {
-                owned_in.push(vec![0.0; n]);
-            }
+        // Distinct fields; raw slice so we can also mut-borrow `state`.
+        let silence = unsafe { std::slice::from_raw_parts(inst.scratch.silence.as_ptr(), n) };
+        let mut in_store = [&[] as &[f32]; MAX_AUDIO_CH];
+        for i in 0..total_in_ch {
+            in_store[i] = port_audio(inst.ports.get(i).copied(), n).unwrap_or(silence);
+        }
+        let in_refs = &in_store[..total_in_ch];
+
+        let mut out_ptrs = [ptr::null_mut::<f32>(); MAX_AUDIO_CH];
+        for (i, dest) in out_ptrs.iter_mut().take(out_ch).enumerate() {
+            let port_i = total_in_ch + i;
+            *dest = inst
+                .ports
+                .get(port_i)
+                .copied()
+                .unwrap_or(ptr::null_mut())
+                .cast::<f32>();
+        }
+        if out_ptrs[..out_ch].iter().any(|p| p.is_null()) {
+            return;
         }
 
-        let mut owned_out: Vec<Vec<f32>> = Vec::with_capacity(out_ch);
-        for _ in 0..out_ch {
-            owned_out.push(vec![0.0; n]);
-        }
-        let midi_out = {
-            let in_refs: Vec<&[f32]> = owned_in.iter().map(Vec::as_slice).collect();
-            let mut out_refs: Vec<&mut [f32]> =
-                owned_out.iter_mut().map(Vec::as_mut_slice).collect();
-            let mut buffer = AudioBuffer::from_slices_checked_with_sidechain(
-                &in_refs,
-                &mut out_refs,
+        let dsp = inst.state.as_mut().expect("checked is_none above");
+        let mut ctx = ProcessContext::new(inst.sample_rate, n)
+            .with_process_mode(ProcessMode::Realtime)
+            .with_midi(std::mem::take(&mut inst.scratch.midi))
+            .with_midi_out(std::mem::take(&mut inst.scratch.midi_out));
+        let _ = unsafe {
+            run_process_chunk::<L>(
+                dsp,
+                &inst.params,
+                in_refs,
+                out_ptrs,
+                out_ch,
                 n,
                 in_ch,
                 sidechain_ch,
-            );
-            let mut ctx = ProcessContext::new(inst.sample_rate, n)
-                .with_process_mode(ProcessMode::Realtime)
-                .with_midi(midi);
-            let _ = L::process(dsp, &inst.params, &mut buffer, &mut ctx);
-            ctx.midi_out.clone()
+                &mut ctx,
+            )
         };
-
-        for (c, out_ch_buf) in owned_out.iter().enumerate() {
-            let port_i = total_in_ch + c;
-            if let Some(s) = port_audio_mut(inst.ports.get(port_i).copied(), n) {
-                s.copy_from_slice(out_ch_buf);
-            }
-        }
-
-        write_midi(inst, n, &midi_out);
+        inst.scratch.midi = std::mem::take(&mut ctx.midi);
+        write_midi(inst, n, &ctx.midi_out);
+        inst.scratch.midi_out = std::mem::take(&mut ctx.midi_out);
+        inst.scratch.midi_out.clear();
     });
+}
+
+/// Write one block into host port pointers (mono or stereo).
+#[allow(clippy::too_many_arguments)]
+unsafe fn run_process_chunk<L: PluginLogic>(
+    state: &mut L::DspState,
+    params: &L::Params,
+    in_refs: &[&[f32]],
+    out_ptrs: [*mut f32; MAX_AUDIO_CH],
+    out_ch: usize,
+    frames: usize,
+    main_in_ch: usize,
+    sidechain_in_ch: usize,
+    ctx: &mut ProcessContext,
+) -> aura_core::ProcessStatus {
+    match out_ch {
+        1 => {
+            let mut s0 = unsafe { std::slice::from_raw_parts_mut(out_ptrs[0], frames) };
+            let mut outs = [&mut s0 as &mut [f32]];
+            let mut buffer = unsafe {
+                AudioBuffer::from_slices_with_sidechain_unchecked(
+                    in_refs,
+                    &mut outs,
+                    frames,
+                    main_in_ch,
+                    sidechain_in_ch,
+                )
+            };
+            L::process(state, params, &mut buffer, ctx)
+        }
+        2 => {
+            let mut s0 = unsafe { std::slice::from_raw_parts_mut(out_ptrs[0], frames) };
+            let mut s1 = unsafe { std::slice::from_raw_parts_mut(out_ptrs[1], frames) };
+            let mut outs = [&mut s0 as &mut [f32], &mut s1];
+            let mut buffer = unsafe {
+                AudioBuffer::from_slices_with_sidechain_unchecked(
+                    in_refs,
+                    &mut outs,
+                    frames,
+                    main_in_ch,
+                    sidechain_in_ch,
+                )
+            };
+            L::process(state, params, &mut buffer, ctx)
+        }
+        _ => aura_core::ProcessStatus::Error,
+    }
 }
 
 fn port_audio<'a>(ptr: Option<*mut c_void>, n: usize) -> Option<&'a [f32]> {
     let p = ptr.filter(|p| !p.is_null())?;
     Some(unsafe { std::slice::from_raw_parts(p as *const f32, n) })
-}
-
-fn port_audio_mut<'a>(ptr: Option<*mut c_void>, n: usize) -> Option<&'a mut [f32]> {
-    let p = ptr.filter(|p| !p.is_null())?;
-    Some(unsafe { std::slice::from_raw_parts_mut(p as *mut f32, n) })
 }
 
 /// Encode [`MidiBuffer`] events into the MIDI atom-sequence output port.
@@ -523,17 +606,16 @@ fn message_bytes(msg: MidiMessage) -> ([u8; 3], usize) {
     ([msg.status_byte(), msg.data1, msg.data2], len)
 }
 
-/// Parse the MIDI atom-sequence input port into a [`MidiBuffer`].
+/// Parse the MIDI atom-sequence input port into `inst.scratch.midi`.
 ///
-/// Empty when the plugin has no MIDI port, the host left it unconnected,
+/// No-op when the plugin has no MIDI port, the host left it unconnected,
 /// URID mapping failed, or the buffer is not an `atom:Sequence`.
-fn read_midi<L: PluginLogic>(inst: &Instance<L>, n: usize) -> MidiBuffer {
-    let mut midi = MidiBuffer::new();
+fn read_midi<L: PluginLogic>(inst: &mut Instance<L>, n: usize) {
     let Some(port) = inst.midi_in_port else {
-        return midi;
+        return;
     };
     if inst.midi_event_type == 0 {
-        return midi;
+        return;
     }
     let ptr = inst
         .ports
@@ -541,12 +623,15 @@ fn read_midi<L: PluginLogic>(inst: &Instance<L>, n: usize) -> MidiBuffer {
         .copied()
         .unwrap_or(ptr::null_mut());
     if ptr.is_null() {
-        return midi;
+        return;
     }
+    let midi_event_type = inst.midi_event_type;
+    let sequence_type = inst.sequence_type;
+    let midi = &mut inst.scratch.midi;
     unsafe {
         let seq = &*(ptr as *const LV2_Atom_Sequence);
-        if inst.sequence_type != 0 && seq.atom.type_ != inst.sequence_type {
-            return midi;
+        if sequence_type != 0 && seq.atom.type_ != sequence_type {
+            return;
         }
         let base = ptr as *const u8;
         // atom.size covers everything after the LV2_Atom header (seq body + events).
@@ -559,7 +644,10 @@ fn read_midi<L: PluginLogic>(inst: &Instance<L>, n: usize) -> MidiBuffer {
             if data_off + body_size > total {
                 break; // corrupt buffer — stop
             }
-            if ev.body.type_ == inst.midi_event_type && body_size > 0 {
+            if ev.body.type_ == midi_event_type && body_size > 0 {
+                if midi.len() >= MAX_MIDI_EVENTS {
+                    break;
+                }
                 // LV2 MIDI events are 1-3 raw bytes, status first (no running status).
                 let data = std::slice::from_raw_parts(base.add(data_off), body_size.min(3));
                 let offset = ev.time.frames.clamp(0, n as i64 - 1) as u32;
@@ -576,7 +664,6 @@ fn read_midi<L: PluginLogic>(inst: &Instance<L>, n: usize) -> MidiBuffer {
             off = data_off + ((body_size + 7) & !7);
         }
     }
-    midi
 }
 
 // ---------------------------------------------------------------------------

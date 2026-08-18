@@ -39,7 +39,7 @@ use aura_core::{
     AudioBuffer, AudioConfig, BusLayout, ChannelConfig, NoteBuffer, NoteEvent, NoteEventKind,
     NoteExpression, NoteTarget, PluginLogic, ProcessContext, ProcessMode, ProcessStatus,
     TimedParamEvent, apply_at_time, apply_non_chunked, host_callback, host_callback_with,
-    layout_at, route_param_mod, route_param_value, split_points,
+    layout_at, route_param_mod, route_param_value, split_points_into,
 };
 use aura_core::{MidiBuffer, MidiMessage, MidiStatus, Ump};
 use aura_params::{ParamFlags, ParamInfo, ParamRange, Params};
@@ -213,6 +213,7 @@ unsafe extern "C" fn factory_create_plugin<L: PluginLogic>(
         latency_dirty: AtomicBool::new(false),
         tail_cache: AtomicU32::new(0),
         process_mode: ProcessMode::Realtime,
+        scratch: ProcessScratch::new(),
     });
 
     let plugin = Box::new(clap_plugin {
@@ -323,6 +324,61 @@ pub(crate) struct Instance<L: PluginLogic> {
     tail_cache: AtomicU32,
     /// Host render mode (`clap.render`) → `ProcessContext.process_mode`.
     process_mode: ProcessMode,
+    /// Audio-thread scratch — reserved in `activate`, reused every `process`.
+    scratch: ProcessScratch,
+}
+
+/// Pre-sized process working set. Heap growth here is a Bitwig-crash class bug
+/// (note-expression flood used to `Vec::new` + copy every block).
+struct ProcessScratch {
+    timed: Vec<TimedParamEvent>,
+    midi: MidiBuffer,
+    midi_out: MidiBuffer,
+    notes: NoteBuffer,
+    notes_chunk: NoteBuffer,
+    midi_chunk: MidiBuffer,
+    splits: Vec<u32>,
+    /// Zeroed fallback when a host input pointer is null.
+    silence: Vec<f32>,
+}
+
+/// Bitwig can emit a note-expression per sample per voice. Cap extras; keep
+/// on/off/choke so notes cannot stick. Slack in the reserve covers those.
+const MAX_NOTE_EVENTS: usize = 4096;
+
+impl ProcessScratch {
+    fn new() -> Self {
+        Self {
+            timed: Vec::new(),
+            midi: MidiBuffer::new(),
+            midi_out: MidiBuffer::new(),
+            notes: NoteBuffer::new(),
+            notes_chunk: NoteBuffer::new(),
+            midi_chunk: MidiBuffer::new(),
+            splits: Vec::new(),
+            silence: Vec::new(),
+        }
+    }
+
+    fn prepare(&mut self, max_frames: usize) {
+        self.timed.reserve(256);
+        self.midi.reserve(MAX_NOTE_EVENTS);
+        self.midi_out.reserve(256);
+        self.notes.reserve(MAX_NOTE_EVENTS + 128);
+        self.notes_chunk.reserve(MAX_NOTE_EVENTS + 128);
+        self.midi_chunk.reserve(MAX_NOTE_EVENTS);
+        self.splits.reserve(64);
+        if self.silence.len() < max_frames {
+            self.silence.resize(max_frames, 0.0);
+        }
+    }
+}
+
+/// Stereo + optional stereo SC today; headroom if a layout grows.
+const MAX_AUDIO_CH: usize = 8;
+
+fn accept_note_event(len: usize, essential: bool) -> bool {
+    essential || len < MAX_NOTE_EVENTS
 }
 
 impl<L: PluginLogic> Instance<L> {
@@ -467,6 +523,7 @@ unsafe extern "C" fn plugin_activate<L: PluginLogic>(
         };
         inst.sample_rate = sample_rate;
         inst.max_frames = max_frames;
+        inst.scratch.prepare(max_frames as usize);
         let layout = inst.selected_layout();
         let config = AudioConfig::new(sample_rate, max_frames as usize)
             .with_channels(layout.main_input_channels(), layout.main_output_channels())
@@ -545,12 +602,23 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
         if frames == 0 {
             return CLAP_PROCESS_CONTINUE;
         }
+        if inst.max_frames == 0 || frames > inst.max_frames as usize {
+            return CLAP_PROCESS_ERROR;
+        }
 
-        let mut timed: Vec<TimedParamEvent> = Vec::new();
-        let mut midi = MidiBuffer::with_capacity(32);
-        let mut notes = NoteBuffer::with_capacity(32);
+        inst.scratch.timed.clear();
+        inst.scratch.midi.clear();
+        inst.scratch.notes.clear();
+        inst.scratch.midi_out.clear();
         if !process.in_events.is_null() {
-            unsafe { collect_input_events(process.in_events, &mut timed, &mut midi, &mut notes) };
+            unsafe {
+                collect_input_events(
+                    process.in_events,
+                    &mut inst.scratch.timed,
+                    &mut inst.scratch.midi,
+                    &mut inst.scratch.notes,
+                );
+            };
         }
         unsafe { emit_param_events(&inst.param_events, process.out_events) };
 
@@ -562,6 +630,7 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
 
         let layout = inst.selected_layout();
         let process_mode = inst.process_mode;
+        let sample_rate = inst.sample_rate;
 
         let Some(state) = inst.state.as_mut() else {
             return CLAP_PROCESS_ERROR;
@@ -570,88 +639,155 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
         let sidechain_in_ch = layout.sidechain_input_channels() as usize;
         let total_in_ch = main_in_ch + sidechain_in_ch;
         let out_ch = layout.main_output_channels() as usize;
-        if out_ch == 0 {
+        if !matches!(out_ch, 1 | 2) || total_in_ch > MAX_AUDIO_CH {
             return CLAP_PROCESS_ERROR;
         }
 
-        // Own input channels from all host input ports (main + optional sidechain).
-        let mut owned_in: Vec<Vec<f32>> = Vec::with_capacity(total_in_ch.max(out_ch));
+        // Host pointers only — no per-block audio copies. Extra host input
+        // ports on an output-only instrument are ignored (used to panic).
+        let mut in_ptrs = [ptr::null::<f32>(); MAX_AUDIO_CH];
+        let mut filled_in = 0usize;
         if !process.audio_inputs.is_null() {
             for port_i in 0..process.audio_inputs_count as usize {
+                if filled_in >= total_in_ch {
+                    break;
+                }
                 let port = unsafe { &*process.audio_inputs.add(port_i) };
                 if port.data32.is_null() {
                     continue;
                 }
                 for c in 0..port.channel_count as usize {
-                    let ip = unsafe { *port.data32.add(c) };
-                    if ip.is_null() {
-                        owned_in.push(vec![0.0; frames]);
-                    } else {
-                        owned_in.push(unsafe { std::slice::from_raw_parts(ip, frames) }.to_vec());
+                    if filled_in >= total_in_ch {
+                        break;
                     }
+                    in_ptrs[filled_in] = unsafe { *port.data32.add(c) };
+                    filled_in += 1;
                 }
             }
         }
-        while owned_in.len() < total_in_ch {
-            owned_in.push(vec![0.0; frames]);
-        }
 
-        // Own output channels.
-        let mut owned_out: Vec<Vec<f32>> = Vec::with_capacity(out_ch);
-        let mut host_out: Vec<*mut f32> = Vec::with_capacity(out_ch);
+        let mut out_ptrs = [ptr::null_mut::<f32>(); MAX_AUDIO_CH];
+        let mut filled_out = 0usize;
         if process.audio_outputs_count > 0 && !process.audio_outputs.is_null() {
             let out_port = unsafe { &*process.audio_outputs };
             if !out_port.data32.is_null() {
-                for c in 0..out_ch.min(out_port.channel_count as usize) {
-                    let op = unsafe { *out_port.data32.add(c) };
-                    host_out.push(op);
-                    owned_out.push(vec![0.0; frames]);
+                let n = out_ch.min(out_port.channel_count as usize);
+                for (slot, ptr) in out_ptrs.iter_mut().take(n).enumerate() {
+                    *ptr = unsafe { *out_port.data32.add(slot) };
+                    filled_out += 1;
                 }
             }
         }
-        if owned_out.len() != out_ch {
+        if filled_out != out_ch {
             return CLAP_PROCESS_ERROR;
         }
 
         // Sample-accurate: non-CHUNKED params apply at block start; CHUNKED
         // params split the block at their event times.
         let infos = inst.params.param_infos();
-        apply_non_chunked(&*inst.params, &timed, &infos);
+        apply_non_chunked(&*inst.params, &inst.scratch.timed, &infos);
         let frames_u = frames as u32;
-        let splits = split_points(frames_u, &timed, &infos);
+        split_points_into(
+            &mut inst.scratch.splits,
+            frames_u,
+            &inst.scratch.timed,
+            &infos,
+        );
 
         let mut status = ProcessStatus::Continue;
-        let mut midi_out_all = MidiBuffer::with_capacity(32);
+        let n_splits = inst.scratch.splits.len();
 
-        for w in splits.windows(2) {
-            let t0 = w[0] as usize;
-            let t1 = w[1] as usize;
+        for si in 0..n_splits.saturating_sub(1) {
+            let t0 = inst.scratch.splits[si] as usize;
+            let t1 = inst.scratch.splits[si + 1] as usize;
             if t1 <= t0 {
                 continue;
             }
             let chunk_len = t1 - t0;
-            apply_at_time(&*inst.params, &timed, w[0], &infos);
-
-            let in_refs: Vec<&[f32]> = owned_in.iter().map(|ch| &ch[t0..t1]).collect();
-            let mut out_owned: Vec<&mut [f32]> =
-                owned_out.iter_mut().map(|ch| &mut ch[t0..t1]).collect();
-
-            let mut buffer = AudioBuffer::from_slices_checked_with_sidechain(
-                &in_refs,
-                &mut out_owned,
-                chunk_len,
-                main_in_ch,
-                sidechain_in_ch,
+            apply_at_time(
+                &*inst.params,
+                &inst.scratch.timed,
+                inst.scratch.splits[si],
+                &infos,
             );
-            let chunk_midi = midi.slice_rebased(w[0], w[1]);
-            let chunk_notes = notes.slice_rebased(w[0], w[1]);
-            let mut ctx = ProcessContext::new(inst.sample_rate, chunk_len)
+
+            if inst.scratch.silence.len() < t1 {
+                return CLAP_PROCESS_ERROR;
+            }
+            let silence = &inst.scratch.silence[t0..t1];
+            let mut in_store = [&[] as &[f32]; MAX_AUDIO_CH];
+            for i in 0..total_in_ch {
+                in_store[i] = if in_ptrs[i].is_null() {
+                    silence
+                } else {
+                    unsafe { std::slice::from_raw_parts(in_ptrs[i].add(t0), chunk_len) }
+                };
+            }
+            let in_refs = &in_store[..total_in_ch];
+            if in_refs.iter().any(|ch| ch.len() < chunk_len) {
+                return CLAP_PROCESS_ERROR;
+            }
+            if out_ptrs[..out_ch].iter().any(|p| p.is_null()) {
+                return CLAP_PROCESS_ERROR;
+            }
+
+            let single = n_splits == 2;
+            if !single {
+                let (a, b) = (inst.scratch.splits[si], inst.scratch.splits[si + 1]);
+                inst.scratch
+                    .midi_chunk
+                    .copy_range_rebased(&inst.scratch.midi, a, b);
+                inst.scratch
+                    .notes_chunk
+                    .copy_range_rebased(&inst.scratch.notes, a, b);
+            }
+            let midi = if single {
+                std::mem::take(&mut inst.scratch.midi)
+            } else {
+                std::mem::take(&mut inst.scratch.midi_chunk)
+            };
+            let notes = if single {
+                std::mem::take(&mut inst.scratch.notes)
+            } else {
+                std::mem::take(&mut inst.scratch.notes_chunk)
+            };
+            let mut ctx = ProcessContext::new(sample_rate, chunk_len)
                 .with_process_mode(process_mode)
-                .with_midi(chunk_midi)
-                .with_notes(chunk_notes);
+                .with_midi(midi)
+                .with_notes(notes)
+                .with_midi_out(std::mem::take(&mut inst.scratch.midi_out));
             ctx.transport = transport;
-            let chunk_status = L::process(state, &inst.params, &mut buffer, &mut ctx);
-            midi_out_all.extend_rebased(&ctx.midi_out, w[0]);
+
+            let chunk_status = unsafe {
+                run_process_chunk::<L>(
+                    state,
+                    &inst.params,
+                    in_refs,
+                    out_ptrs,
+                    out_ch,
+                    t0,
+                    chunk_len,
+                    main_in_ch,
+                    sidechain_in_ch,
+                    &mut ctx,
+                )
+            };
+
+            if single {
+                inst.scratch.midi = std::mem::take(&mut ctx.midi);
+                inst.scratch.notes = std::mem::take(&mut ctx.notes);
+            } else {
+                inst.scratch.midi_chunk = std::mem::take(&mut ctx.midi);
+                inst.scratch.notes_chunk = std::mem::take(&mut ctx.notes);
+                inst.scratch.midi_chunk.clear();
+                inst.scratch.notes_chunk.clear();
+            }
+            unsafe {
+                emit_midi_events_at(process.out_events, &ctx.midi_out, inst.scratch.splits[si]);
+            }
+            inst.scratch.midi_out = std::mem::take(&mut ctx.midi_out);
+            inst.scratch.midi_out.clear();
+
             match chunk_status {
                 ProcessStatus::Error => {
                     status = ProcessStatus::Error;
@@ -664,16 +800,6 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
                     }
                 }
             }
-        }
-
-        unsafe { emit_midi_events(process.out_events, &midi_out_all) };
-
-        for (c, host_ptr) in host_out.iter().enumerate() {
-            if host_ptr.is_null() {
-                continue;
-            }
-            let dst = unsafe { std::slice::from_raw_parts_mut(*host_ptr, frames) };
-            dst.copy_from_slice(&owned_out[c]);
         }
 
         // PDC: latency.changed is [main-thread] only — schedule callback.
@@ -695,7 +821,59 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
     })
 }
 
+/// Write one chunk into host output pointers (mono or stereo).
+#[allow(clippy::too_many_arguments)]
+unsafe fn run_process_chunk<L: PluginLogic>(
+    state: &mut L::DspState,
+    params: &L::Params,
+    in_refs: &[&[f32]],
+    out_ptrs: [*mut f32; MAX_AUDIO_CH],
+    out_ch: usize,
+    t0: usize,
+    chunk_len: usize,
+    main_in_ch: usize,
+    sidechain_in_ch: usize,
+    ctx: &mut ProcessContext,
+) -> ProcessStatus {
+    unsafe fn slice_out<'a>(p: *mut f32, t0: usize, n: usize) -> &'a mut [f32] {
+        unsafe { std::slice::from_raw_parts_mut(p.add(t0), n) }
+    }
+    match out_ch {
+        1 => {
+            let mut s0 = unsafe { slice_out(out_ptrs[0], t0, chunk_len) };
+            let mut outs = [&mut s0 as &mut [f32]];
+            let mut buffer = unsafe {
+                AudioBuffer::from_slices_with_sidechain_unchecked(
+                    in_refs,
+                    &mut outs,
+                    chunk_len,
+                    main_in_ch,
+                    sidechain_in_ch,
+                )
+            };
+            L::process(state, params, &mut buffer, ctx)
+        }
+        2 => {
+            let mut s0 = unsafe { slice_out(out_ptrs[0], t0, chunk_len) };
+            let mut s1 = unsafe { slice_out(out_ptrs[1], t0, chunk_len) };
+            let mut outs = [&mut s0 as &mut [f32], &mut s1];
+            let mut buffer = unsafe {
+                AudioBuffer::from_slices_with_sidechain_unchecked(
+                    in_refs,
+                    &mut outs,
+                    chunk_len,
+                    main_in_ch,
+                    sidechain_in_ch,
+                )
+            };
+            L::process(state, params, &mut buffer, ctx)
+        }
+        _ => ProcessStatus::Error,
+    }
+}
+
 /// Collect timed param / MIDI / note events from the host input list (no apply).
+#[allow(clippy::too_many_lines)]
 unsafe fn collect_input_events(
     in_events: *const clap_input_events,
     timed: &mut Vec<TimedParamEvent>,
@@ -725,6 +903,9 @@ unsafe fn collect_input_events(
         match header.type_ {
             CLAP_EVENT_PARAM_VALUE => {
                 let pev = unsafe { &*(hdr as *const clap_event_param_value) };
+                if pev.note_id >= 0 && !accept_note_event(notes.len(), false) {
+                    continue;
+                }
                 route_param_value(
                     timed,
                     notes,
@@ -741,6 +922,9 @@ unsafe fn collect_input_events(
             }
             CLAP_EVENT_PARAM_MOD => {
                 let pev = unsafe { &*(hdr as *const clap_event_param_mod) };
+                if pev.note_id >= 0 && !accept_note_event(notes.len(), false) {
+                    continue;
+                }
                 route_param_mod(
                     timed,
                     notes,
@@ -756,6 +940,9 @@ unsafe fn collect_input_events(
                 );
             }
             CLAP_EVENT_NOTE_ON | CLAP_EVENT_NOTE_OFF | CLAP_EVENT_NOTE_CHOKE => {
+                if !accept_note_event(notes.len(), true) {
+                    continue;
+                }
                 let n = unsafe { &*(hdr as *const clap_event_note) };
                 notes.push(NoteEvent {
                     sample_offset: header.time,
@@ -778,6 +965,9 @@ unsafe fn collect_input_events(
                 }
             }
             CLAP_EVENT_NOTE_EXPRESSION => {
+                if !accept_note_event(notes.len(), false) {
+                    continue;
+                }
                 let e = unsafe { &*(hdr as *const clap_event_note_expression) };
                 notes.push(NoteEvent {
                     sample_offset: header.time,
@@ -899,7 +1089,8 @@ unsafe fn emit_param_events(queue: &ParamEventQueue, out: *const clap_output_eve
 }
 
 /// Push plugin-generated MIDI events from [`ProcessContext::midi_out`] to the host.
-unsafe fn emit_midi_events(out: *const clap_output_events, midi: &MidiBuffer) {
+/// `base` is added to each sample offset (0 for a full-block chunk).
+unsafe fn emit_midi_events_at(out: *const clap_output_events, midi: &MidiBuffer, base: u32) {
     if out.is_null() || midi.is_empty() {
         return;
     }
@@ -907,6 +1098,7 @@ unsafe fn emit_midi_events(out: *const clap_output_events, midi: &MidiBuffer) {
         return;
     };
     for ev in midi.iter() {
+        let time = ev.sample_offset.saturating_add(base);
         match ev.message.status {
             MidiStatus::NoteOn | MidiStatus::NoteOff => {
                 let type_ = if ev.message.is_note_on() {
@@ -914,7 +1106,7 @@ unsafe fn emit_midi_events(out: *const clap_output_events, midi: &MidiBuffer) {
                 } else {
                     CLAP_EVENT_NOTE_OFF
                 };
-                let e = clap_event_note {
+                let mut e = clap_event_note {
                     header: event_header(type_, size_of::<clap_event_note>() as u32),
                     note_id: -1,
                     port_index: 0,
@@ -922,19 +1114,17 @@ unsafe fn emit_midi_events(out: *const clap_output_events, midi: &MidiBuffer) {
                     key: i16::from(ev.message.data1),
                     velocity: f64::from(ev.message.data2) / 127.0,
                 };
-                let mut header = e.header;
-                header.time = ev.sample_offset;
-                unsafe { try_push(out, &header) };
+                e.header.time = time;
+                unsafe { try_push(out, &e as *const _ as *const clap_event_header) };
             }
             _ => {
-                let e = clap_event_midi {
+                let mut e = clap_event_midi {
                     header: event_header(CLAP_EVENT_MIDI, size_of::<clap_event_midi>() as u32),
                     port_index: 0,
                     data: [ev.message.status_byte(), ev.message.data1, ev.message.data2],
                 };
-                let mut header = e.header;
-                header.time = ev.sample_offset;
-                unsafe { try_push(out, &header) };
+                e.header.time = time;
+                unsafe { try_push(out, &e as *const _ as *const clap_event_header) };
             }
         }
     }
@@ -2194,6 +2384,19 @@ mod latency_cache_tests {
         assert!(!swap_latency(&cache, 512));
         assert!(swap_latency(&cache, 1024));
         assert_eq!(cache.load(Ordering::Relaxed), 1024);
+    }
+}
+
+#[cfg(test)]
+mod process_scratch_tests {
+    use super::{MAX_NOTE_EVENTS, accept_note_event};
+
+    #[test]
+    fn expression_flood_is_capped_note_on_is_not() {
+        assert!(accept_note_event(MAX_NOTE_EVENTS - 1, false));
+        assert!(!accept_note_event(MAX_NOTE_EVENTS, false));
+        assert!(accept_note_event(MAX_NOTE_EVENTS, true));
+        assert!(accept_note_event(MAX_NOTE_EVENTS + 50, true));
     }
 }
 

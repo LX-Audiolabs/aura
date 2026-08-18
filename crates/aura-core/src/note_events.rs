@@ -153,6 +153,10 @@ impl NoteBuffer {
         self.events.clear();
     }
 
+    pub fn reserve(&mut self, additional: usize) {
+        self.events.reserve(additional);
+    }
+
     #[must_use]
     pub fn len(&self) -> usize {
         self.events.len()
@@ -190,11 +194,17 @@ impl NoteBuffer {
     #[must_use]
     pub fn slice_rebased(&self, start: u32, end: u32) -> Self {
         let mut out = Self::with_capacity(self.events.len());
-        for mut ev in self.iter_range(start, end) {
-            ev.sample_offset = ev.sample_offset.saturating_sub(start);
-            out.push(ev);
-        }
+        out.copy_range_rebased(self, start, end);
         out
+    }
+
+    /// Like [`slice_rebased`](Self::slice_rebased) into an existing buffer (no new `Vec`).
+    pub fn copy_range_rebased(&mut self, src: &Self, start: u32, end: u32) {
+        self.clear();
+        for mut ev in src.iter_range(start, end) {
+            ev.sample_offset = ev.sample_offset.saturating_sub(start);
+            self.events.push(ev);
+        }
     }
 
     #[must_use]
@@ -323,5 +333,18 @@ mod tests {
         assert_eq!(chunk.as_slice()[1].sample_offset, 10);
         assert!(chunk.as_slice()[1].matches_voice(1, 60));
         assert!(!chunk.as_slice()[1].matches_voice(2, 64));
+    }
+
+    #[test]
+    fn copy_range_rebased_reuses_buffer() {
+        let mut notes = NoteBuffer::new();
+        notes.push(NoteEvent::on(10, 1, 60, 0.8));
+        notes.push(NoteEvent::on(40, 2, 64, 0.5));
+        let mut dest = NoteBuffer::with_capacity(8);
+        dest.copy_range_rebased(&notes, 10, 30);
+        assert_eq!(dest.len(), 1);
+        assert_eq!(dest.as_slice()[0].sample_offset, 0);
+        dest.copy_range_rebased(&notes, 0, 50);
+        assert_eq!(dest.len(), 2);
     }
 }

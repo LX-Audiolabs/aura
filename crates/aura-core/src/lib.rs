@@ -24,6 +24,7 @@ pub use buffer::AudioBuffer;
 pub use bus::{BusLayout, ChannelConfig, layout_at};
 pub use chunked_process::{
     TimedParamEvent, apply_at_time, apply_event, apply_non_chunked, is_split_event, split_points,
+    split_points_into,
 };
 pub use config::{AudioConfig, ProcessMode};
 pub use editor::{Editor, EditorBridge, IntoEditor, PluginContext, RawWindowHandle};

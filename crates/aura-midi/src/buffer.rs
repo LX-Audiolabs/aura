@@ -37,6 +37,10 @@ impl MidiBuffer {
         self.events.clear();
     }
 
+    pub fn reserve(&mut self, additional: usize) {
+        self.events.reserve(additional);
+    }
+
     #[must_use]
     pub fn len(&self) -> usize {
         self.events.len()
@@ -84,10 +88,20 @@ impl MidiBuffer {
     #[must_use]
     pub fn slice_rebased(&self, start: u32, end: u32) -> Self {
         let mut out = Self::with_capacity(self.events.len());
-        for ev in self.iter_range(start, end) {
-            out.push(ev.sample_offset.saturating_sub(start), ev.message);
-        }
+        out.copy_range_rebased(self, start, end);
         out
+    }
+
+    /// Like [`slice_rebased`](Self::slice_rebased) into an existing buffer (no new `Vec`).
+    pub fn copy_range_rebased(&mut self, src: &Self, start: u32, end: u32) {
+        self.clear();
+        for ev in src.iter_range(start, end) {
+            // Source is already sorted; push in order without binary insert.
+            self.events.push(MidiEvent {
+                sample_offset: ev.sample_offset.saturating_sub(start),
+                message: ev.message,
+            });
+        }
     }
 
     /// Append events, adding `base` to each sample offset (merge chunk outs).
@@ -128,5 +142,17 @@ mod tests {
         buf.push(10, MidiMessage::note_off(0, 60, 0));
         assert_eq!(buf.iter_range(0, 5).count(), 1);
         assert_eq!(buf.iter_range(5, 11).count(), 2);
+    }
+
+    #[test]
+    fn copy_range_rebased_preserves_order() {
+        let mut buf = MidiBuffer::new();
+        buf.push(4, MidiMessage::note_on(0, 60, 100));
+        buf.push(12, MidiMessage::note_off(0, 60, 0));
+        let mut dest = MidiBuffer::with_capacity(4);
+        dest.copy_range_rebased(&buf, 4, 13);
+        assert_eq!(dest.len(), 2);
+        assert_eq!(dest.as_slice()[0].sample_offset, 0);
+        assert_eq!(dest.as_slice()[1].sample_offset, 8);
     }
 }

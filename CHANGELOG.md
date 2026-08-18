@@ -17,6 +17,12 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 - `aura-hot` CLAP proxy: `cargo aura install --hot` / `watch --hot` writes `Name.clap` (host-mapped) + `Name.impl.*` (replaced on each watch). Re-add the instance to pick up new DSP.
 - AURA identity tokens: aurora teal on ink in `@aura` `AuraTheme`; `aura-gui` uses the same chrome (wordmark, card, mesh / hot).
 
+## [0.7.1] - 2026-08-18
+
+### Fixed
+
+- CLAP / VST3 / LV2 `process`: reuse activate-reserved scratch, write host outputs in place, and cap note/MIDI events (4096). Bitwig crashed once CLAP note expressions flooded the audio thread with per-block `Vec` allocs. CLAP `emit_midi_events` now pushes the full note/MIDI event (was header-only — host UB).
+
 ## [0.7.0] - 2026-08-17
 
 ### Added
@@ -191,7 +197,8 @@ this release records what `main` contains after the multi-format + UI pass.
 - Still open for “Basis fertig”: VST3/LV2 real-host smoke; optional LV2 UI; product cutover later
 - Crates not published to crates.io (`publish = false`)
 
-[Unreleased]: https://github.com/LX-Audiolabs/aura/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/LX-Audiolabs/aura/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/LX-Audiolabs/aura/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/LX-Audiolabs/aura/compare/v0.6.3...v0.7.0
 [0.6.3]: https://github.com/LX-Audiolabs/aura/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/LX-Audiolabs/aura/compare/v0.6.1...v0.6.2

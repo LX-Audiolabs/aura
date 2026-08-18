@@ -391,6 +391,39 @@ struct Inner<L: PluginLogic> {
     processing: bool,
     /// Index into `L::bus_layouts()` last accepted by `setBusArrangements`.
     layout_index: usize,
+    scratch: ProcessScratch,
+}
+
+/// Audio-thread working set. Reserved in `setupProcessing` / `setActive`.
+struct ProcessScratch {
+    midi: MidiBuffer,
+    midi_out: MidiBuffer,
+    silence: Vec<f32>,
+}
+
+const MAX_AUDIO_CH: usize = 8;
+const MAX_MIDI_EVENTS: usize = 4096;
+
+impl ProcessScratch {
+    fn new() -> Self {
+        Self {
+            midi: MidiBuffer::new(),
+            midi_out: MidiBuffer::new(),
+            silence: Vec::new(),
+        }
+    }
+
+    fn prepare(&mut self, max_frames: usize) {
+        self.midi.reserve(MAX_MIDI_EVENTS + 128);
+        self.midi_out.reserve(256);
+        if self.silence.len() < max_frames {
+            self.silence.resize(max_frames, 0.0);
+        }
+    }
+}
+
+fn accept_midi_event(len: usize, essential: bool) -> bool {
+    essential || len < MAX_MIDI_EVENTS
 }
 
 impl<L: PluginLogic> Component<L> {
@@ -408,6 +441,7 @@ impl<L: PluginLogic> Component<L> {
                 active: false,
                 processing: false,
                 layout_index: 0,
+                scratch: ProcessScratch::new(),
             }),
         }
     }
@@ -522,11 +556,17 @@ impl<L: PluginLogic> Component<L> {
             let sidechain_in_ch = layout.sidechain_input_channels() as usize;
             let total_in_ch = main_in_ch + sidechain_in_ch;
             let out_ch = layout.main_output_channels() as usize;
-            let Some(state) = inner.state.as_mut() else {
+            let max_samples = inner.max_samples;
+            if !matches!(out_ch, 1 | 2) || total_in_ch > MAX_AUDIO_CH {
                 return kResultOk;
-            };
-
-            if out_ch == 0 {
+            }
+            if max_samples == 0 || frames > max_samples {
+                return kResultFalse;
+            }
+            if inner.scratch.silence.len() < frames {
+                return kResultFalse;
+            }
+            if inner.state.is_none() {
                 return kResultOk;
             }
 
@@ -537,83 +577,90 @@ impl<L: PluginLogic> Component<L> {
                 return kResultOk;
             };
             // SAFETY: union field valid because symbolicSampleSize == kSample32.
-            let out_ptrs = unsafe { out_bus.__field0.channelBuffers32 };
-            if out_ptrs.is_null() {
+            let host_out32 = unsafe { out_bus.__field0.channelBuffers32 };
+            if host_out32.is_null() {
                 return kResultOk;
             }
 
-            // Own input channels from all host input buses (main + optional sidechain).
-            let mut owned_in: Vec<Vec<f32>> = Vec::with_capacity(total_in_ch.max(out_ch));
+            let mut in_ptrs = [ptr::null::<f32>(); MAX_AUDIO_CH];
+            let mut filled_in = 0usize;
             if data.numInputs > 0 && !data.inputs.is_null() {
                 for bus_i in 0..data.numInputs as usize {
+                    if filled_in >= total_in_ch {
+                        break;
+                    }
                     let bus = unsafe { &*data.inputs.add(bus_i) };
-                    // SAFETY: union field valid for kSample32.
                     let ptrs = unsafe { bus.__field0.channelBuffers32 };
                     if ptrs.is_null() {
                         continue;
                     }
                     for c in 0..bus.numChannels.max(0) as usize {
-                        let ip = unsafe { *ptrs.add(c) };
-                        if ip.is_null() {
-                            owned_in.push(vec![0.0; frames]);
-                        } else {
-                            owned_in
-                                .push(unsafe { std::slice::from_raw_parts(ip, frames) }.to_vec());
+                        if filled_in >= total_in_ch {
+                            break;
                         }
+                        in_ptrs[filled_in] = unsafe { *ptrs.add(c) };
+                        filled_in += 1;
                     }
                 }
             }
-            while owned_in.len() < total_in_ch {
-                owned_in.push(vec![0.0; frames]);
+
+            let mut out_ptrs = [ptr::null_mut::<f32>(); MAX_AUDIO_CH];
+            for (slot, dest) in out_ptrs.iter_mut().take(out_ch).enumerate() {
+                *dest = unsafe { *host_out32.add(slot) };
+            }
+            if out_ptrs[..out_ch].iter().any(|p| p.is_null()) {
+                return kResultOk;
             }
 
-            // Own output channels.
-            let mut owned_out: Vec<Vec<f32>> = Vec::with_capacity(out_ch);
-            let mut host_out: Vec<*mut f32> = Vec::with_capacity(out_ch);
-            for c in 0..out_ch {
-                // SAFETY: `c < out_ch` channels, per AudioBusBuffers contract.
-                let op = unsafe { *out_ptrs.add(c) };
-                host_out.push(op);
-                owned_out.push(vec![0.0; frames]);
+            inner.scratch.midi.clear();
+            inner.scratch.midi_out.clear();
+            if L::info().accepts_midi_in && !data.inputEvents.is_null() {
+                unsafe { collect_input_events(data.inputEvents, &mut inner.scratch.midi) };
             }
+            let midi = std::mem::take(&mut inner.scratch.midi);
+            let midi_out = std::mem::take(&mut inner.scratch.midi_out);
 
-            let in_refs: Vec<&[f32]> = owned_in.iter().map(Vec::as_slice).collect();
-            let mut out_refs: Vec<&mut [f32]> =
-                owned_out.iter_mut().map(Vec::as_mut_slice).collect();
-
-            {
-                let mut buffer = AudioBuffer::from_slices_checked_with_sidechain(
-                    &in_refs,
-                    &mut out_refs,
-                    frames,
-                    main_in_ch,
-                    sidechain_in_ch,
-                );
-                let mut ctx =
-                    ProcessContext::new(sample_rate, frames).with_process_mode(process_mode);
-                if L::info().accepts_midi_in && !data.inputEvents.is_null() {
-                    let mut midi = MidiBuffer::with_capacity(32);
-                    // SAFETY: host guarantees `inputEvents` is valid for this call.
-                    unsafe { collect_input_events(data.inputEvents, &mut midi) };
-                    ctx = ctx.with_midi(midi);
+            let mut ctx = {
+                // Distinct fields; raw slice so we can also mut-borrow `state`.
+                let silence =
+                    unsafe { std::slice::from_raw_parts(inner.scratch.silence.as_ptr(), frames) };
+                let mut in_store = [&[] as &[f32]; MAX_AUDIO_CH];
+                for i in 0..total_in_ch {
+                    in_store[i] = if in_ptrs[i].is_null() {
+                        silence
+                    } else {
+                        unsafe { std::slice::from_raw_parts(in_ptrs[i], frames) }
+                    };
                 }
+                let in_refs = &in_store[..total_in_ch];
+                let state = inner.state.as_mut().expect("checked is_none above");
+                let mut ctx = ProcessContext::new(sample_rate, frames)
+                    .with_process_mode(process_mode)
+                    .with_midi(midi)
+                    .with_midi_out(midi_out);
                 ctx.transport = transport;
-                // ProcessStatus has no VST3 per-block equivalent; drop it.
-                let _ = L::process(state, &self.params, &mut buffer, &mut ctx);
-                let midi_out = std::mem::take(&mut ctx.midi_out);
-                if L::info().emits_midi && !midi_out.is_empty() && !data.outputEvents.is_null() {
-                    unsafe { emit_output_events(data.outputEvents, &midi_out) };
-                }
+                let _ = unsafe {
+                    run_process_chunk::<L>(
+                        state,
+                        &self.params,
+                        in_refs,
+                        out_ptrs,
+                        out_ch,
+                        0,
+                        frames,
+                        main_in_ch,
+                        sidechain_in_ch,
+                        &mut ctx,
+                    )
+                };
+                ctx
+            };
+            inner.scratch.midi = std::mem::take(&mut ctx.midi);
+            if L::info().emits_midi && !ctx.midi_out.is_empty() && !data.outputEvents.is_null() {
+                unsafe { emit_output_events(data.outputEvents, &ctx.midi_out) };
             }
-
-            for (c, host_ptr) in host_out.iter().enumerate() {
-                if host_ptr.is_null() {
-                    continue;
-                }
-                // SAFETY: host channel buffers hold at least `frames`.
-                let dst = unsafe { std::slice::from_raw_parts_mut(*host_ptr, frames) };
-                dst.copy_from_slice(&owned_out[c]);
-            }
+            inner.scratch.midi_out = std::mem::take(&mut ctx.midi_out);
+            inner.scratch.midi_out.clear();
             kResultOk
         })
     }
@@ -807,6 +854,8 @@ impl<L: PluginLogic> IComponentTrait for Component<L> {
             let mut dsp = L::init(&self.params, inner.sample_rate);
             self.params.set_sample_rate(inner.sample_rate);
             L::reset(&mut dsp, &self.params, &config);
+            let scratch_frames = inner.max_samples.max(8192);
+            inner.scratch.prepare(scratch_frames);
             inner.state = Some(dsp);
             inner.active = true;
         } else {
@@ -924,6 +973,8 @@ impl<L: PluginLogic> IAudioProcessorTrait for Component<L> {
             inner.sample_rate = setup.sampleRate;
             inner.max_samples = setup.maxSamplesPerBlock.max(0) as usize;
             inner.process_mode = map_process_mode(setup.processMode);
+            let scratch_frames = inner.max_samples.max(8192);
+            inner.scratch.prepare(scratch_frames);
         }
         self.params.set_sample_rate(setup.sampleRate);
         self.gui.set_sample_rate(setup.sampleRate);
@@ -1087,6 +1138,57 @@ impl<L: PluginLogic> IEditControllerTrait for Component<L> {
 // MIDI input helpers
 // ---------------------------------------------------------------------------
 
+/// Write one block into host output pointers (mono or stereo).
+#[allow(clippy::too_many_arguments)]
+unsafe fn run_process_chunk<L: PluginLogic>(
+    state: &mut L::DspState,
+    params: &L::Params,
+    in_refs: &[&[f32]],
+    out_ptrs: [*mut f32; MAX_AUDIO_CH],
+    out_ch: usize,
+    t0: usize,
+    chunk_len: usize,
+    main_in_ch: usize,
+    sidechain_in_ch: usize,
+    ctx: &mut ProcessContext,
+) -> aura_core::ProcessStatus {
+    unsafe fn slice_out<'a>(p: *mut f32, t0: usize, n: usize) -> &'a mut [f32] {
+        unsafe { std::slice::from_raw_parts_mut(p.add(t0), n) }
+    }
+    match out_ch {
+        1 => {
+            let mut s0 = unsafe { slice_out(out_ptrs[0], t0, chunk_len) };
+            let mut outs = [&mut s0 as &mut [f32]];
+            let mut buffer = unsafe {
+                AudioBuffer::from_slices_with_sidechain_unchecked(
+                    in_refs,
+                    &mut outs,
+                    chunk_len,
+                    main_in_ch,
+                    sidechain_in_ch,
+                )
+            };
+            L::process(state, params, &mut buffer, ctx)
+        }
+        2 => {
+            let mut s0 = unsafe { slice_out(out_ptrs[0], t0, chunk_len) };
+            let mut s1 = unsafe { slice_out(out_ptrs[1], t0, chunk_len) };
+            let mut outs = [&mut s0 as &mut [f32], &mut s1];
+            let mut buffer = unsafe {
+                AudioBuffer::from_slices_with_sidechain_unchecked(
+                    in_refs,
+                    &mut outs,
+                    chunk_len,
+                    main_in_ch,
+                    sidechain_in_ch,
+                )
+            };
+            L::process(state, params, &mut buffer, ctx)
+        }
+        _ => aura_core::ProcessStatus::Error,
+    }
+}
+
 /// Drain the host input event list into `midi` (note on/off only).
 unsafe fn collect_input_events(events: *mut IEventList, midi: &mut MidiBuffer) {
     // SAFETY: host guarantees `events` is valid for this process call;
@@ -1116,7 +1218,9 @@ unsafe fn collect_input_events(events: *mut IEventList, midi: &mut MidiBuffer) {
             _ => None,
         };
         if let Some(msg) = msg {
-            midi.push(offset, msg);
+            if accept_midi_event(midi.len(), true) {
+                midi.push(offset, msg);
+            }
         }
     }
 }

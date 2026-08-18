@@ -60,22 +60,33 @@ pub fn is_split_event(event: &TimedParamEvent, infos: &[ParamInfo]) -> bool {
 ///
 /// Split candidates: sample offsets of [`is_split_event`] events with
 /// `0 < t < frames`.
-#[must_use]
-pub fn split_points(frames: u32, events: &[TimedParamEvent], infos: &[ParamInfo]) -> Vec<u32> {
-    let mut pts = Vec::with_capacity(events.len() + 2);
-    pts.push(0);
-    pts.push(frames);
+/// Write sorted unique split points into `out` (always includes `0` and `frames`).
+pub fn split_points_into(
+    out: &mut Vec<u32>,
+    frames: u32,
+    events: &[TimedParamEvent],
+    infos: &[ParamInfo],
+) {
+    out.clear();
+    out.push(0);
+    out.push(frames);
     for ev in events {
         if !is_split_event(ev, infos) {
             continue;
         }
         let t = ev.sample_offset();
         if t > 0 && t < frames {
-            pts.push(t);
+            out.push(t);
         }
     }
-    pts.sort_unstable();
-    pts.dedup();
+    out.sort_unstable();
+    out.dedup();
+}
+
+#[must_use]
+pub fn split_points(frames: u32, events: &[TimedParamEvent], infos: &[ParamInfo]) -> Vec<u32> {
+    let mut pts = Vec::with_capacity(events.len() + 2);
+    split_points_into(&mut pts, frames, events, infos);
     pts
 }
 
