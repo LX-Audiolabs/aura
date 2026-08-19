@@ -9,7 +9,7 @@
 //! (O(1) per sample). Number of partials is limited by Nyquist so the
 //! result stays alias-free within the sample rate.
 //!
-//! Use DSF when pristine quality matters; use PolyBLEP for efficiency.
+//! Use DSF when pristine quality matters; use `PolyBLEP` for efficiency.
 
 use std::f32::consts::TAU;
 

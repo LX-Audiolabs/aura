@@ -55,7 +55,7 @@ impl UnisonOscillator {
     ///
     /// # Errors
     ///
-    /// Returns error if frequency or sample_rate is invalid.
+    /// Returns error if frequency or `sample_rate` is invalid.
     pub fn new(
         waveform: Waveform,
         frequency: f32,

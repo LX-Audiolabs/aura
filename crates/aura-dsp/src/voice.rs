@@ -6,7 +6,7 @@
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 
-/// Inline voice capacity — the SmallVec spills to the heap above this.
+/// Inline voice capacity — the `SmallVec` spills to the heap above this.
 /// 16 covers the vast majority of polyphonic-synth use cases without alloc.
 const VOICE_INLINE: usize = 16;
 

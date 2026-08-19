@@ -49,7 +49,7 @@ impl Chorus {
     ///
     /// # Errors
     ///
-    /// Returns error if sample_rate or LFO rate is invalid.
+    /// Returns error if `sample_rate` or LFO rate is invalid.
     pub fn new(
         num_voices: usize,
         base_delay_ms: f32,
@@ -132,7 +132,7 @@ impl Flanger {
     ///
     /// # Errors
     ///
-    /// Returns error if sample_rate or LFO rate is invalid.
+    /// Returns error if `sample_rate` or LFO rate is invalid.
     pub fn new(
         base_delay_ms: f32,
         depth_ms: f32,
@@ -209,7 +209,7 @@ impl Phaser {
     ///
     /// # Errors
     ///
-    /// Returns error if sample_rate or LFO rate is invalid.
+    /// Returns error if `sample_rate` or LFO rate is invalid.
     pub fn new(
         num_stages: usize,
         rate: f32,
@@ -304,9 +304,7 @@ impl Distortion {
             DistortionType::WaveFold => {
                 // Analytical triangle-wave folding: maps any finite value into -1..1
                 // by reflecting at the boundaries. Handles NaN/Inf safely.
-                if !driven.is_finite() {
-                    0.0
-                } else {
+                if driven.is_finite() {
                     // Shift so fold boundaries align: x in [0, 4) maps to triangle
                     let x = driven + 1.0; // shift range so -1 maps to 0
                     let period = 4.0_f32;
@@ -316,6 +314,8 @@ impl Distortion {
                     } else {
                         3.0 - t // falling: 2->1, 3->0, 4->-1
                     }
+                } else {
+                    0.0
                 }
             }
         };

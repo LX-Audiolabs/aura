@@ -200,7 +200,11 @@ impl AdditiveSynth {
     ///
     /// Requires the `synthesis` feature (uses hisab DCT).
     pub fn compress_amplitudes_dct(&self, num_coeffs: usize) -> Result<Vec<f64>> {
-        let amps: Vec<f64> = self.partials.iter().map(|p| p.amplitude as f64).collect();
+        let amps: Vec<f64> = self
+            .partials
+            .iter()
+            .map(|p| f64::from(p.amplitude))
+            .collect();
         let coeffs =
             hisab::num::dct(&amps).map_err(|e| crate::error::DspError::ComputationError {
                 message: format!("DCT failed: {e:?}"),

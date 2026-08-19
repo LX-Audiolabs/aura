@@ -17,7 +17,7 @@ use crate::error::Result;
 /// decaying, pitched tone.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KarplusStrong {
-    /// Delay line (period = sample_rate / frequency).
+    /// Delay line (period = `sample_rate` / frequency).
     delay_line: DelayLine,
     /// Feedback coefficient (controls decay time).
     feedback: f32,
@@ -47,7 +47,7 @@ impl KarplusStrong {
     ///
     /// # Errors
     ///
-    /// Returns error if frequency or sample_rate is invalid.
+    /// Returns error if frequency or `sample_rate` is invalid.
     pub fn new(frequency: f32, decay: f32, brightness: f32, sample_rate: f32) -> Result<Self> {
         if sample_rate <= 0.0 || !sample_rate.is_finite() {
             return Err(crate::error::DspError::InvalidSampleRate { sample_rate });

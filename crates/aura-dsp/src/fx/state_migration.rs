@@ -21,8 +21,8 @@ use serde_json::Value;
 /// `"params"` key. Returns `None` if the data does not look like
 /// nice-plug JSON (truce binary or empty).
 ///
-/// The returned map has parameter IDs (snake_case, matching the Rust
-/// param struct field names, e.g. "bass_gain") as keys and raw values
+/// The returned map has parameter IDs (`snake_case`, matching the Rust
+/// param struct field names, e.g. "`bass_gain`") as keys and raw values
 /// (not 0.0-1.0 normalized) as `f64`. Each nice-plug value is itself a
 /// single-key type-tagged object - `{"f32": 0.0}`, `{"bool": false}`,
 /// `{"i32": 2}` - not a bare number, so each entry is unwrapped one

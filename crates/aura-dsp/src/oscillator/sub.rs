@@ -36,7 +36,7 @@ impl SubOscillator {
     ///
     /// # Errors
     ///
-    /// Returns error if frequency or sample_rate is invalid.
+    /// Returns error if frequency or `sample_rate` is invalid.
     pub fn new(
         waveform: Waveform,
         base_frequency: f32,

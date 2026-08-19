@@ -2,6 +2,7 @@
 
 use aura_dsp::oscillator::{Oscillator, Waveform};
 
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 fn main() {
     let sample_rate = 44100.0;
     let frequency = 440.0;
@@ -35,6 +36,6 @@ fn main() {
     let peak = buffer.iter().map(|s| s.abs()).fold(0.0f32, f32::max);
 
     println!();
-    println!("Generated {:.0} samples (1 second)", sample_rate);
+    println!("Generated {sample_rate:.0} samples (1 second)");
     println!("Peak amplitude: {peak:.6}");
 }

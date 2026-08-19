@@ -86,6 +86,8 @@ pub fn clip_wave_minmax_window(ring: &[f32], write_pos: usize, cols: usize) -> V
                 min = min.min(v);
                 max = max.max(v);
             }
+            // Sentinel check: min only stays at f32::MAX when the column range is empty.
+            #[allow(clippy::float_cmp)]
             if min == f32::MAX {
                 (0.0, 0.0)
             } else {

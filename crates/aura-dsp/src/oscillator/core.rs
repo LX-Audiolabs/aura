@@ -12,13 +12,13 @@ use crate::noise;
 pub enum Waveform {
     /// Sine wave.
     Sine,
-    /// Band-limited sawtooth wave (PolyBLEP).
+    /// Band-limited sawtooth wave (`PolyBLEP`).
     Saw,
-    /// Band-limited square wave (PolyBLEP).
+    /// Band-limited square wave (`PolyBLEP`).
     Square,
     /// Triangle wave (integrated square).
     Triangle,
-    /// Band-limited pulse wave with variable width (PolyBLEP).
+    /// Band-limited pulse wave with variable width (`PolyBLEP`).
     Pulse,
     /// White noise.
     WhiteNoise,
@@ -28,10 +28,10 @@ pub enum Waveform {
     BrownNoise,
 }
 
-/// 4-point PolyBLEP correction for anti-aliased discontinuities.
+/// 4-point `PolyBLEP` correction for anti-aliased discontinuities.
 ///
 /// Extends the correction window to 2 samples on each side of the
-/// discontinuity (vs 1 sample for 2-point PolyBLEP), providing better
+/// discontinuity (vs 1 sample for 2-point `PolyBLEP`), providing better
 /// suppression of aliasing harmonics at high frequencies. The residual
 /// is derived from an integrated piecewise-cubic BLAMP kernel, yielding
 /// C1 continuity at the transition boundaries.
@@ -92,7 +92,7 @@ impl Oscillator {
     ///
     /// # Errors
     ///
-    /// Returns `DspError::InvalidSampleRate` if sample_rate <= 0.
+    /// Returns `DspError::InvalidSampleRate` if `sample_rate` <= 0.
     /// Returns `DspError::InvalidFrequency` if frequency is out of range
     /// (does not apply to noise waveforms).
     pub fn new(waveform: Waveform, frequency: f32, sample_rate: f32) -> Result<Self> {

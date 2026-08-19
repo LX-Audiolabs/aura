@@ -23,7 +23,7 @@ impl HardSync {
     ///
     /// # Errors
     ///
-    /// Returns error if frequencies or sample_rate are invalid.
+    /// Returns error if frequencies or `sample_rate` are invalid.
     pub fn new(
         master_freq: f32,
         slave_freq: f32,

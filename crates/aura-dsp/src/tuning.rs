@@ -14,7 +14,7 @@ use crate::error::{DspError, Result};
 #[inline]
 #[must_use]
 pub fn equal_temperament_freq(note: u8, a4_hz: f32) -> f32 {
-    a4_hz * 2.0f32.powf((note as f32 - 69.0) / 12.0)
+    a4_hz * 2.0f32.powf((f32::from(note) - 69.0) / 12.0)
 }
 
 /// Convert a MIDI note number to frequency in Hz (A4 = 440 Hz).
@@ -137,7 +137,7 @@ impl TuningTable {
     ///
     /// # Errors
     ///
-    /// Returns error if any ratio is <= 0 or a4_hz is invalid.
+    /// Returns error if any ratio is <= 0 or `a4_hz` is invalid.
     pub fn custom(name: String, ratios: [f32; 12], a4_hz: f32) -> Result<Self> {
         if a4_hz <= 0.0 || !a4_hz.is_finite() {
             return Err(DspError::InvalidParameter {
@@ -166,7 +166,7 @@ impl TuningTable {
     /// and the semitone within the octave selects the ratio.
     #[must_use]
     pub fn note_to_freq(&self, note: u8) -> f32 {
-        let note_i = note as i32;
+        let note_i = i32::from(note);
         // A4 = note 69, which is degree 9 in the octave (A is 9 semitones above C)
         let a4_degree = 9;
         let semitone_from_a4 = note_i - 69;
@@ -190,7 +190,7 @@ pub fn note_name(note: u8) -> String {
     const NAMES: [&str; 12] = [
         "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
     ];
-    let octave = (note / 12) as i32 - 1;
+    let octave = i32::from(note / 12) - 1;
     let name = NAMES[(note % 12) as usize];
     format!("{name}{octave}")
 }

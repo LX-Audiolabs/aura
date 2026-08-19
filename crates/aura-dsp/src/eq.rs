@@ -135,7 +135,7 @@ impl GraphicEq {
     ///
     /// # Errors
     ///
-    /// Returns error if sample_rate is invalid.
+    /// Returns error if `sample_rate` is invalid.
     pub fn new(sample_rate: f32) -> Result<Self> {
         let mut eq = ParametricEq::new(sample_rate);
         let mut active_frequencies = Vec::new();

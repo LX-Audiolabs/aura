@@ -3,7 +3,7 @@
 //! - Audio EQ Cookbook biquads (Robert Bristow-Johnson)
 //! - Cytomic/Simper SVF (simultaneous LP/HP/BP/Notch)
 //! - [`MoogLadder`] — classic discrete Moog (fundsp port)
-//! - [`PredictiveLadder`] — ZDF linear-prediction ladder (InfiniteDSP)
+//! - [`PredictiveLadder`] — ZDF linear-prediction ladder (`InfiniteDSP`)
 //!
 //! One Moog model only — no parallel RK4 / Huovilainen copies.
 
@@ -77,7 +77,7 @@ impl BiquadFilter {
     ///
     /// # Errors
     ///
-    /// Returns error if frequency or sample_rate is invalid, or q <= 0.
+    /// Returns error if frequency or `sample_rate` is invalid, or q <= 0.
     pub fn new(filter_type: FilterType, sample_rate: f32, frequency: f32, q: f32) -> Result<Self> {
         Self::with_gain(filter_type, sample_rate, frequency, q, 0.0)
     }
@@ -90,11 +90,11 @@ impl BiquadFilter {
     /// * `sample_rate` - Sample rate in Hz
     /// * `frequency` - Cutoff/center frequency in Hz
     /// * `q` - Q factor (resonance), must be > 0
-    /// * `gain_db` - Gain in dB (used by LowShelf, HighShelf, Peak)
+    /// * `gain_db` - Gain in dB (used by `LowShelf`, `HighShelf`, Peak)
     ///
     /// # Errors
     ///
-    /// Returns error if frequency or sample_rate is invalid, or q <= 0.
+    /// Returns error if frequency or `sample_rate` is invalid, or q <= 0.
     pub fn with_gain(
         filter_type: FilterType,
         sample_rate: f32,
@@ -322,7 +322,7 @@ impl StateVariableFilter {
     ///
     /// # Errors
     ///
-    /// Returns error if frequency, sample_rate, or q is invalid.
+    /// Returns error if frequency, `sample_rate`, or q is invalid.
     pub fn new(frequency: f32, q: f32, sample_rate: f32) -> Result<Self> {
         if let Some(e) = error::validate_sample_rate(sample_rate) {
             return Err(e);

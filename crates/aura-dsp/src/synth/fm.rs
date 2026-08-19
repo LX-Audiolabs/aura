@@ -53,7 +53,7 @@ impl FmOperator {
     ///
     /// # Errors
     ///
-    /// Returns error if sample_rate or envelope parameters are invalid.
+    /// Returns error if `sample_rate` or envelope parameters are invalid.
     pub fn new(frequency: f32, sample_rate: f32) -> Result<Self> {
         let envelope = Adsr::with_sample_rate(0.01, 0.1, 0.8, 0.3, sample_rate)?;
         Ok(Self {
@@ -149,7 +149,7 @@ impl FmSynthEngine {
     ///
     /// # Errors
     ///
-    /// Returns error if `num_operators` is 0 or > 6, or sample_rate is invalid.
+    /// Returns error if `num_operators` is 0 or > 6, or `sample_rate` is invalid.
     pub fn new(num_operators: usize, sample_rate: f32) -> Result<Self> {
         if num_operators == 0 || num_operators > MAX_OPERATORS {
             return Err(crate::error::DspError::InvalidParameter {

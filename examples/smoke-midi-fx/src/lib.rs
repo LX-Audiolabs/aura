@@ -128,12 +128,9 @@ impl PluginLogic for SmokeMidiFx {
             for ev in context.midi.iter() {
                 let msg = ev.message;
                 let out_msg = if msg.is_note_on() || msg.is_note_off() {
-                    let note = msg
-                        .note_number()
-                        .map(|note| {
-                            u8::try_from((i32::from(note) + transpose).clamp(0, 127)).unwrap_or(0)
-                        })
-                        .unwrap_or(msg.data1);
+                    let note = msg.note_number().map_or(msg.data1, |note| {
+                        u8::try_from((i32::from(note) + transpose).clamp(0, 127)).unwrap_or(0)
+                    });
                     MidiMessage::raw(msg.status_byte(), note, msg.data2)
                 } else {
                     msg

@@ -124,8 +124,8 @@ impl PluginLogic for SmokeSynth {
         info.category = PluginCategory::Instrument;
         info.accepts_midi_in = true;
         info.midi_input_dialect = aura::MidiDialect::Clap;
-        info.voice_count = MAX_VOICES as u32;
-        info.voice_capacity = MAX_VOICES as u32;
+        info.voice_count = u32::try_from(MAX_VOICES).expect("MAX_VOICES fits in u32");
+        info.voice_capacity = u32::try_from(MAX_VOICES).expect("MAX_VOICES fits in u32");
         info
     }
 
@@ -161,6 +161,7 @@ impl PluginLogic for SmokeSynth {
         state.was_playing = false;
     }
 
+    #[allow(clippy::too_many_lines)]
     fn process(
         state: &mut Self::DspState,
         params: &Self::Params,
@@ -283,8 +284,8 @@ impl PluginLogic for SmokeSynth {
 
         #[allow(clippy::cast_possible_truncation)]
         let end_at = n.saturating_sub(1) as u32;
-        for i in 0..MAX_VOICES {
-            if !state.voices[i].env.is_active() {
+        for (i, voice) in state.voices.iter().enumerate() {
+            if !voice.env.is_active() {
                 state.table.mark_silent(i, end_at);
             }
         }
@@ -359,32 +360,30 @@ fn ingest(state: &mut DspState, notes: &NoteBuffer) {
     // PARAM_MOD in the same block *before* NOTE_ON; applying On last would
     // wipe gain_mod.
     for ev in notes.iter() {
-        if let NoteEventKind::On { velocity } = ev.kind {
-            if let Some(i) = find_slot(&state.table, ev) {
-                let tv = state.table.voices()[i];
-                start_voice(
-                    &mut state.voices[i],
-                    tv.key,
-                    tv.tuning,
-                    clap_unit(velocity),
-                    state.sr,
-                );
-            }
+        if let NoteEventKind::On { velocity } = ev.kind
+            && let Some(i) = find_slot(&state.table, ev)
+        {
+            let tv = state.table.voices()[i];
+            start_voice(
+                &mut state.voices[i],
+                tv.key,
+                tv.tuning,
+                clap_unit(velocity),
+                state.sr,
+            );
         }
     }
     for ev in notes.iter() {
         match ev.kind {
             NoteEventKind::ParamMod { param_id, amount } => {
                 if param_id == 1 {
-                    for i in 0..MAX_VOICES {
-                        let tv = state.table.voices()[i];
+                    for (i, tv) in state.table.voices().iter().enumerate() {
                         if tv.is_occupied() && ev.matches_voice(tv.note_id, tv.key) {
                             state.voices[i].gain_mod = amount;
                         }
                     }
                 } else if param_id == 2 {
-                    for i in 0..MAX_VOICES {
-                        let tv = state.table.voices()[i];
+                    for (i, tv) in state.table.voices().iter().enumerate() {
                         if tv.is_occupied() && ev.matches_voice(tv.note_id, tv.key) {
                             state.voices[i].pan_mod = amount;
                         }
@@ -393,15 +392,13 @@ fn ingest(state: &mut DspState, notes: &NoteBuffer) {
             }
             NoteEventKind::ParamValue { param_id, plain } => {
                 if param_id == 1 {
-                    for i in 0..MAX_VOICES {
-                        let tv = state.table.voices()[i];
+                    for (i, tv) in state.table.voices().iter().enumerate() {
                         if tv.is_occupied() && ev.matches_voice(tv.note_id, tv.key) {
                             state.voices[i].gain_plain = Some(plain);
                         }
                     }
                 } else if param_id == 2 {
-                    for i in 0..MAX_VOICES {
-                        let tv = state.table.voices()[i];
+                    for (i, tv) in state.table.voices().iter().enumerate() {
                         if tv.is_occupied() && ev.matches_voice(tv.note_id, tv.key) {
                             state.voices[i].pan_plain = Some(plain);
                         }

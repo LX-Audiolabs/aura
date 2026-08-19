@@ -73,7 +73,7 @@ impl Lfo {
     ///
     /// # Errors
     ///
-    /// Returns error if frequency or sample_rate is invalid.
+    /// Returns error if frequency or `sample_rate` is invalid.
     pub fn new(shape: LfoShape, frequency: f32, sample_rate: f32) -> Result<Self> {
         if let Some(e) = error::validate_sample_rate(sample_rate) {
             return Err(e);
@@ -110,10 +110,9 @@ impl Lfo {
     ///
     /// # Errors
     ///
-    /// Returns error if frequency or sample_rate is invalid.
+    /// Returns error if frequency or `sample_rate` is invalid.
     pub fn from_waveform(waveform: Waveform, frequency: f32, sample_rate: f32) -> Result<Self> {
         let shape = match waveform {
-            Waveform::Sine => LfoShape::Sine,
             Waveform::Triangle => LfoShape::Triangle,
             Waveform::Square => LfoShape::Square,
             Waveform::Saw => LfoShape::SawDown,
@@ -265,7 +264,7 @@ impl FmModulator {
     ///
     /// # Errors
     ///
-    /// Returns error if frequencies or sample_rate are invalid.
+    /// Returns error if frequencies or `sample_rate` are invalid.
     pub fn new(carrier_freq: f32, mod_freq: f32, mod_index: f32, sample_rate: f32) -> Result<Self> {
         if let Some(e) = error::validate_sample_rate(sample_rate) {
             return Err(e);
@@ -337,7 +336,7 @@ impl RingModulator {
     ///
     /// # Errors
     ///
-    /// Returns error if frequency or sample_rate is invalid.
+    /// Returns error if frequency or `sample_rate` is invalid.
     pub fn new(waveform: Waveform, mod_freq: f32, sample_rate: f32) -> Result<Self> {
         let modulator = Oscillator::new(waveform, mod_freq, sample_rate)?;
         Ok(Self { modulator })

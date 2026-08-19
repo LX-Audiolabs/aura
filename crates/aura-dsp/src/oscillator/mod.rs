@@ -1,6 +1,6 @@
 //! Oscillator module with band-limited waveform generation.
 //!
-//! Provides PolyBLEP anti-aliased saw, square, and pulse waveforms,
+//! Provides `PolyBLEP` anti-aliased saw, square, and pulse waveforms,
 //! along with basic sine, triangle, and noise generators. Layered
 //! variants (unison, sub-oscillator, hard sync) build on the base
 //! [`Oscillator`]. Extra ports from fundsp (MIT/Apache): DSF, soft saw,

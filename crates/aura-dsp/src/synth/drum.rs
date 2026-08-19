@@ -53,7 +53,7 @@ impl KickDrum {
     ///
     /// # Errors
     ///
-    /// Returns error if sample_rate is invalid.
+    /// Returns error if `sample_rate` is invalid.
     pub fn new(
         start_freq: f32,
         end_freq: f32,
@@ -203,7 +203,7 @@ impl SnareDrum {
     ///
     /// # Errors
     ///
-    /// Returns error if sample_rate is invalid.
+    /// Returns error if `sample_rate` is invalid.
     pub fn new(sample_rate: f32) -> Result<Self> {
         if sample_rate <= 0.0 || !sample_rate.is_finite() {
             return Err(crate::error::DspError::InvalidSampleRate { sample_rate });
@@ -322,7 +322,7 @@ impl HiHat {
     ///
     /// # Errors
     ///
-    /// Returns error if sample_rate is invalid.
+    /// Returns error if `sample_rate` is invalid.
     pub fn new(open: bool, sample_rate: f32) -> Result<Self> {
         if sample_rate <= 0.0 || !sample_rate.is_finite() {
             return Err(crate::error::DspError::InvalidSampleRate { sample_rate });

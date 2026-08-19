@@ -119,7 +119,7 @@ impl Reverb {
     ///
     /// # Errors
     ///
-    /// Returns error if sample_rate is invalid.
+    /// Returns error if `sample_rate` is invalid.
     pub fn new(
         decay: f32,
         damping: f32,

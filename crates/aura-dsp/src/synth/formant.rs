@@ -209,7 +209,7 @@ impl FormantSynth {
         self.apply_params(&params)
     }
 
-    /// Morph between two vowels at position `t` (0.0 = vowel_a, 1.0 = vowel_b).
+    /// Morph between two vowels at position `t` (0.0 = `vowel_a`, 1.0 = `vowel_b`).
     ///
     /// # Errors
     ///

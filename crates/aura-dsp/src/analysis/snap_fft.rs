@@ -100,7 +100,7 @@ impl SnapFFT {
     }
 
     /// Accumulate frame into SNAP buffer
-    /// Returns true when snapshot is complete (fft_count reaches threshold)
+    /// Returns true when snapshot is complete (`fft_count` reaches threshold)
     pub fn accumulate_snap(
         &mut self,
         frame: &[f32; SPECTRUM_BINS],
@@ -118,7 +118,7 @@ impl SnapFFT {
         // Phase change detection
         if snap_phase != self.snap_phase_prev {
             // Reset accumulator for new phase
-            for v in self.snap_accum[mode as usize].iter_mut() {
+            for v in &mut self.snap_accum[mode as usize] {
                 *v = -90.0;
             }
             self.snap_fft_count = 0;
@@ -150,7 +150,7 @@ impl SnapFFT {
 
     /// Clear all snapshot accumulators
     pub fn reset_snapshots(&mut self) {
-        for accum in self.snap_accum.iter_mut() {
+        for accum in &mut self.snap_accum {
             accum.fill(-90.0);
         }
         self.snap_fft_count = 0;

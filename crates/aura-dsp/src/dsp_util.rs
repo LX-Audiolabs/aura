@@ -160,7 +160,10 @@ pub fn fft_magnitudes(input: &[f32]) -> Vec<f32> {
     use hisab::Complex;
 
     let n = input.len();
-    let mut complex: Vec<Complex> = input.iter().map(|&s| Complex::new(s as f64, 0.0)).collect();
+    let mut complex: Vec<Complex> = input
+        .iter()
+        .map(|&s| Complex::new(f64::from(s), 0.0))
+        .collect();
     // fft returns Result — unwrap-free: if it fails, return empty
     if hisab::num::fft(&mut complex).is_err() {
         return Vec::new();
@@ -185,7 +188,10 @@ pub fn power_spectrum(input: &[f32]) -> Vec<f32> {
     use hisab::Complex;
 
     let n = input.len();
-    let mut complex: Vec<Complex> = input.iter().map(|&s| Complex::new(s as f64, 0.0)).collect();
+    let mut complex: Vec<Complex> = input
+        .iter()
+        .map(|&s| Complex::new(f64::from(s), 0.0))
+        .collect();
     if hisab::num::fft(&mut complex).is_err() {
         return Vec::new();
     }
@@ -224,7 +230,7 @@ pub fn bspline_eval_1d(degree: usize, control_points: &[f32], t: f32) -> Option<
     if degree == 0 || control_points.len() <= degree {
         return None;
     }
-    let t = t as f64;
+    let t = f64::from(t);
     if !(0.0..=1.0).contains(&t) {
         return None;
     }
@@ -280,7 +286,7 @@ pub fn eval_polynomial(coeffs: &[f64], x: f32) -> f32 {
     if coeffs.is_empty() {
         return 0.0;
     }
-    let xd = x as f64;
+    let xd = f64::from(x);
     let mut acc = coeffs[coeffs.len() - 1];
     for &c in coeffs[..coeffs.len() - 1].iter().rev() {
         acc = acc * xd + c;
@@ -438,6 +444,11 @@ pub fn chromagram(magnitudes: &[Vec<f32>], window_size: usize, sample_rate: f32)
 /// the running median used as the picking threshold; lower = more
 /// sensitive.
 ///
+/// # Panics
+///
+/// Panics if any spectral-flux value in the local window is NaN (should
+/// never happen for finite magnitude input).
+///
 /// Requires the `synthesis` feature.
 #[cfg(feature = "synthesis")]
 #[must_use]
@@ -565,10 +576,10 @@ pub fn detect_pitch_autocorr(
     // Catmull-Rom cubic through (peak_lag-1, peak_lag, peak_lag+1, peak_lag+2)
     // mapped to t ∈ [0, 1] between the middle pair. The peak lives at some
     // fractional t we'll find by Newton-Raphson on the derivative.
-    let y0 = autocorr[peak_lag - 1] as f64;
-    let y1 = autocorr[peak_lag] as f64;
-    let y2 = autocorr[peak_lag + 1] as f64;
-    let y3 = autocorr[peak_lag + 2] as f64;
+    let y0 = f64::from(autocorr[peak_lag - 1]);
+    let y1 = f64::from(autocorr[peak_lag]);
+    let y2 = f64::from(autocorr[peak_lag + 1]);
+    let y3 = f64::from(autocorr[peak_lag + 2]);
 
     // P(t)   = 0.5 * (a*t³ + b*t² + c*t + 2*y1)
     // P'(t)  = 0.5 * (3a*t² + 2b*t + c)
@@ -597,8 +608,8 @@ pub fn detect_pitch_autocorr(
     if refined_lag <= 0.0 {
         return None;
     }
-    let pitch = sample_rate as f64 / refined_lag;
-    if !pitch.is_finite() || pitch < min_hz as f64 * 0.5 || pitch > max_hz as f64 * 2.0 {
+    let pitch = f64::from(sample_rate) / refined_lag;
+    if !pitch.is_finite() || pitch < f64::from(min_hz) * 0.5 || pitch > f64::from(max_hz) * 2.0 {
         return None;
     }
     Some(pitch as f32)
@@ -901,7 +912,7 @@ mod tests {
     fn test_fit_polynomial_recovers_known_quadratic() {
         // y = 1 + 2x + 3x²; fit should recover those coefficients exactly
         // (within numerical noise) given enough sample points.
-        let xs: Vec<f64> = (0..20).map(|i| -2.0 + i as f64 * 0.2).collect();
+        let xs: Vec<f64> = (0..20).map(|i| -2.0 + f64::from(i) * 0.2).collect();
         let ys: Vec<f64> = xs.iter().map(|&x| 1.0 + 2.0 * x + 3.0 * x * x).collect();
         let coeffs = fit_polynomial(&xs, &ys, 2).unwrap();
         assert_eq!(coeffs.len(), 3);
@@ -936,7 +947,7 @@ mod tests {
     fn test_fit_polynomial_approximates_tanh() {
         // Demonstrate the canonical use case: replace tanh with a fast
         // odd polynomial that's accurate over a useful range.
-        let xs: Vec<f64> = (0..201).map(|i| -2.0 + i as f64 * 0.02).collect();
+        let xs: Vec<f64> = (0..201).map(|i| -2.0 + f64::from(i) * 0.02).collect();
         let ys: Vec<f64> = xs.iter().map(|&x| x.tanh()).collect();
         let coeffs = fit_polynomial(&xs, &ys, 5).unwrap();
 
@@ -945,7 +956,7 @@ mod tests {
         // sweet spot is well inside.
         for i in 0..=30 {
             let x = -1.5 + i as f32 * 0.1;
-            let exact = (x as f64).tanh() as f32;
+            let exact = f64::from(x).tanh() as f32;
             let approx = eval_polynomial(&coeffs, x);
             assert!(
                 (exact - approx).abs() < 0.015,

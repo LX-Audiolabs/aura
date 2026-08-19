@@ -728,7 +728,7 @@ export {{ {struct_name} }}
     );
 
     let theme_slint = format!(
-        r#"// {display} — design tokens and theme.
+        r"// {display} — design tokens and theme.
 //
 // Override these values to match your brand. Plugin UIs reference them via
 // `{struct_name}.surface`, `{struct_name}.radius-md`, etc.
@@ -756,7 +756,7 @@ export struct {struct_name} {{
     out property <length> spacing-md: 12px;
     out property <length> spacing-lg: 16px;
 }}
-"#,
+",
         struct_name = to_struct_name(&name.replace('-', "_"))
     );
 

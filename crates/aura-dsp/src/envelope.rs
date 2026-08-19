@@ -78,7 +78,7 @@ impl Adsr {
     /// # Errors
     ///
     /// Returns error if any time is negative, sustain is out of range,
-    /// or sample_rate is invalid.
+    /// or `sample_rate` is invalid.
     pub fn with_sample_rate(
         attack: f32,
         decay: f32,
@@ -263,7 +263,7 @@ impl MultiStageEnvelope {
     ///
     /// # Errors
     ///
-    /// Returns error if segments is empty or sample_rate is invalid.
+    /// Returns error if segments is empty or `sample_rate` is invalid.
     pub fn with_sample_rate(segments: Vec<EnvelopeSegment>, sample_rate: f32) -> Result<Self> {
         if segments.is_empty() {
             return Err(DspError::InvalidParameter {

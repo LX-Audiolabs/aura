@@ -12,7 +12,7 @@ pub enum DspError {
     InvalidFrequency {
         /// The invalid frequency value.
         frequency: f32,
-        /// The Nyquist frequency (sample_rate / 2).
+        /// The Nyquist frequency (`sample_rate` / 2).
         nyquist: f32,
     },
 

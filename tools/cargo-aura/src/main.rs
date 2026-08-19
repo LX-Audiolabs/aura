@@ -1788,10 +1788,10 @@ fn workspace_plugin_crates() -> Vec<String> {
         if !in_plugin {
             continue;
         }
-        if let Some((key, val)) = line.split_once('=') {
-            if key.trim() == "crate" {
-                out.push(val.trim().trim_matches('"').trim_matches('\'').to_string());
-            }
+        if let Some((key, val)) = line.split_once('=')
+            && key.trim() == "crate"
+        {
+            out.push(val.trim().trim_matches('"').trim_matches('\'').to_string());
         }
     }
     out

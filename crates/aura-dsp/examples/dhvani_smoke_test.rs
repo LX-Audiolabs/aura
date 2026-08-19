@@ -1,10 +1,10 @@
 //! dhvani integration smoke test.
 //!
-//! Demonstrates how dhvani (the sound engine) would compose aura_dsp primitives
+//! Demonstrates how dhvani (the sound engine) would compose `aura_dsp` primitives
 //! into a playable instrument with voice allocation, modulation, and effects.
 //!
 //! This validates API ergonomics and proves the abstraction boundary works:
-//! aura_dsp provides the DSP building blocks, dhvani wires them together.
+//! `aura_dsp` provides the DSP building blocks, dhvani wires them together.
 
 use aura_dsp::dynamics::Compressor;
 use aura_dsp::envelope::Adsr;

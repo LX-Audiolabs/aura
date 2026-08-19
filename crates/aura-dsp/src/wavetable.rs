@@ -136,7 +136,7 @@ impl WavetableOscillator {
     ///
     /// # Errors
     ///
-    /// Returns error if sample_rate or frequency is invalid.
+    /// Returns error if `sample_rate` or frequency is invalid.
     pub fn new(table: Wavetable, frequency: f32, sample_rate: f32) -> Result<Self> {
         if let Some(e) = error::validate_sample_rate(sample_rate) {
             return Err(e);
@@ -236,7 +236,7 @@ impl MorphWavetable {
     ///
     /// # Errors
     ///
-    /// Returns error if tables is empty, or sample_rate/frequency is invalid.
+    /// Returns error if tables is empty, or `sample_rate/frequency` is invalid.
     pub fn new(tables: Vec<Wavetable>, frequency: f32, sample_rate: f32) -> Result<Self> {
         if tables.is_empty() {
             return Err(DspError::InvalidParameter {
@@ -444,7 +444,7 @@ mod tests {
     fn morph_with_n_tables(n: usize) -> MorphWavetable {
         let tables: Vec<Wavetable> = (0..n)
             .map(|h| {
-                let amps: Vec<f32> = (0..(h + 1)).map(|_| 1.0 / (h + 1) as f32).collect();
+                let amps: Vec<f32> = (0..=h).map(|_| 1.0 / (h + 1) as f32).collect();
                 Wavetable::from_harmonics(h + 1, &amps, 256).unwrap()
             })
             .collect();

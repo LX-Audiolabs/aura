@@ -139,6 +139,7 @@ impl PredictiveLadder {
     /// 4. Feedback: `u = x - k*tanh(y_est)`
     /// 5. Run 4 trapezoidal stages forward, update integrators
     #[inline]
+    #[allow(clippy::many_single_char_names)]
     fn step(s: &mut [f32; 4], sample: &mut f32, g: f32, k: f32, beta: f32) {
         let x = *sample;
 

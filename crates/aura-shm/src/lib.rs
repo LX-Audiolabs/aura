@@ -39,7 +39,7 @@
 //!
 //! ## Error handling
 //!
-//! Invalid slot indices (>= MAX_SLOTS or MAX_CONSUMERS) are silently ignored by
+//! Invalid slot indices (>= `MAX_SLOTS` or `MAX_CONSUMERS`) are silently ignored by
 //! write/touch functions. `claim_*_slot()` returns `None` when all slots are full
 //! or taken by stale instances. `read_*()` returns empty results when the hub
 //! cannot be mapped. Seqlock reads retry up to 4 times if the writer interferes;
@@ -154,14 +154,14 @@ const _: () = {
     );
 };
 
-/// Get wall-clock time in milliseconds since UNIX_EPOCH.
+/// Get wall-clock time in milliseconds since `UNIX_EPOCH`.
 ///
 /// Returns `SystemTime::now()` as milliseconds, consistent across all plugins
 /// in the process. Used for heartbeat tracking and slot liveness checks.
 ///
 /// # Returns
 ///
-/// Milliseconds since UNIX_EPOCH. If system time is unavailable, returns 0
+/// Milliseconds since `UNIX_EPOCH`. If system time is unavailable, returns 0
 /// (a very old heartbeat that will be treated as stale).
 ///
 /// # Example
@@ -170,11 +170,11 @@ const _: () = {
 /// let now_ms = aura_shm::now_ms();
 /// hub.write(slot, "my-label", "target-name", &bins, &band_energy, now_ms);
 /// ```
+#[must_use]
 pub fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
+        .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(0))
 }
 
 /// Format a consumer instance's display name.
@@ -196,6 +196,7 @@ pub fn now_ms() -> u64 {
 /// let name = aura_shm::display_name("My Analyzer", 0);  // "My Analyzer"
 /// let name = aura_shm::display_name("", 0);              // "Hub 1"
 /// ```
+#[must_use]
 pub fn display_name(name: &str, slot: u8) -> String {
     if name.trim().is_empty() {
         format!("Hub {}", slot + 1)
@@ -219,7 +220,7 @@ unsafe fn write_name_bytes(buf: *mut u8, name: &str) -> u32 {
             *buf.add(i) = 0;
         }
     }
-    len as u32
+    u32::try_from(len).expect("len is clamped to MAX_NAME_LEN <= u32::MAX")
 }
 
 /// Handle to the cross-process shared memory hub.
@@ -347,13 +348,16 @@ impl RelayHub {
             Err(_) => (ShmemConf::new().os_id(SHM_OS_ID).open().ok()?, false),
         };
 
-        let shared = shmem.as_ptr() as *const HubShared;
+        // SAFETY: `shmem.as_ptr()` comes from the OS allocator and is page-aligned,
+        // which satisfies `HubShared`'s 8-byte alignment requirement.
+        #[allow(clippy::cast_ptr_alignment)]
+        let shared = shmem.as_ptr().cast::<HubShared>();
 
         if is_creator {
             // Pagefile-backed maps are usually zero, but be explicit so every
             // claimed/heartbeat starts free — non-zero garbage bricks claims.
             unsafe {
-                let p = shared as *mut u8;
+                let p = shared.cast::<u8>();
                 std::ptr::write_bytes(p, 0, size);
                 (*shared).version.store(VERSION, Ordering::Release);
                 (*shared).magic.store(MAGIC, Ordering::Release);
@@ -390,10 +394,15 @@ impl RelayHub {
     /// # Returns
     ///
     /// - `Some((slot_index, generation))` if a slot was claimed (index
-    ///   0..MAX_SLOTS). Store both — `generation` must be passed to every
+    ///   `0..MAX_SLOTS`). Store both — `generation` must be passed to every
     ///   `write`/`touch` call so the hub can tell if this claim is still
     ///   valid (see `write`).
     /// - `None` if all slots are occupied by live instances
+    ///
+    /// # Panics
+    ///
+    /// Never panics in practice: the slot index is bounded by `MAX_SLOTS`, which
+    /// fits in `u8`.
     ///
     /// # Example
     ///
@@ -402,6 +411,7 @@ impl RelayHub {
     ///     // Store slot + generation, use both to publish data
     /// }
     /// ```
+    #[must_use]
     pub fn claim_slot(&self, now_ms: u64) -> Option<(u8, u32)> {
         for idx in 0..MAX_SLOTS {
             let s = unsafe { &(*self.shared).slots[idx] };
@@ -409,7 +419,10 @@ impl RelayHub {
                 try_claim_gen(&s.claimed, &s.heartbeat_ms, &s.generation, now_ms)
             {
                 s.seq.store(0, Ordering::Release);
-                return Some((idx as u8, generation));
+                return Some((
+                    u8::try_from(idx).expect("idx < MAX_SLOTS <= u8::MAX"),
+                    generation,
+                ));
             }
         }
         None
@@ -457,7 +470,7 @@ impl RelayHub {
     /// * `label` - A short name for this publisher (max `MAX_NAME_LEN` bytes)
     /// * `target` - Name of the consumer to send to:
     ///   - Empty string: broadcast to every consumer
-    ///   - Non-empty: only the consumer with matching display_name receives it
+    ///   - Non-empty: only the consumer with matching `display_name` receives it
     /// * `bins` - Spectrum data (up to `SPECTRUM_BINS` f32 values, typically dB)
     /// * `band_energy` - Per-band energy levels (up to `EQ_BANDS` f32 values, dB)
     /// * `now_ms` - Current wall-clock time in milliseconds (updates heartbeat)
@@ -473,6 +486,7 @@ impl RelayHub {
     ///
     /// If `bins` or `band_energy` are shorter than expected, the rest is zero-filled
     /// (spectrum bins are filled with -90.0 dB, band energy with -90.0 dB).
+    #[must_use]
     #[allow(clippy::too_many_arguments)]
     pub fn write(
         &self,
@@ -496,17 +510,17 @@ impl RelayHub {
         let seq0 = seqlock_begin(&s.seq);
 
         unsafe {
-            *s.name_len.get() = write_name_bytes(s.name.get() as *mut u8, label);
-            *s.target_len.get() = write_name_bytes(s.target.get() as *mut u8, target);
+            *s.name_len.get() = write_name_bytes(s.name.get().cast::<u8>(), label);
+            *s.target_len.get() = write_name_bytes(s.target.get().cast::<u8>(), target);
 
-            let bins_ptr = s.bins.get() as *mut f32;
+            let bins_ptr = s.bins.get().cast::<f32>();
             let n = bins.len().min(SPECTRUM_BINS);
             std::ptr::copy_nonoverlapping(bins.as_ptr(), bins_ptr, n);
             for i in n..SPECTRUM_BINS {
                 *bins_ptr.add(i) = -90.0;
             }
 
-            let be_ptr = s.band_energy.get() as *mut f32;
+            let be_ptr = s.band_energy.get().cast::<f32>();
             let m = band_energy.len().min(EQ_BANDS);
             std::ptr::copy_nonoverlapping(band_energy.as_ptr(), be_ptr, m);
             for i in m..EQ_BANDS {
@@ -527,7 +541,7 @@ impl RelayHub {
     ///
     /// Useful for keeping a publisher alive when audio is not actively being
     /// published (e.g., when transport is stopped). Updates label, target, and
-    /// heartbeat but leaves bins and band_energy untouched, so consumers continue
+    /// heartbeat but leaves bins and `band_energy` untouched, so consumers continue
     /// seeing stale but valid spectrum data.
     ///
     /// # Arguments
@@ -548,6 +562,7 @@ impl RelayHub {
     /// `true` if the touch happened, `false` if `slot >= MAX_SLOTS` or this
     /// instance was evicted (`generation` mismatch) — same caller contract
     /// as [`write()`].
+    #[must_use]
     pub fn touch(&self, slot: u8, generation: u32, label: &str, target: &str, now_ms: u64) -> bool {
         let idx = slot as usize;
         if idx >= MAX_SLOTS {
@@ -561,8 +576,8 @@ impl RelayHub {
         let seq0 = seqlock_begin(&s.seq);
 
         unsafe {
-            *s.name_len.get() = write_name_bytes(s.name.get() as *mut u8, label);
-            *s.target_len.get() = write_name_bytes(s.target.get() as *mut u8, target);
+            *s.name_len.get() = write_name_bytes(s.name.get().cast::<u8>(), label);
+            *s.target_len.get() = write_name_bytes(s.target.get().cast::<u8>(), target);
         }
 
         s.active.store(1, Ordering::Release);
@@ -574,7 +589,7 @@ impl RelayHub {
 
     /// Read spectrum data from all publishers targeting this consumer.
     ///
-    /// Returns a list of (publisher_slot, publisher_label, spectrum_bins) tuples
+    /// Returns a list of (`publisher_slot`, `publisher_label`, `spectrum_bins`) tuples
     /// for all live publishers whose target is empty (broadcast) or matches `my_name`.
     /// Stale publishers (no heartbeat within `STALE_MS` milliseconds) are skipped.
     ///
@@ -596,6 +611,7 @@ impl RelayHub {
     ///
     /// Each slot is read up to 16 times if the writer interferes (seqlock conflict).
     /// If all retries fail, that slot is silently skipped.
+    #[must_use]
     pub fn read_active(
         &self,
         my_name: &str,
@@ -617,6 +633,11 @@ impl RelayHub {
     /// Spectrum bins are fixed `[f32; SPECTRUM_BINS]` (no per-hop `Vec` growth).
     /// Prefer pre-filling `out` with `MAX_SLOTS` slots (`String::with_capacity(MAX_NAME_LEN)`)
     /// so the first hop never `push`es either.
+    ///
+    /// # Panics
+    ///
+    /// Never panics in practice: publisher slot indices are bounded by `MAX_SLOTS`,
+    /// which fits in `u8`.
     pub fn read_active_into(
         &self,
         my_name: &str,
@@ -646,17 +667,17 @@ impl RelayHub {
                 let mut bins = [0.0f32; SPECTRUM_BINS];
                 let (name_len, target_len) = unsafe {
                     std::ptr::copy_nonoverlapping(
-                        s.bins.get() as *const f32,
+                        s.bins.get().cast::<f32>(),
                         bins.as_mut_ptr(),
                         SPECTRUM_BINS,
                     );
                     std::ptr::copy_nonoverlapping(
-                        s.name.get() as *const u8,
+                        s.name.get().cast::<u8>(),
                         name_buf.as_mut_ptr(),
                         MAX_NAME_LEN,
                     );
                     std::ptr::copy_nonoverlapping(
-                        s.target.get() as *const u8,
+                        s.target.get().cast::<u8>(),
                         target_buf.as_mut_ptr(),
                         MAX_NAME_LEN,
                     );
@@ -673,15 +694,16 @@ impl RelayHub {
                     let target = std::str::from_utf8(&target_buf[..target_len]).unwrap_or("");
                     if target.is_empty() || target == my_name {
                         let name = std::str::from_utf8(&name_buf[..name_len]).unwrap_or("");
+                        let slot = u8::try_from(idx).expect("idx < MAX_SLOTS <= u8::MAX");
                         if let Some(entry) = out.get_mut(n) {
-                            entry.0 = idx as u8;
+                            entry.0 = slot;
                             entry.1.clear();
                             entry.1.push_str(name);
                             entry.2 = bins;
                         } else {
                             let mut s = String::with_capacity(MAX_NAME_LEN.max(name.len()));
                             s.push_str(name);
-                            out.push((idx as u8, s, bins));
+                            out.push((slot, s, bins));
                         }
                         n += 1;
                     }
@@ -695,6 +717,11 @@ impl RelayHub {
     /// Diagnostic dump of all publisher slots — which are active, their labels,
     /// targets, and whether they match `my_name`. Not audio-thread optimal
     /// (allocates strings per slot); use only for debugging routing issues.
+    ///
+    /// # Panics
+    ///
+    /// Never panics in practice: `STALE_MS` is a small constant that fits in `i64`.
+    #[must_use]
     pub fn diagnose_publishers(
         &self,
         my_name: &str,
@@ -707,9 +734,13 @@ impl RelayHub {
             let age = if hb == 0 {
                 i64::MAX
             } else {
-                now_ms.wrapping_sub(hb) as i64
+                // Both are wall-clock millisecond timestamps; the wrapping
+                // difference is only used for a stale comparison.
+                #[allow(clippy::cast_possible_wrap)]
+                let v = now_ms.wrapping_sub(hb) as i64;
+                v
             };
-            let stale = hb == 0 || age > STALE_MS as i64;
+            let stale = hb == 0 || age > i64::try_from(STALE_MS).expect("STALE_MS fits i64");
 
             let mut label = String::new();
             let mut target = String::new();
@@ -730,12 +761,12 @@ impl RelayHub {
                     let mut target_buf = [0u8; MAX_NAME_LEN];
                     let (name_len, target_len) = unsafe {
                         std::ptr::copy_nonoverlapping(
-                            s.name.get() as *const u8,
+                            s.name.get().cast::<u8>(),
                             name_buf.as_mut_ptr(),
                             MAX_NAME_LEN,
                         );
                         std::ptr::copy_nonoverlapping(
-                            s.target.get() as *const u8,
+                            s.target.get().cast::<u8>(),
                             target_buf.as_mut_ptr(),
                             MAX_NAME_LEN,
                         );
@@ -754,13 +785,21 @@ impl RelayHub {
                 }
             }
 
-            out.push((idx as u8, raw_active, age, label, target, matches));
+            out.push((
+                u8::try_from(idx).expect("idx < MAX_SLOTS <= u8::MAX"),
+                raw_active,
+                age,
+                label,
+                target,
+                matches,
+            ));
         }
         out
     }
 
-    /// Raw atomic snapshot of a slot: (claimed, generation, seq, heartbeat_ms).
+    /// Raw atomic snapshot of a slot: (claimed, generation, seq, `heartbeat_ms`).
     /// For debugging — no seqlock, just the admin fields.
+    #[must_use]
     pub fn slot_raw_state(&self, slot: u8) -> Option<(u32, u32, u32, u64)> {
         let idx = slot as usize;
         if idx >= MAX_SLOTS {
@@ -795,6 +834,7 @@ impl RelayHub {
     /// # Band layout
     ///
     /// The returned array typically contains: [Low Shelf, Peak 1, Peak 2, Peak 3, High Shelf]
+    #[must_use]
     pub fn read_band_energy(&self, slot: u8, now_ms: u64) -> Option<[f32; EQ_BANDS]> {
         let idx = slot as usize;
         if idx >= MAX_SLOTS {
@@ -818,7 +858,7 @@ impl RelayHub {
             let mut energy = [0.0f32; EQ_BANDS];
             unsafe {
                 std::ptr::copy_nonoverlapping(
-                    s.band_energy.get() as *const f32,
+                    s.band_energy.get().cast::<f32>(),
                     energy.as_mut_ptr(),
                     EQ_BANDS,
                 );
@@ -848,6 +888,12 @@ impl RelayHub {
     ///
     /// - `Some((slot_index, band_energy))` if a live matching publisher is found
     /// - `None` if no live publisher matches the name
+    ///
+    /// # Panics
+    ///
+    /// Never panics in practice: the slot index is bounded by `MAX_SLOTS`, which
+    /// fits in `u8`.
+    #[must_use]
     pub fn find_band_energy(&self, name: &str, now_ms: u64) -> Option<(u8, [f32; EQ_BANDS])> {
         for idx in 0..MAX_SLOTS {
             let s = unsafe { &(*self.shared).slots[idx] };
@@ -868,7 +914,7 @@ impl RelayHub {
                 let mut name_buf = [0u8; MAX_NAME_LEN];
                 let name_len = unsafe {
                     std::ptr::copy_nonoverlapping(
-                        s.name.get() as *const u8,
+                        s.name.get().cast::<u8>(),
                         name_buf.as_mut_ptr(),
                         MAX_NAME_LEN,
                     );
@@ -878,9 +924,8 @@ impl RelayHub {
                 if seq1 == s.seq.load(Ordering::Acquire) {
                     let slot_name = String::from_utf8_lossy(&name_buf[..name_len]);
                     if slot_name == name {
-                        return self
-                            .read_band_energy(idx as u8, now_ms)
-                            .map(|e| (idx as u8, e));
+                        let slot = u8::try_from(idx).expect("idx < MAX_SLOTS <= u8::MAX");
+                        return self.read_band_energy(slot, now_ms).map(|e| (slot, e));
                     }
                 }
                 break;
@@ -902,8 +947,13 @@ impl RelayHub {
     ///
     /// # Returns
     ///
-    /// - `Some(slot_index)` if a free slot was claimed (index 0..MAX_CONSUMERS)
+    /// - `Some(slot_index)` if a free slot was claimed (index `0..MAX_CONSUMERS`)
     /// - `None` if all consumer slots are occupied
+    ///
+    /// # Panics
+    ///
+    /// Never panics in practice: the slot index is bounded by `MAX_CONSUMERS`,
+    /// which fits in `u8`.
     ///
     /// # Example
     ///
@@ -912,12 +962,13 @@ impl RelayHub {
     ///     hub.write_consumer_name(slot, "My Analyzer", aura_shm::now_ms());
     /// }
     /// ```
+    #[must_use]
     pub fn claim_consumer_slot(&self, now_ms: u64) -> Option<u8> {
         for idx in 0..MAX_CONSUMERS {
             let s = unsafe { &(*self.shared).consumers[idx] };
             if try_claim(&s.claimed, &s.heartbeat_ms, now_ms) {
                 s.seq.store(0, Ordering::Release);
-                return Some(idx as u8);
+                return Some(u8::try_from(idx).expect("idx < MAX_CONSUMERS <= u8::MAX"));
             }
         }
         None
@@ -997,7 +1048,7 @@ impl RelayHub {
 
         let seq0 = seqlock_begin(&s.seq);
         unsafe {
-            *s.name_len.get() = write_name_bytes(s.name.get() as *mut u8, name);
+            *s.name_len.get() = write_name_bytes(s.name.get().cast::<u8>(), name);
         }
         seqlock_end(&s.seq, seq0);
         s.heartbeat_ms.store(now_ms, Ordering::Release);
@@ -1023,7 +1074,7 @@ impl RelayHub {
             }
             let name_len = unsafe {
                 std::ptr::copy_nonoverlapping(
-                    s.name.get() as *const u8,
+                    s.name.get().cast::<u8>(),
                     out.as_mut_ptr(),
                     MAX_NAME_LEN,
                 );
@@ -1050,6 +1101,7 @@ impl RelayHub {
     ///
     /// `true` if a live consumer instance is advertising exactly this name,
     /// `false` otherwise.
+    #[must_use]
     pub fn consumer_exists(&self, name: &str, now_ms: u64) -> bool {
         let mut buf = [0u8; MAX_NAME_LEN];
         for idx in 0..MAX_CONSUMERS {
@@ -1129,6 +1181,7 @@ impl RelayHub {
     ///     }
     /// }
     /// ```
+    #[must_use]
     pub fn read_consumers(&self, now_ms: u64) -> Vec<String> {
         let mut out = Vec::new();
         self.read_consumers_into(now_ms, &mut out);
@@ -1156,7 +1209,7 @@ impl RelayHub {
                 let mut name_buf = [0u8; MAX_NAME_LEN];
                 let name_len = unsafe {
                     std::ptr::copy_nonoverlapping(
-                        s.name.get() as *const u8,
+                        s.name.get().cast::<u8>(),
                         name_buf.as_mut_ptr(),
                         MAX_NAME_LEN,
                     );
@@ -1217,6 +1270,7 @@ pub fn relay_hub() -> Option<&'static RelayHub> {
 /// - Exactly one live consumer (stale/wrong target) → auto-target it.
 /// - Stale target with multiple live consumers → broadcast (`Some("")`) so
 ///   publish does not silently stop when a persisted name no longer exists.
+#[must_use]
 pub fn resolve_relay_target(hub: &RelayHub, selected: &str, now_ms: u64) -> Option<String> {
     if selected.is_empty() {
         return Some(String::new());
@@ -1227,6 +1281,7 @@ pub fn resolve_relay_target(hub: &RelayHub, selected: &str, now_ms: u64) -> Opti
 /// Pure [`resolve_relay_target`] against an already-fetched consumer list —
 /// no hub scan. Use when the caller read the consumers once and resolves
 /// (possibly repeatedly) from that snapshot.
+#[must_use]
 pub fn resolve_from_consumers(selected: &str, consumers: &[String]) -> Option<String> {
     if selected.is_empty() {
         return Some(String::new());

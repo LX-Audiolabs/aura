@@ -442,8 +442,8 @@ unsafe extern "C" fn run<L: PluginLogic>(instance: LV2_Handle, sample_count: u32
         // Distinct fields; raw slice so we can also mut-borrow `state`.
         let silence = unsafe { std::slice::from_raw_parts(inst.scratch.silence.as_ptr(), n) };
         let mut in_store = [&[] as &[f32]; MAX_AUDIO_CH];
-        for i in 0..total_in_ch {
-            in_store[i] = port_audio(inst.ports.get(i).copied(), n).unwrap_or(silence);
+        for (i, dest) in in_store.iter_mut().enumerate().take(total_in_ch) {
+            *dest = port_audio(inst.ports.get(i).copied(), n).unwrap_or(silence);
         }
         let in_refs = &in_store[..total_in_ch];
 
@@ -605,7 +605,7 @@ fn write_midi<L: PluginLogic>(inst: &Instance<L>, n: usize, midi: &MidiBuffer) {
             }
 
             let atom_ev = base.add(off) as *mut LV2_Atom_Event;
-            (*atom_ev).time.frames = ev.sample_offset.min(n as u32 - 1) as i64;
+            (*atom_ev).time.frames = i64::from(ev.sample_offset.min(n as u32 - 1));
             (*atom_ev).body.type_ = inst.midi_event_type;
             (*atom_ev).body.size = len as u32;
             let data_ptr = base.add(off + size_of::<LV2_Atom_Event>());

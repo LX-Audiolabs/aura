@@ -452,7 +452,10 @@ mod tests {
         assert!(msg.is_note_on());
         assert_eq!(msg.note_number(), Some(64));
         let off = NoteEvent::off(4, 1, 64, 0.0);
-        assert!(off.to_midi1().is_some_and(|m| m.is_note_off()));
+        assert!(
+            off.to_midi1()
+                .is_some_and(aura_midi::MidiMessage::is_note_off)
+        );
         let mut midi = crate::MidiBuffer::new();
         let mut notes = NoteBuffer::new();
         notes.push(on);

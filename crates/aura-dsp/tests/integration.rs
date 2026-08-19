@@ -1,4 +1,13 @@
-//! Integration tests for aura_dsp.
+//! Integration tests for `aura_dsp`.
+
+// Integration tests are DSP smoke tests: float/int conversions and exact
+// float assertions are intentional and harmless here.
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::float_cmp
+)]
 
 use aura_dsp::delay::{AllpassDelay, CombFilter, DelayLine};
 use aura_dsp::effects::{Chorus, Distortion, DistortionType, Flanger, Phaser};
@@ -55,9 +64,9 @@ fn sine_440_correct_period() {
     }
 }
 
-/// Test that PolyBLEP saw has reduced energy above Nyquist.
+/// Test that `PolyBLEP` saw has reduced energy above Nyquist.
 ///
-/// We compare the high-frequency energy of a PolyBLEP saw versus a naive saw
+/// We compare the high-frequency energy of a `PolyBLEP` saw versus a naive saw
 /// by checking that the signal stays within reasonable bounds.
 #[test]
 fn polyblep_saw_anti_aliased() {
@@ -170,7 +179,7 @@ fn equal_temperament_a4_c4() {
 
 /// Test that FM synthesis produces sidebands.
 ///
-/// FM synthesis with carrier=440Hz, modulator=220Hz, mod_index=2 should
+/// FM synthesis with carrier=440Hz, modulator=220Hz, `mod_index=2` should
 /// produce energy at frequencies other than just the carrier.
 #[test]
 fn fm_synthesis_produces_sidebands() {

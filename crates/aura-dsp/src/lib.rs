@@ -48,7 +48,7 @@
 //!
 //! ## Feature Flags
 //!
-//! - `default` — All core primitives (oscillators, filters, envelopes, effects, dynamics, EQ, reverb, voice, mod matrix, panning, smoothing, tuning, noise, delay, wavetable, dsp_util)
+//! - `default` — All core primitives (oscillators, filters, envelopes, effects, dynamics, EQ, reverb, voice, mod matrix, panning, smoothing, tuning, noise, delay, wavetable, `dsp_util`)
 //! - `synthesis` — Synthesis algorithm modules (subtractive, FM, drum, formant, additive, vocoder, granular, physical modeling)
 //! - `acoustics` — Room simulation, convolution reverb, binaural, FDN, analysis, ambisonics (via goonj)
 //! - `logging` — Enable tracing-subscriber for structured logging output
@@ -87,6 +87,21 @@
 //! - **Index-based mutators (`set_operator_freq`, `set_band_gain`)** that may
 //!   receive an out-of-range index return `Option<()>` or `Result<()>` so
 //!   callers can detect — and not silently ignore — bad indices.
+
+// DSP code intentionally uses float/int conversions where precision loss,
+// truncation or sign loss are harmless by construction (array indices,
+// sample counts, normalized parameters). Allow these lints crate-wide so
+// real logic issues remain visible.
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::must_use_candidate,
+    // Tests compare exact float results and DSP benchmarks allocate large stack buffers.
+    clippy::float_cmp,
+    clippy::large_stack_arrays
+)]
 
 /// Portable analysis: FFT/SNAP maths, spectrum, meter blocks (no vault/MD/*Shared).
 pub mod analysis;

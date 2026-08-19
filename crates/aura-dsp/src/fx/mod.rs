@@ -46,7 +46,7 @@ impl Biquad {
 
     #[inline]
     pub fn process(&mut self, x: f32) -> f32 {
-        let x_f64 = x as f64;
+        let x_f64 = f64::from(x);
         // Transposed Direct Form II
         let y = self.b0 * x_f64 + self.s1;
         let s1 = self.b1 * x_f64 - self.a1 * y + self.s2;
@@ -93,8 +93,8 @@ impl Biquad {
         if sample_rate < 1.0 {
             return;
         }
-        let fc = (fc as f64).min(0.49 * (sample_rate as f64)).max(1.0);
-        let sr = sample_rate as f64;
+        let fc = f64::from(fc).min(0.49 * f64::from(sample_rate)).max(1.0);
+        let sr = f64::from(sample_rate);
         let theta = std::f64::consts::PI * fc / sr;
         let k = theta.tan();
         let norm = 1.0 / (1.0 + std::f64::consts::FRAC_1_SQRT_2 * 2.0 * k + k * k);
@@ -110,8 +110,8 @@ impl Biquad {
         if sample_rate < 1.0 {
             return;
         }
-        let fc = (fc as f64).min(0.49 * (sample_rate as f64)).max(1.0);
-        let sr = sample_rate as f64;
+        let fc = f64::from(fc).min(0.49 * f64::from(sample_rate)).max(1.0);
+        let sr = f64::from(sample_rate);
         let theta = std::f64::consts::PI * fc / sr;
         let k = theta.tan();
         let norm = 1.0 / (1.0 + std::f64::consts::FRAC_1_SQRT_2 * 2.0 * k + k * k);
@@ -129,11 +129,11 @@ impl Biquad {
         if sample_rate < 1.0 {
             return;
         }
-        let fc = (fc as f64).min(0.49 * (sample_rate as f64)).max(1.0);
-        let sr = sample_rate as f64;
+        let fc = f64::from(fc).min(0.49 * f64::from(sample_rate)).max(1.0);
+        let sr = f64::from(sample_rate);
         let theta = std::f64::consts::PI * fc / sr;
         let k = theta.tan();
-        let inv_q = 1.0 / (q as f64);
+        let inv_q = 1.0 / f64::from(q);
         let norm = 1.0 / (1.0 + inv_q * k + k * k);
 
         self.b0 = norm;
@@ -149,11 +149,11 @@ impl Biquad {
         if sample_rate < 1.0 {
             return;
         }
-        let fc = (fc as f64).min(0.49 * (sample_rate as f64)).max(1.0);
-        let sr = sample_rate as f64;
+        let fc = f64::from(fc).min(0.49 * f64::from(sample_rate)).max(1.0);
+        let sr = f64::from(sample_rate);
         let theta = std::f64::consts::PI * fc / sr;
         let k = theta.tan();
-        let inv_q = 1.0 / (q as f64);
+        let inv_q = 1.0 / f64::from(q);
         let norm = 1.0 / (1.0 + inv_q * k + k * k);
 
         self.b0 = k * k * norm;
@@ -173,11 +173,11 @@ impl Biquad {
     }
 
     pub fn set_peaking_eq(&mut self, fc: f32, db_gain: f32, q: f32, sample_rate: f32) {
-        let a = 10.0f64.powf(db_gain as f64 / 40.0);
-        let omega = 2.0 * std::f64::consts::PI * (fc as f64) / (sample_rate as f64);
+        let a = 10.0f64.powf(f64::from(db_gain) / 40.0);
+        let omega = 2.0 * std::f64::consts::PI * f64::from(fc) / f64::from(sample_rate);
         let sn = omega.sin();
         let cs = omega.cos();
-        let alpha = sn / (2.0 * (q as f64));
+        let alpha = sn / (2.0 * f64::from(q));
 
         let b0 = 1.0 + alpha * a;
         let b1 = -2.0 * cs;
@@ -191,12 +191,12 @@ impl Biquad {
     }
 
     pub fn set_low_shelf(&mut self, fc: f32, db_gain: f32, slope_s: f32, sample_rate: f32) {
-        let a = 10.0f64.powf(db_gain as f64 / 40.0);
-        let omega = 2.0 * std::f64::consts::PI * (fc as f64) / (sample_rate as f64);
+        let a = 10.0f64.powf(f64::from(db_gain) / 40.0);
+        let omega = 2.0 * std::f64::consts::PI * f64::from(fc) / f64::from(sample_rate);
         let sn = omega.sin();
         let cs = omega.cos();
         let alpha = (sn / 2.0)
-            * (((a + 1.0 / a) * (1.0 / (slope_s as f64) - 1.0) + 2.0)
+            * (((a + 1.0 / a) * (1.0 / f64::from(slope_s) - 1.0) + 2.0)
                 .max(0.0)
                 .sqrt());
 
@@ -215,7 +215,7 @@ impl Biquad {
 
     /// Magnitude response at `freq` Hz in dB. Useful for drawing EQ transfer function curves.
     pub fn magnitude_db(&self, freq: f32, sample_rate: f32) -> f32 {
-        let w = 2.0 * std::f64::consts::PI * (freq as f64) / (sample_rate as f64);
+        let w = 2.0 * std::f64::consts::PI * f64::from(freq) / f64::from(sample_rate);
         let cw = w.cos();
         let c2w = (2.0 * w).cos();
         let sw = w.sin();
@@ -237,12 +237,12 @@ impl Biquad {
     }
 
     pub fn set_high_shelf(&mut self, fc: f32, db_gain: f32, slope_s: f32, sample_rate: f32) {
-        let a = 10.0f64.powf(db_gain as f64 / 40.0);
-        let omega = 2.0 * std::f64::consts::PI * (fc as f64) / (sample_rate as f64);
+        let a = 10.0f64.powf(f64::from(db_gain) / 40.0);
+        let omega = 2.0 * std::f64::consts::PI * f64::from(fc) / f64::from(sample_rate);
         let sn = omega.sin();
         let cs = omega.cos();
         let alpha = (sn / 2.0)
-            * (((a + 1.0 / a) * (1.0 / (slope_s as f64) - 1.0) + 2.0)
+            * (((a + 1.0 / a) * (1.0 / f64::from(slope_s) - 1.0) + 2.0)
                 .max(0.0)
                 .sqrt());
 
@@ -330,24 +330,24 @@ impl LR2Crossover {
     }
 
     pub fn set_cutoff(&mut self, fc: f32, sample_rate: f32) {
-        let fc = (fc as f64).min(0.47 * (sample_rate as f64)).max(10.0);
-        let theta = std::f64::consts::PI * fc / (sample_rate as f64);
+        let fc = f64::from(fc).min(0.47 * f64::from(sample_rate)).max(10.0);
+        let theta = std::f64::consts::PI * fc / f64::from(sample_rate);
         let k = theta.tan();
         let norm = 1.0 / (1.0 + k);
 
-        let b0_lp = k * norm;
-        let b1_lp = k * norm;
-        let a1_lp = (k - 1.0) * norm;
+        let b0_low = k * norm;
+        let b1_low = k * norm;
+        let a1_low = (k - 1.0) * norm;
 
-        let b0_hp = norm;
-        let b1_hp = -norm;
-        let a1_hp = (k - 1.0) * norm;
+        let b0_high = norm;
+        let b1_high = -norm;
+        let a1_high = (k - 1.0) * norm;
 
-        self.lp1.set_coefs(b0_lp, b1_lp, 0.0, a1_lp, 0.0);
-        self.lp2.set_coefs(b0_lp, b1_lp, 0.0, a1_lp, 0.0);
+        self.lp1.set_coefs(b0_low, b1_low, 0.0, a1_low, 0.0);
+        self.lp2.set_coefs(b0_low, b1_low, 0.0, a1_low, 0.0);
 
-        self.hp1.set_coefs(b0_hp, b1_hp, 0.0, a1_hp, 0.0);
-        self.hp2.set_coefs(b0_hp, b1_hp, 0.0, a1_hp, 0.0);
+        self.hp1.set_coefs(b0_high, b1_high, 0.0, a1_high, 0.0);
+        self.hp2.set_coefs(b0_high, b1_high, 0.0, a1_high, 0.0);
     }
 
     #[inline]
@@ -389,9 +389,13 @@ impl<const N: usize> ToleranceTable<N> {
     /// Each slot is a value in [-1.0, 1.0] — multiply by your max tolerance
     /// (e.g. 0.02 for ±2%) when applying to a parameter.
     pub fn new(seed: u64) -> Self {
-        let mut state = if seed == 0 { 0xdeadbeefcafe1234 } else { seed };
+        let mut state = if seed == 0 {
+            0xdead_beef_cafe_1234
+        } else {
+            seed
+        };
         let mut offsets = [0.0f32; N];
-        for slot in offsets.iter_mut() {
+        for slot in &mut offsets {
             // Xorshift64 — no deps, no alloc, reproducible
             state ^= state << 13;
             state ^= state >> 7;
@@ -461,7 +465,7 @@ impl MasteringSaturator {
 
 // =============================================================================
 
-/// Mastering Clipper (bx_clipper inspired)
+/// Mastering Clipper (`bx_clipper` inspired)
 /// A peak shaver with mathematically perfect soft-knee bounding.
 pub struct MasteringClipper;
 
@@ -749,6 +753,11 @@ pub struct AutoLoudMeter {
 
 impl AutoLoudMeter {
     /// `sample_rate` is f32 to match `nih_plug::util::Psafe`-style call sites.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the underlying EBU R128 analyzer cannot be created (extremely
+    /// unlikely for valid sample rates).
     pub fn new(sample_rate: f32) -> Self {
         // Mode::S for short-term LUFS + Mode::TRUE_PEAK for ITU-R BS.1770-4
         // inter-sample (4x oversampled) true-peak metering. The true-peak read
@@ -820,6 +829,10 @@ pub struct MasteringMeter {
 }
 
 impl MasteringMeter {
+    /// # Panics
+    ///
+    /// Panics if the underlying EBU R128 analyzer cannot be created (extremely
+    /// unlikely for valid sample rates).
     pub fn new(sample_rate: f32) -> Self {
         let mut analyzer =
             EbuR128::new(2, sample_rate as u32, Mode::I | Mode::LRA | Mode::TRUE_PEAK)
@@ -917,8 +930,8 @@ impl RmsMeter {
         let n = left.len().min(right.len());
         let mut s = 0.0f64;
         for i in 0..n {
-            let l = left[i] as f64;
-            let r = right[i] as f64;
+            let l = f64::from(left[i]);
+            let r = f64::from(right[i]);
             s += l * l + r * r;
         }
         self.sum_sq += s;
@@ -1194,9 +1207,9 @@ impl MsBandLimiter {
 // CPU floating-point helper: set FTZ/DAZ inside a block, restore MXCSR on exit.
 // =============================================================================
 
-/// RAII guard that enables Flush-To-Zero and Denormals-Are-Zero on x86_64
+/// RAII guard that enables Flush-To-Zero and Denormals-Are-Zero on `x86_64`
 /// for the duration of the current scope and restores the previous MXCSR
-/// value when dropped. On non-x86_64 targets it is a zero-cost no-op.
+/// value when dropped. On non-`x86_64` targets it is a zero-cost no-op.
 pub struct FtzDazGuard {
     #[cfg(target_arch = "x86_64")]
     old_csr: u32,

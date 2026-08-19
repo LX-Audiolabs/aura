@@ -1249,10 +1249,10 @@ unsafe fn collect_input_events(events: *mut IEventList, midi: &mut MidiBuffer) {
             }
             _ => None,
         };
-        if let Some(msg) = msg {
-            if accept_midi_event(midi.len(), true) {
-                midi.push(offset, msg);
-            }
+        if let Some(msg) = msg
+            && accept_midi_event(midi.len(), true)
+        {
+            midi.push(offset, msg);
         }
     }
 }

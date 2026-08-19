@@ -272,9 +272,8 @@ impl GranularEngine {
 
         // Find an inactive slot index.
         let slot_idx = self.grains.iter().position(|g| !g.active);
-        let slot_idx = match slot_idx {
-            Some(i) => i,
-            None => return, // All slots full — drop this grain.
+        let Some(slot_idx) = slot_idx else {
+            return; // All slots full — drop this grain.
         };
 
         let jitter = if self.spray > 0.0 {
