@@ -662,7 +662,7 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
         let sidechain_in_ch = layout.sidechain_input_channels() as usize;
         let total_in_ch = main_in_ch + sidechain_in_ch;
         let mut out_ch = layout.main_output_channels() as usize;
-        if !matches!(out_ch, 0 | 1 | 2) || total_in_ch > MAX_AUDIO_CH {
+        if !matches!(out_ch, 0..=2) || total_in_ch > MAX_AUDIO_CH {
             return CLAP_PROCESS_ERROR;
         }
 
@@ -703,7 +703,7 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
         }
         // Note-FX racks (Bitwig) often pass 0 audio ports. Still process events.
         if filled_out != out_ch {
-            if matches!(filled_out, 0 | 1 | 2) {
+            if matches!(filled_out, 0..=2) {
                 out_ch = filled_out;
             } else {
                 return CLAP_PROCESS_ERROR;

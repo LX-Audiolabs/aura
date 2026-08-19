@@ -88,6 +88,10 @@ pub trait PluginLogic: 'static {
 
     /// Load a host-chosen preset file (CLAP `preset-load` FILE location).
     /// Default: v1 param blob ([`crate::decode_state`]).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be read or is not a valid state blob.
     fn load_preset_from_file(params: &Self::Params, path: &std::path::Path) -> Result<(), String> {
         crate::preset::load_preset_file(params, path)
     }

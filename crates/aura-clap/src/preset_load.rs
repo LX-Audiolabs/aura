@@ -218,6 +218,7 @@ unsafe extern "C" fn discovery_get_descriptor<L: PluginLogic>(
     &discovery_names::<L>().desc
 }
 
+#[allow(clippy::struct_field_names)]
 struct Provider<L: PluginLogic> {
     provider: clap_preset_discovery_provider,
     loc_name: CString,

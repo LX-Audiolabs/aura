@@ -37,6 +37,11 @@ pub fn apply_factory_preset(params: &dyn Params, preset: &FactoryPreset) -> bool
 }
 
 /// Load a v1 state file from disk. Default [`PluginLogic`] file path.
+///
+/// # Errors
+///
+/// Returns an error if the file cannot be read or does not contain a valid
+/// AURA state blob.
 pub fn load_preset_file(params: &dyn Params, path: &Path) -> Result<(), String> {
     let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
     if decode_state(params, &bytes) {

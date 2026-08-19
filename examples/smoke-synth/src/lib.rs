@@ -13,6 +13,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use aura::dsp::envelope::Adsr;
 use aura::dsp::oscillator::{Oscillator, Waveform};
+use aura::dsp::panning::{PanLaw, pan_mono};
 use aura::midi::midi_note_to_freq;
 use aura::prelude::*;
 
@@ -53,6 +54,15 @@ pub struct SynthParams {
         flags = "automatable | modulatable | modulatable_per_note"
     )]
     pub gain: FloatParam,
+
+    #[param(
+        id = 2,
+        name = "Pan",
+        range = "linear(-1, 1)",
+        default = 0.0,
+        flags = "automatable | modulatable | modulatable_per_note"
+    )]
+    pub pan: FloatParam,
 }
 
 pub struct SmokeSynth;
@@ -63,6 +73,8 @@ struct VoiceDsp {
     env: Adsr,
     gain_mod: f64,
     gain_plain: Option<f64>,
+    pan_mod: f64,
+    pan_plain: Option<f64>,
 }
 
 pub struct DspState {
@@ -90,6 +102,8 @@ fn make_voice_dsp(sr: f32) -> VoiceDsp {
         env: make_env(sr),
         gain_mod: 0.0,
         gain_plain: None,
+        pan_mod: 0.0,
+        pan_plain: None,
     }
 }
 
@@ -249,13 +263,20 @@ impl PluginLogic for SmokeSynth {
                 * volume.clamp(0.0, 4.0)
                 * pressure.clamp(0.0, 1.0)
                 * stack_norm;
+            let pan_plain = vd.pan_plain.unwrap_or(params.pan.raw_target());
+            #[allow(clippy::cast_possible_truncation)]
+            let pan = (pan_plain + vd.pan_mod).clamp(-1.0, 1.0) as f32;
 
             for s in 0..n {
                 let sine = vd.osc_sine.next_sample();
                 let saw = vd.osc_saw.next_sample();
                 let sample = (sine * (1.0 - mix) + saw * mix) * vd.env.next_value() * lin;
-                for c in 0..outs {
-                    buffer.output(c)[s] += sample;
+                if outs >= 2 {
+                    let (l, r) = pan_mono(sample, pan, PanLaw::EqualPower);
+                    buffer.output(0)[s] += l;
+                    buffer.output(1)[s] += r;
+                } else {
+                    buffer.output(0)[s] += sample;
                 }
             }
         }
@@ -361,6 +382,13 @@ fn ingest(state: &mut DspState, notes: &NoteBuffer) {
                             state.voices[i].gain_mod = amount;
                         }
                     }
+                } else if param_id == 2 {
+                    for i in 0..MAX_VOICES {
+                        let tv = state.table.voices()[i];
+                        if tv.is_occupied() && ev.matches_voice(tv.note_id, tv.key) {
+                            state.voices[i].pan_mod = amount;
+                        }
+                    }
                 }
             }
             NoteEventKind::ParamValue { param_id, plain } => {
@@ -369,6 +397,13 @@ fn ingest(state: &mut DspState, notes: &NoteBuffer) {
                         let tv = state.table.voices()[i];
                         if tv.is_occupied() && ev.matches_voice(tv.note_id, tv.key) {
                             state.voices[i].gain_plain = Some(plain);
+                        }
+                    }
+                } else if param_id == 2 {
+                    for i in 0..MAX_VOICES {
+                        let tv = state.table.voices()[i];
+                        if tv.is_occupied() && ev.matches_voice(tv.note_id, tv.key) {
+                            state.voices[i].pan_plain = Some(plain);
                         }
                     }
                 }
@@ -393,6 +428,8 @@ fn start_voice(v: &mut VoiceDsp, key: i16, tuning: f32, _velocity: f32, sr: f32)
     v.env.gate_on();
     v.gain_mod = 0.0;
     v.gain_plain = None;
+    v.pan_mod = 0.0;
+    v.pan_plain = None;
 }
 
 fn retune(v: &mut VoiceDsp, key: i16, tuning_semis: f32, _sr: f32) {
@@ -461,6 +498,155 @@ mod tests {
         ingest(&mut state, &notes);
         assert!((state.voices[0].gain_mod - 6.0).abs() < 1e-12);
         assert!(state.voices[1].gain_mod.abs() < 1e-12);
+    }
+
+    /// Voice Stack (4x same key, different note ids) must receive independent
+    /// per-note Pan PARAM_MOD amounts. Pan is a much better Voice-Stack test
+    /// than gain because the dynamic stack_norm keeps the overall level constant.
+    #[test]
+    fn voice_stack_pan_spread_is_independent() {
+        let params = SynthParams::default();
+        let mut state = SmokeSynth::init(&params, 44_100.0);
+        let mut notes = NoteBuffer::new();
+
+        // Four stacked notes of the same key, each with a different pan position.
+        let amounts = [-1.0, -0.33, 0.33, 1.0];
+        for (i, &amount) in amounts.iter().enumerate() {
+            let id = i as i32 + 1;
+            notes.push(ev_on(id, 60, 0.8));
+            notes.push(NoteEvent {
+                sample_offset: 0,
+                note_id: id,
+                port_index: 0,
+                channel: 0,
+                key: 60,
+                kind: NoteEventKind::ParamMod {
+                    param_id: 2,
+                    amount,
+                },
+            });
+        }
+        ingest(&mut state, &notes);
+
+        assert_eq!(state.table.occupied_count(), 4);
+        for (i, &amount) in amounts.iter().enumerate() {
+            assert!(
+                (state.voices[i].pan_mod - amount).abs() < 1e-12,
+                "voice {i} pan_mod should be {amount}, got {}",
+                state.voices[i].pan_mod
+            );
+        }
+    }
+
+    /// PARAM_MOD for Pan that arrives *before* the matching NOTE_ON in the same
+    /// block must still reach the freshly allocated voice.
+    #[test]
+    fn param_mod_pan_before_note_on_reaches_voice() {
+        let params = SynthParams::default();
+        let mut state = SmokeSynth::init(&params, 44_100.0);
+        let mut notes = NoteBuffer::new();
+
+        // Pan modulation first, then the note-on for the same note_id/key.
+        notes.push(NoteEvent {
+            sample_offset: 0,
+            note_id: 7,
+            port_index: 0,
+            channel: 0,
+            key: 64,
+            kind: NoteEventKind::ParamMod {
+                param_id: 2,
+                amount: 0.75,
+            },
+        });
+        notes.push(ev_on(7, 64, 0.8));
+        ingest(&mut state, &notes);
+
+        assert_eq!(state.table.occupied_count(), 1);
+        assert!(
+            (state.voices[0].pan_mod - 0.75).abs() < 1e-12,
+            "pan_mod should be 0.75, got {}",
+            state.voices[0].pan_mod
+        );
+    }
+
+    /// Render one block and return the peak absolute sample value per channel.
+    fn render_peaks(state: &mut DspState, params: &SynthParams, frames: usize) -> (f32, f32) {
+        let channels = 2usize;
+        let in_buf = vec![vec![0.0f32; frames]; channels];
+        let mut out_buf = in_buf.clone();
+        let in_refs: Vec<&[f32]> = in_buf.iter().map(Vec::as_slice).collect();
+        let mut out_refs: Vec<&mut [f32]> = out_buf.iter_mut().map(Vec::as_mut_slice).collect();
+        let mut buffer = AudioBuffer::from_slices_checked(&in_refs, &mut out_refs, frames);
+        let mut ctx = ProcessContext::new(44_100.0, frames);
+        let status = SmokeSynth::process(state, params, &mut buffer, &mut ctx);
+        assert!(
+            matches!(
+                status,
+                ProcessStatus::Continue | ProcessStatus::TailFinished
+            ),
+            "process returned Error"
+        );
+        let peak_l = out_buf[0].iter().map(|s| s.abs()).fold(0.0f32, f32::max);
+        let peak_r = out_buf[1].iter().map(|s| s.abs()).fold(0.0f32, f32::max);
+        (peak_l, peak_r)
+    }
+
+    /// Voice Stack spread on Pan must move voices to different stereo positions.
+    /// This is much more audible than gain spread because stack_norm keeps the
+    /// overall level constant.
+    #[test]
+    fn voice_stack_pan_spread_is_audible() {
+        let params = SynthParams::default();
+        let frames = 256;
+
+        // Hard-panned left.
+        let mut state_left = SmokeSynth::init(&params, 44_100.0);
+        let mut notes = NoteBuffer::new();
+        notes.push(ev_on(1, 60, 0.8));
+        notes.push(NoteEvent {
+            sample_offset: 0,
+            note_id: 1,
+            port_index: 0,
+            channel: 0,
+            key: 60,
+            kind: NoteEventKind::ParamMod {
+                param_id: 2,
+                amount: -1.0,
+            },
+        });
+        ingest(&mut state_left, &notes);
+        let (peak_l, peak_r) = render_peaks(&mut state_left, &params, frames);
+        assert!(peak_l > 1e-3, "left-panned voice should be audible on left");
+        assert!(
+            peak_r < peak_l * 0.1,
+            "left-panned voice should be quiet on right"
+        );
+
+        // Hard-panned right.
+        let mut state_right = SmokeSynth::init(&params, 44_100.0);
+        notes.clear();
+        notes.push(ev_on(1, 60, 0.8));
+        notes.push(NoteEvent {
+            sample_offset: 0,
+            note_id: 1,
+            port_index: 0,
+            channel: 0,
+            key: 60,
+            kind: NoteEventKind::ParamMod {
+                param_id: 2,
+                amount: 1.0,
+            },
+        });
+        ingest(&mut state_right, &notes);
+        let (peak_l, peak_r) = render_peaks(&mut state_right, &params, frames);
+        assert!(
+            peak_r > 1e-3,
+            "right-panned voice should be audible on right"
+        );
+        assert!(
+            peak_l < peak_r * 0.1,
+            "right-panned voice should be quiet on left"
+        );
     }
 
     #[test]
