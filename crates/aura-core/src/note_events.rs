@@ -392,7 +392,10 @@ mod tests {
                 amount: a
             } if (a - 0.25).abs() < 1e-12
         ));
-        let by_key = notes.iter().find(|e| e.note_id < 0 && e.key == 60).expect("key");
+        let by_key = notes
+            .iter()
+            .find(|e| e.note_id < 0 && e.key == 60)
+            .expect("key");
         assert!(matches!(
             by_key.kind,
             NoteEventKind::ParamMod {
