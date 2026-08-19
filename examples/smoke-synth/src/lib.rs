@@ -174,12 +174,14 @@ impl PluginLogic for SmokeSynth {
                 .notes
                 .iter()
                 .filter_map(|e| match e.kind {
-                    NoteEventKind::ParamMod { param_id, amount } => {
-                        Some(format!("id{param_id} n{} k{} {amount:.4}", e.note_id, e.key))
-                    }
-                    NoteEventKind::ParamValue { param_id, plain } => {
-                        Some(format!("val{param_id} n{} k{} {plain:.4}", e.note_id, e.key))
-                    }
+                    NoteEventKind::ParamMod { param_id, amount } => Some(format!(
+                        "id{param_id} n{} k{} {amount:.4}",
+                        e.note_id, e.key
+                    )),
+                    NoteEventKind::ParamValue { param_id, plain } => Some(format!(
+                        "val{param_id} n{} k{} {plain:.4}",
+                        e.note_id, e.key
+                    )),
                     _ => None,
                 })
                 .collect();
@@ -234,11 +236,7 @@ impl PluginLogic for SmokeSynth {
             };
             #[allow(clippy::cast_possible_truncation)]
             let gain_db = (gain_plain + mod_db) as f32;
-            let vel = if tv.is_occupied() {
-                tv.velocity
-            } else {
-                1.0
-            };
+            let vel = if tv.is_occupied() { tv.velocity } else { 1.0 };
             let volume = if tv.is_occupied() { tv.volume } else { 1.0 };
             let pressure = if tv.is_occupied() { tv.pressure } else { 1.0 };
             let mix = if tv.is_occupied() {
@@ -277,9 +275,7 @@ impl PluginLogic for SmokeSynth {
 fn midi_to_notes(midi: &MidiBuffer, dest: &mut NoteBuffer) {
     for ev in midi.iter() {
         let msg = ev.message;
-        if matches!(msg.status, aura::MidiStatus::ControlChange)
-            && matches!(msg.data1, 120 | 123)
-        {
+        if matches!(msg.status, aura::MidiStatus::ControlChange) && matches!(msg.data1, 120 | 123) {
             dest.push(NoteEvent {
                 sample_offset: ev.sample_offset,
                 note_id: -1,

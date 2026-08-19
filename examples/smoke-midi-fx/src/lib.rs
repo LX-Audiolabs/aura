@@ -144,8 +144,8 @@ impl PluginLogic for SmokeMidiFx {
             for ev in context.notes.iter() {
                 let mut out = ev;
                 if out.key >= 0 {
-                    out.key = i16::try_from((i32::from(out.key) + transpose).clamp(0, 127))
-                        .unwrap_or(0);
+                    out.key =
+                        i16::try_from((i32::from(out.key) + transpose).clamp(0, 127)).unwrap_or(0);
                 }
                 context.notes_out.push(out);
             }
