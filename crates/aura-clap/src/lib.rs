@@ -38,7 +38,7 @@ use aura_core::transport::Transport;
 use aura_core::{
     AudioBuffer, AudioConfig, BusLayout, ChannelConfig, NoteBuffer, NoteEvent, NoteEventKind,
     NoteExpression, NoteTarget, PluginLogic, ProcessContext, ProcessMode, ProcessStatus,
-    TimedParamEvent, apply_at_time, apply_non_chunked, host_callback, host_callback_with,
+    TimedParamEvent, Tuning, apply_at_time, apply_non_chunked, host_callback, host_callback_with,
     layout_at, route_param_mod, route_param_value, split_points_into,
 };
 use aura_core::{MidiBuffer, MidiMessage, Ump, UmpBuffer};
@@ -62,6 +62,7 @@ use clap_sys::ext::audio_ports::{
 use clap_sys::ext::audio_ports_config::{
     CLAP_EXT_AUDIO_PORTS_CONFIG, clap_audio_ports_config, clap_plugin_audio_ports_config,
 };
+use clap_sys::ext::draft::tuning::CLAP_EXT_TUNING;
 use clap_sys::ext::gui::{
     CLAP_EXT_GUI, CLAP_WINDOW_API_COCOA, CLAP_WINDOW_API_WIN32, CLAP_WINDOW_API_X11, clap_host_gui,
     clap_plugin_gui, clap_window,
@@ -109,6 +110,7 @@ use clap_sys::string_sizes::{CLAP_NAME_SIZE, CLAP_PATH_SIZE};
 use clap_sys::version::CLAP_VERSION;
 
 mod preset_load;
+mod tuning;
 
 // ---------------------------------------------------------------------------
 // Export macro
@@ -204,6 +206,7 @@ unsafe extern "C" fn factory_create_plugin<L: PluginLogic>(
 
     let params = Arc::new(L::Params::default());
     let desc = descriptor::<L>();
+    let tuning_state = tuning::TuningState::new(host);
 
     let instance = Box::new(Instance::<L> {
         host,
@@ -221,6 +224,8 @@ unsafe extern "C" fn factory_create_plugin<L: PluginLogic>(
         tail_cache: AtomicU32::new(0),
         process_mode: ProcessMode::Realtime,
         scratch: ProcessScratch::new(),
+        tuning_state,
+        tuning_pool_changed: AtomicBool::new(false),
     });
 
     let plugin = Box::new(clap_plugin {
@@ -333,12 +338,17 @@ pub(crate) struct Instance<L: PluginLogic> {
     process_mode: ProcessMode,
     /// Audio-thread scratch — reserved in `activate`, reused every `process`.
     scratch: ProcessScratch,
+    /// CLAP `clap.tuning/2` host state (event space + active tuning ids).
+    tuning_state: Arc<tuning::TuningState>,
+    /// Set by the host's `clap.tuning` `changed()` callback; consumed in process.
+    tuning_pool_changed: AtomicBool,
 }
 
 /// Pre-sized process working set. Heap growth here is a Bitwig-crash class bug
 /// (note-expression flood used to `Vec::new` + copy every block).
 struct ProcessScratch {
     timed: Vec<TimedParamEvent>,
+    tuning_events: Vec<aura_core::TuningEvent>,
     midi: MidiBuffer,
     midi_out: MidiBuffer,
     notes: NoteBuffer,
@@ -361,6 +371,7 @@ impl ProcessScratch {
     fn new() -> Self {
         Self {
             timed: Vec::new(),
+            tuning_events: Vec::new(),
             midi: MidiBuffer::new(),
             midi_out: MidiBuffer::new(),
             notes: NoteBuffer::new(),
@@ -377,6 +388,7 @@ impl ProcessScratch {
 
     fn prepare(&mut self, max_frames: usize) {
         self.timed.reserve(256);
+        self.tuning_events.reserve(16);
         self.midi.reserve(MAX_NOTE_EVENTS);
         self.midi_out.reserve(256);
         self.notes.reserve(MAX_NOTE_EVENTS + 128);
@@ -626,17 +638,21 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
         }
 
         inst.scratch.timed.clear();
+        inst.scratch.tuning_events.clear();
         inst.scratch.midi.clear();
         inst.scratch.notes.clear();
         inst.scratch.midi_out.clear();
         inst.scratch.notes_out.clear();
         inst.scratch.ump.clear();
         inst.scratch.ump_out.clear();
+        let tuning_space_id = inst.tuning_state.space_id();
         if !process.in_events.is_null() {
             unsafe {
                 collect_input_events(
                     process.in_events,
                     &mut inst.scratch.timed,
+                    &mut inst.scratch.tuning_events,
+                    tuning_space_id,
                     &mut inst.scratch.midi,
                     &mut inst.scratch.notes,
                     &mut inst.scratch.ump,
@@ -721,6 +737,17 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
             &inst.scratch.timed,
             &infos,
         );
+        for ev in &inst.scratch.tuning_events {
+            let t = ev.sample_offset;
+            if t > 0 && t < frames_u {
+                inst.scratch.splits.push(t);
+            }
+        }
+        inst.scratch.splits.sort_unstable();
+        inst.scratch.splits.dedup();
+
+        let tuning =
+            Tuning::new(Arc::clone(&inst.tuning_state) as Arc<dyn aura_core::TuningProvider>);
 
         let mut status = ProcessStatus::Continue;
         let n_splits = inst.scratch.splits.len();
@@ -738,6 +765,12 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
                 inst.scratch.splits[si],
                 &infos,
             );
+            let chunk_t0 = inst.scratch.splits[si];
+            for ev in &inst.scratch.tuning_events {
+                if ev.sample_offset == chunk_t0 {
+                    tuning.apply_event(ev);
+                }
+            }
 
             if inst.scratch.silence.len() < t1 {
                 return CLAP_PROCESS_ERROR;
@@ -794,7 +827,8 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
                 .with_ump(ump)
                 .with_midi_out(std::mem::take(&mut inst.scratch.midi_out))
                 .with_notes_out(std::mem::take(&mut inst.scratch.notes_out))
-                .with_ump_out(std::mem::take(&mut inst.scratch.ump_out));
+                .with_ump_out(std::mem::take(&mut inst.scratch.ump_out))
+                .with_tuning(tuning.clone());
             ctx.transport = transport;
 
             let chunk_status = unsafe {
@@ -850,6 +884,9 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
             }
         }
 
+        if inst.tuning_pool_changed.swap(false, Ordering::Relaxed) {
+            L::tuning_changed(state, &inst.params);
+        }
         // PDC: latency.changed is [main-thread] only — schedule callback.
         if inst.update_latency_cache() {
             inst.latency_dirty.store(true, Ordering::Relaxed);
@@ -933,11 +970,13 @@ unsafe fn run_process_chunk<L: PluginLogic>(
     }
 }
 
-/// Collect timed param / MIDI / note events from the host input list (no apply).
+/// Collect timed param / MIDI / note / tuning events from the host input list.
 #[allow(clippy::too_many_lines)]
 unsafe fn collect_input_events(
     in_events: *const clap_input_events,
     timed: &mut Vec<TimedParamEvent>,
+    tuning_events: &mut Vec<aura_core::TuningEvent>,
+    tuning_space_id: u16,
     midi: &mut MidiBuffer,
     notes: &mut NoteBuffer,
     ump: &mut UmpBuffer,
@@ -946,6 +985,7 @@ unsafe fn collect_input_events(
     notes.clear();
     ump.clear();
     timed.clear();
+    tuning_events.clear();
     let ev = unsafe { &*in_events };
     let Some(size_fn) = ev.size else {
         return;
@@ -960,6 +1000,12 @@ unsafe fn collect_input_events(
             continue;
         }
         let header = unsafe { &*hdr };
+        if tuning_space_id != 0 && header.space_id == tuning_space_id {
+            if let Some(ev) = unsafe { tuning::parse_tuning_event(header, hdr) } {
+                tuning_events.push(ev);
+            }
+            continue;
+        }
         if header.space_id != CLAP_CORE_EVENT_SPACE_ID {
             continue;
         }
@@ -1079,10 +1125,21 @@ unsafe fn apply_input_events(
     midi: &mut MidiBuffer,
 ) {
     let mut timed = Vec::new();
+    let mut tuning_events = Vec::new();
     let mut notes = NoteBuffer::new();
     let mut ump = UmpBuffer::new();
-    unsafe { collect_input_events(in_events, &mut timed, midi, &mut notes, &mut ump) };
-    let _ = (notes, ump); // ponytail: flush has no process() to consume poly / UMP
+    unsafe {
+        collect_input_events(
+            in_events,
+            &mut timed,
+            &mut tuning_events,
+            0,
+            midi,
+            &mut notes,
+            &mut ump,
+        );
+    }
+    let _ = (tuning_events, notes, ump); // ponytail: flush has no process() to consume these
     for ev in timed {
         aura_core::apply_event(params, ev);
     }
@@ -1338,6 +1395,9 @@ unsafe extern "C" fn plugin_get_extension<L: PluginLogic>(
             return gui_ext::<L>() as *const _ as *const c_void;
         }
         return ptr::null();
+    }
+    if id == CLAP_EXT_TUNING && L::info().supports_tuning {
+        return tuning::tuning_ext::<L>() as *const _ as *const c_void;
     }
     ptr::null()
 }

@@ -124,7 +124,9 @@ fn spawn_job(ui_w: Weak<AppWindow>, busy: Arc<Mutex<bool>>, builder: JobBuilder)
         return;
     };
     {
-        let mut b = busy.lock().unwrap_or_else(|e| e.into_inner());
+        let mut b = busy
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if *b {
             append_log_ui(&ui, "already busy — wait for the current command\n");
             return;
@@ -162,6 +164,7 @@ fn spawn_job(ui_w: Weak<AppWindow>, busy: Arc<Mutex<bool>>, builder: JobBuilder)
 // UI state
 // ---------------------------------------------------------------------------
 
+#[allow(clippy::struct_excessive_bools)]
 struct UiState {
     project_dir: String,
     plugin_name: String,
@@ -333,9 +336,10 @@ fn find_aura_root() -> Option<PathBuf> {
 }
 
 fn aura_root_hint() -> String {
-    find_aura_root()
-        .map(|p| p.display().to_string())
-        .unwrap_or_else(|| "(set AURA_PATH or install cargo-aura)".into())
+    find_aura_root().map_or_else(
+        || "(set AURA_PATH or install cargo-aura)".into(),
+        |p| p.display().to_string(),
+    )
 }
 
 fn which(bin: &str) -> Option<PathBuf> {
@@ -365,9 +369,9 @@ fn path_to_shared(p: &Path) -> SharedString {
 }
 
 fn append_log_ui(ui: &AppWindow, chunk: &str) {
+    const MAX: usize = 80_000;
     let mut t = ui.get_log_text().to_string();
     t.push_str(chunk);
-    const MAX: usize = 80_000;
     if t.len() > MAX {
         t = t[t.len() - MAX..].to_string();
     }

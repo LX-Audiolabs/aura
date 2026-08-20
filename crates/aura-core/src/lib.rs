@@ -19,6 +19,7 @@ pub mod preset;
 pub mod process;
 pub mod state;
 pub mod transport;
+pub mod tuning;
 
 pub use aura_params::sample::{Float, Sample};
 pub use buffer::AudioBuffer;
@@ -42,6 +43,7 @@ pub use preset::{FactoryPreset, FactoryPresetState, apply_factory_preset, load_p
 pub use process::{ProcessContext, ProcessStatus};
 pub use state::{decode_state, encode_state};
 pub use transport::Transport;
+pub use tuning::{Tuning, TuningEvent, TuningProvider};
 
 // MIDI types live in `aura-midi`; re-export for process-path convenience.
 pub use aura_midi::{

@@ -498,8 +498,8 @@ mod tests {
     }
 
     /// Voice Stack (4x same key, different note ids) must receive independent
-    /// per-note Pan PARAM_MOD amounts. Pan is a much better Voice-Stack test
-    /// than gain because the dynamic stack_norm keeps the overall level constant.
+    /// per-note Pan `PARAM_MOD` amounts. Pan is a much better Voice-Stack test
+    /// than gain because the dynamic `stack_norm` keeps the overall level constant.
     #[test]
     fn voice_stack_pan_spread_is_independent() {
         let params = SynthParams::default();
@@ -509,7 +509,7 @@ mod tests {
         // Four stacked notes of the same key, each with a different pan position.
         let amounts = [-1.0, -0.33, 0.33, 1.0];
         for (i, &amount) in amounts.iter().enumerate() {
-            let id = i as i32 + 1;
+            let id = i32::try_from(i).unwrap() + 1;
             notes.push(ev_on(id, 60, 0.8));
             notes.push(NoteEvent {
                 sample_offset: 0,
@@ -535,7 +535,7 @@ mod tests {
         }
     }
 
-    /// PARAM_MOD for Pan that arrives *before* the matching NOTE_ON in the same
+    /// `PARAM_MOD` for Pan that arrives *before* the matching `NOTE_ON` in the same
     /// block must still reach the freshly allocated voice.
     #[test]
     fn param_mod_pan_before_note_on_reaches_voice() {
@@ -589,7 +589,7 @@ mod tests {
     }
 
     /// Voice Stack spread on Pan must move voices to different stereo positions.
-    /// This is much more audible than gain spread because stack_norm keeps the
+    /// This is much more audible than gain spread because `stack_norm` keeps the
     /// overall level constant.
     #[test]
     fn voice_stack_pan_spread_is_audible() {

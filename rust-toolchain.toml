@@ -1,11 +1,4 @@
 [toolchain]
-# Pinned: stable 1.97.1 miscompiles build scripts on this machine
-# (STATUS_BREAKPOINT in smoke-gain's slint build script at opt-level 0,
-# STATUS_ILLEGAL_INSTRUCTION at opt-level 3). 1.96.0 builds the full
-# workspace clean. Revisit on the next stable (1.98+).
-# 2026-08-07: same crash resurfaced on 1.96.0 after dep rebuilds — resolved
-# by full target/ clean + toolchain reinstall. If it ever returns:
-# CARGO_PROFILE_DEV_BUILD_OVERRIDE_OPT_LEVEL=2.
-channel = "1.97.1"
+channel = "stable"
 components = ["rustfmt", "clippy"]
 profile = "minimal"

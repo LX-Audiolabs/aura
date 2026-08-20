@@ -427,14 +427,9 @@ mod tests {
         gain: FloatParam,
     }
 
+    #[derive(Default)]
     struct DummyEditor {
         handle: Option<RawWindowHandle>,
-    }
-
-    impl Default for DummyEditor {
-        fn default() -> Self {
-            Self { handle: None }
-        }
     }
 
     impl Editor for DummyEditor {
@@ -528,7 +523,7 @@ mod tests {
 
     #[test]
     fn ui_extension_data_null_for_unknown_uri() {
-        let uri = CStr::from_bytes_with_nul(b"http://example.com/unknown\0").unwrap();
+        let uri = c"http://example.com/unknown";
         // SAFETY: test-only calls with known-safe pointer inputs.
         assert!(unsafe { ui_extension_data::<TestLogic>(uri.as_ptr()) }.is_null());
         assert!(unsafe { ui_extension_data::<TestLogic>(std::ptr::null()) }.is_null());

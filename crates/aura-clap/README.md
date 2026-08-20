@@ -41,7 +41,7 @@ aura::export!(MyPlugin);
 
 ## Status
 
-Entry, factory, audio-ports (mono/stereo + optional sidechain), audio-ports-config, note-ports, params, process, state, GUI, remote-controls, latency, **tail**, **render**, **preset-load**.
+Entry, factory, audio-ports (mono/stereo + optional sidechain), audio-ports-config, note-ports, params, process, state, GUI, remote-controls, latency, **tail**, **render**, **preset-load**, **tuning** (`clap.tuning/2`, MTS-ESP host support).
 
 **Layouts:** `PluginLogic::bus_layouts()` — default stereo. Override with `BusLayout::mono()`, `stereo_and_mono()`, or `.with_sidechain(…)`. Host switches via `clap.audio-ports-config` when more than one layout is declared.
 
@@ -62,6 +62,8 @@ Entry, factory, audio-ports (mono/stereo + optional sidechain), audio-ports-conf
 **Render:** `clap.render` sets `ProcessContext.process_mode` (`Realtime` / `Offline`).
 
 **Preset load:** `clap.preset-load/2` (compat `clap.preset-load.draft/2`). FILE location reads a v1 state blob (`PluginLogic::load_preset_from_file`). PLUGIN location looks up `PluginLogic::factory_presets` by `load_key`. Non-empty factory list also exposes `preset-discovery-factory/2` (PLUGIN / factory content).
+
+**Tuning / MTS-ESP:** set `PluginInfo.supports_tuning = true` to advertise `clap.tuning/2`. In `process()`, query `context.tuning.relative_offset(port, channel, key, sample_offset)` for the detune in semitones and `context.tuning.should_play(...)` to honor host-driven note filtering. Host tuning changes split the block sample-accurately; `PluginLogic::tuning_changed` is called when the host reports that the tuning pool changed.
 
 **MIDI 2:** set `PluginInfo.midi_input_dialect = MidiDialect::Midi2` to prefer `CLAP_NOTE_DIALECT_MIDI2` (CLAP + MIDI 1 still advertised). Incoming `CLAP_EVENT_MIDI2` lands on `ProcessContext.ump` as native [`Ump`] packets (per-note pitch bend, SysEx8, Flex included). A 7-bit image is still mirrored to `midi` when `to_midi1` exists. Push generated packets to `ump_out` — CLAP emits `CLAP_EVENT_MIDI2`. Native notes / expressions stay on `MidiDialect::Clap` + `ProcessContext.notes`.
 

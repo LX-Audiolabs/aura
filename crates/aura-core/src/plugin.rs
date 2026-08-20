@@ -95,4 +95,11 @@ pub trait PluginLogic: 'static {
     fn load_preset_from_file(params: &Self::Params, path: &std::path::Path) -> Result<(), String> {
         crate::preset::load_preset_file(params, path)
     }
+
+    /// Called when the host reports that the tuning pool changed.
+    ///
+    /// This is invoked from the audio thread the next processing block after
+    /// the host's `clap.tuning` `changed()` callback. Plugins can rebuild any
+    /// cached tuning tables here. Default: no-op.
+    fn tuning_changed(_state: &mut Self::DspState, _params: &Self::Params) {}
 }

@@ -50,6 +50,8 @@ pub struct PluginInfo {
     pub voice_count: u32,
     /// Allocated voice pool (`voice_count <= voice_capacity`). `0` → same as count.
     pub voice_capacity: u32,
+    /// Advertise CLAP `clap.tuning/2` (MTS-ESP / dynamic tuning host support).
+    pub supports_tuning: bool,
 }
 
 impl PluginInfo {
@@ -77,6 +79,7 @@ impl PluginInfo {
             midi_output_dialect: MidiDialect::Midi1,
             voice_count: 0,
             voice_capacity: 0,
+            supports_tuning: false,
         }
     }
 }

@@ -4,6 +4,7 @@ use aura_midi::{MidiBuffer, UmpBuffer};
 
 use crate::config::ProcessMode;
 use crate::note_events::NoteBuffer;
+use crate::tuning::Tuning;
 
 /// What the plugin wants after `process`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -49,6 +50,8 @@ pub struct ProcessContext {
     pub ump: UmpBuffer,
     /// Plugin → host UMP. CLAP emits `CLAP_EVENT_MIDI2`; VST3/LV2 down-convert.
     pub ump_out: UmpBuffer,
+    /// Host-driven tuning context (CLAP `clap.tuning`).
+    pub tuning: Tuning,
 }
 
 impl ProcessContext {
@@ -65,6 +68,7 @@ impl ProcessContext {
             notes_out: NoteBuffer::new(),
             ump: UmpBuffer::new(),
             ump_out: UmpBuffer::new(),
+            tuning: Tuning::disabled(),
         }
     }
 
@@ -113,6 +117,12 @@ impl ProcessContext {
     #[must_use]
     pub fn with_ump_out(mut self, ump_out: UmpBuffer) -> Self {
         self.ump_out = ump_out;
+        self
+    }
+
+    #[must_use]
+    pub fn with_tuning(mut self, tuning: Tuning) -> Self {
+        self.tuning = tuning;
         self
     }
 

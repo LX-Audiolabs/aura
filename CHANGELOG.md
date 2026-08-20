@@ -7,17 +7,16 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ## [Unreleased]
 
-Stage 6 author-loop items below already shipped in **v0.7.1** (0.8.0 tag skipped). Note/MIDI process work is in **v0.7.2**.
+## [0.8.0] - 2026-08-20
 
 ### Added
 
-- CLAP poly `PARAM_MOD` / per-note `PARAM_VALUE` (`note_id ≥ 0`) and `CLAP_EVENT_NOTE_EXPRESSION` → `ProcessContext.notes`. Mono events still hit `Params`. `MidiDialect::Clap` prefers `CLAP_NOTE_DIALECT_CLAP`. smoke-synth: velocity, volume (Bitwig Gain), timbre (sine→saw), pressure, tuning, per-note Gain.
-- `cargo aura watch` — poll `src` / `ui` / manifests and rebuild (+ install). Default format `--clap`. `--no-install` skips the host copy. Install copy retries when a host still maps the binary.
-- `cargo aura mesh` — thin wrapper over `agal` (default `agal .`). Optional; builds do not need it.
-- `aura-midi::Ump` — MIDI 2.0 Universal MIDI Packet stubs (MIDI 1 CV, MIDI 2 note on/off, per-note pitch bend, `SysEx8`, Flex Data, lossy `to_midi1`).
-- CLAP: ingest `CLAP_EVENT_MIDI2` (down-convert to `MidiMessage`). `MidiDialect::Midi2` now prefers the MIDI 2 note-port dialect. smoke-synth advertises MIDI 2 in.
-- `aura-hot` CLAP proxy: `cargo aura install --hot` / `watch --hot` writes `Name.clap` (host-mapped) + `Name.impl.*` (replaced on each watch). Re-add the instance to pick up new DSP.
-- AURA identity tokens: aurora teal on ink in `@aura` `AuraTheme`; `aura-gui` uses the same chrome (wordmark, card, mesh / hot).
+- CLAP `clap.tuning/2` (draft) / MTS-ESP host tuning support. Plugins opt in with `PluginInfo.supports_tuning` and query `ProcessContext.tuning.relative_offset(...)` / `should_play(...)` per note. Tuning selection events split the block sample-accurately; `PluginLogic::tuning_changed` is called when the host tuning pool changes.
+
+### Changed
+
+- Toolchain auf `stable` gestellt.
+- Kleine Clippy-Korrekturen in `smoke-synth`, `aura-lv2` und `aura-gui`.
 
 ## [0.7.2] - 2026-08-18
 
