@@ -635,6 +635,7 @@ name = "aura-preview"
 version = "0.8.0"
 dependencies = [
  "aura-build",
+ "image",
  "notify",
  "slint-interpreter",
  "spin_on",

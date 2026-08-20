@@ -13,6 +13,7 @@ aura-build = { workspace = true }
 slint-interpreter = { workspace = true }
 notify = "8"
 spin_on = "0.1"
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 [lints]
 workspace = true

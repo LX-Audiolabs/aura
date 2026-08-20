@@ -37,6 +37,7 @@ export component ControlWindow inherits Window {
 
     callback reload-requested();
     callback watch-toggled(bool);
+    callback screenshot-requested();
 
     VerticalLayout {
         padding: 10px;
@@ -47,6 +48,10 @@ export component ControlWindow inherits Window {
             Button {
                 text: "Reload";
                 clicked => root.reload-requested();
+            }
+            Button {
+                text: "Screenshot";
+                clicked => root.screenshot-requested();
             }
             CheckBox {
                 text: "Auto-reload on save";
@@ -146,12 +151,56 @@ impl Preview {
         }
     }
 
+    fn take_screenshot(&self) {
+        let Some(instance) = &self.instance else {
+            self.set_status("no preview window to capture", false);
+            return;
+        };
+        match instance.window().take_snapshot() {
+            Ok(buffer) => {
+                let dir = self
+                    .entry
+                    .parent()
+                    .map(std::path::PathBuf::from)
+                    .unwrap_or_else(std::env::temp_dir);
+                let timestamp = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs();
+                let filename = format!("aura-preview-{timestamp}.png");
+                let path = dir.join(filename);
+                match save_png(&path, buffer) {
+                    Ok(()) => self.set_status(&format!("saved {}", path.display()), true),
+                    Err(e) => self.set_status(&format!("save failed: {e}"), false),
+                }
+            }
+            Err(e) => self.set_status(&format!("snapshot failed: {e}"), false),
+        }
+    }
+
     fn set_status(&self, text: &str, ok: bool) {
         let _ = self
             .control
             .set_property("status", Value::from(SharedString::from(text)));
         let _ = self.control.set_property("status-ok", Value::from(ok));
     }
+}
+
+fn save_png(
+    path: &std::path::Path,
+    buffer: slint_interpreter::SharedPixelBuffer<slint_interpreter::Rgba8Pixel>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let width = buffer.width();
+    let height = buffer.height();
+    let rgba: Vec<u8> = buffer
+        .as_slice()
+        .iter()
+        .flat_map(|p| [p.r, p.g, p.b, p.a])
+        .collect();
+    let img = image::RgbaImage::from_raw(width, height, rgba)
+        .ok_or("invalid image dimensions")?;
+    img.save(path)?;
+    Ok(())
 }
 
 struct Args {
@@ -272,6 +321,12 @@ fn create_control(
     control
         .set_callback("reload-requested", |_| {
             with_preview(Preview::reload);
+            Value::Void
+        })
+        .expect("callback exists in CONTROL_SOURCE");
+    control
+        .set_callback("screenshot-requested", |_| {
+            with_preview(|p| p.take_screenshot());
             Value::Void
         })
         .expect("callback exists in CONTROL_SOURCE");
