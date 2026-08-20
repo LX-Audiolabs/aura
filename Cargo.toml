@@ -91,9 +91,3 @@ panic = "unwind"
 
 [profile.shell]
 inherits = "release"
-
-# Workaround for Slint 1.17.1: i-slint-compiler calls `widget_library!()` but
-# build.rs only generates a `widget_library()` function. Fixed in Slint master;
-# patch locally until 1.17.2 ships.
-[patch.crates-io]
-i-slint-compiler = { path = "patches/i-slint-compiler" }
