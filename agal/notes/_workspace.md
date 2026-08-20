@@ -34,7 +34,7 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 [ATOM] type=decision | detail=G15 AudioTap landed 2026-08-10 — lock-free SPSC sample ring in aura-params
 [ATOM] type=decision | detail=Basis fertig 2026-08-08 — DoD green; first-class CLAP path 2026-08-11
 [ATOM] type=decision | detail=CLAP leftover = multi-out / G5 / host proofs — see aura-clap README; NoteVoiceTable is the note_id + NOTE_END bookkeeping
-[ATOM] type=decision | detail=v0.7.2 shipped notes_out + native ump (2026-08-18); 0.8.0 tag skipped — Stage 6 already in v0.7.1
+[ATOM] type=decision | detail=v0.8.0 = clap.tuning/2 (MTS-ESP); tagged 2026-08-20. v0.7.2 = notes_out + native ump (2026-08-18)
 [ATOM] type=decision | detail=CLAP first: ProcessContext.ump is native MIDI 2; midi is the 7-bit fallback. VST3/LV2 must not shrink the process API
 [ATOM] type=decision | detail=NoteVoiceTable (note_id + NOTE_END) is the framework voice bookkeeping; plugin still owns oscillators / envelopes
 [ATOM] type=decision | detail=cargo aura watch = rebuild+install poll (no notify dep); preview stays Slint-only

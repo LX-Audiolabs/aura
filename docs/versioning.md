@@ -2,14 +2,14 @@
 
 How we number releases. Short, so agents and humans do the same thing.
 
-Last pass: 2026-08-11.
+Last pass: 2026-08-20.
 
 ## Current
 
 | | |
 |--|--|
 | **Scheme** | [Semantic Versioning 2.0](https://semver.org/) |
-| **Workspace version** | `0.7.2` in root `Cargo.toml` → `[workspace.package] version` |
+| **Workspace version** | `0.8.0` in root `Cargo.toml` → `[workspace.package] version` |
 | **Crates** | all `aura-*` + `cargo-aura` / `aura-preview` use `version.workspace = true` |
 | **crates.io** | `publish = false` for now — consume via path or git; crates.io when we cut a published line |
 | **Git tags** | `vMAJOR.MINOR.PATCH` (annotated), e.g. `v0.1.0` |
