@@ -25,9 +25,9 @@ import { Button, CheckBox } from "std-widgets.slint";
 export component ControlWindow inherits Window {
     title: "aura-preview — control";
     min-width: 360px;
-    min-height: 130px;
+    min-height: 150px;
     preferred-width: 460px;
-    preferred-height: 160px;
+    preferred-height: 190px;
 
     in property <string> file: "";
     in property <string> status: "";
@@ -60,17 +60,24 @@ export component ControlWindow inherits Window {
                 toggled => root.watch-toggled(root.watch);
             }
         }
-        Text {
-            text: root.file;
-            font-size: 11px;
-            overflow: elide;
-            color: #888888;
-        }
-        Text {
-            text: root.status;
-            font-size: 11px;
-            wrap: word-wrap;
-            color: root.status-ok ? #7ec87e : #e07a7a;
+        Rectangle {
+            background: #111111;
+            VerticalLayout {
+                padding: 8px;
+                spacing: 4px;
+                Text {
+                    text: root.file;
+                    font-size: 13px;
+                    overflow: elide;
+                    color: #dddddd;
+                }
+                Text {
+                    text: root.status;
+                    font-size: 13px;
+                    wrap: word-wrap;
+                    color: root.status-ok ? #7ec87e : #e07a7a;
+                }
+            }
         }
     }
 }

@@ -10,6 +10,7 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 ### Fixed
 
 - Drop unused `dependencies.baseview.version` on `aura-baseview` (`workspace = true` already pins `=0.3.0`). Cargo warned on every `cargo aura` invocation.
+- `aura-preview` control: larger status/path text on a dark bar (green/red status kept).
 - `cargo aura add` / `add-ui`: register the new crate in workspace `Cargo.toml` `members`. agal / `cargo metadata` only see workspace members, so a scaffold-only plugin was invisible. Added plugin crates no longer emit a nested `[workspace]` table (Cargo: `multiple workspace roots`). `[[plugin]].crate` is the package name (for `-p`), not the members path.
 
 ## [0.8.0] - 2026-08-20
