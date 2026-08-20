@@ -1,0 +1,10 @@
+{
+  "rust-analyzer.cargo.buildScripts.enable": true,
+  "rust-analyzer.procMacro.enable": true,
+  "rust-analyzer.cargo.extraEnv": {
+    "SLINT_WIDGETS_LIBRARY": "${workspaceFolder}/.vscode/slint-widgets-stub.rs"
+  },
+  "rust-analyzer.server.extraEnv": {
+    "SLINT_WIDGETS_LIBRARY": "${workspaceFolder}/.vscode/slint-widgets-stub.rs"
+  }
+}
