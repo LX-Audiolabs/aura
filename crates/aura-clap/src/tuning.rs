@@ -1,13 +1,14 @@
 //! CLAP `clap.tuning/2` (draft) host integration.
 
-use std::ffi::c_char;
+use std::ffi::{CStr, c_char};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU16, AtomicU32, Ordering};
 
-use aura_core::{PluginLogic, TuningEvent, TuningProvider};
+use aura_core::{PluginLogic, TuningEvent, TuningInfo, TuningProvider};
 use clap_sys::ext::draft::tuning::{
     CLAP_EXT_TUNING, clap_event_tuning, clap_host_tuning, clap_plugin_tuning_t,
 };
+use clap_sys::string_sizes::CLAP_NAME_SIZE;
 use clap_sys::ext::event_registry::{CLAP_EXT_EVENT_REGISTRY, clap_host_event_registry};
 use clap_sys::host::clap_host;
 use clap_sys::id::CLAP_INVALID_ID;
@@ -115,6 +116,38 @@ impl TuningProvider for TuningState {
         }
         ext.should_play
             .is_none_or(|should| unsafe { should(self.host, id, channel, key) })
+    }
+
+    fn tuning_count(&self) -> u32 {
+        let Some(ext) = self.ext else {
+            return 0;
+        };
+        let Some(count) = ext.get_tuning_count else {
+            return 0;
+        };
+        unsafe { count(self.host) }
+    }
+
+    fn tuning_info(&self, index: u32) -> Option<TuningInfo> {
+        let ext = self.ext?;
+        let get = ext.get_info?;
+        let mut info = clap_sys::ext::draft::tuning::clap_tuning_info {
+            tuning_id: CLAP_INVALID_ID,
+            name: [0; CLAP_NAME_SIZE],
+            is_dynamic: false,
+        };
+        if unsafe { get(self.host, index, &mut info) } {
+            let name = unsafe { CStr::from_ptr(info.name.as_ptr()) }
+                .to_string_lossy()
+                .into_owned();
+            Some(TuningInfo {
+                id: info.tuning_id,
+                name,
+                is_dynamic: info.is_dynamic,
+            })
+        } else {
+            None
+        }
     }
 }
 

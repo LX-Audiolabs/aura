@@ -43,7 +43,7 @@ pub use preset::{FactoryPreset, FactoryPresetState, apply_factory_preset, load_p
 pub use process::{ProcessContext, ProcessStatus};
 pub use state::{decode_state, encode_state};
 pub use transport::Transport;
-pub use tuning::{Tuning, TuningEvent, TuningProvider};
+pub use tuning::{Tuning, TuningEvent, TuningInfo, TuningProvider};
 
 // MIDI types live in `aura-midi`; re-export for process-path convenience.
 pub use aura_midi::{
