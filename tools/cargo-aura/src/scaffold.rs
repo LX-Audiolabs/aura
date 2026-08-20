@@ -650,11 +650,45 @@ impl PluginLogic for {struct_name} {{
 }
 
 /// Scaffold paths for `cargo aura add` (crate only — no root `aura.toml` / `agal.toml`).
+///
+/// Drops the empty `[workspace]` table from `files()`: `add` registers the crate
+/// as a workspace member of the catalog root, and a nested workspace root makes
+/// Cargo (and agal) refuse the whole tree (`multiple workspace roots`).
 pub fn plugin_crate_files(spec: &ScaffoldSpec) -> Vec<(String, String)> {
     files(spec)
         .into_iter()
         .filter(|(p, _)| p != "aura.toml" && p != "agal.toml")
+        .map(|(p, c)| {
+            if p == "Cargo.toml" {
+                (p, strip_standalone_workspace(&c))
+            } else {
+                (p, c)
+            }
+        })
         .collect()
+}
+
+fn strip_standalone_workspace(cargo: &str) -> String {
+    const COMMENT: &str = "# Standalone package (not a member of the AURA framework workspace).";
+    let mut out = String::new();
+    let mut prev_blank = false;
+    for line in cargo.lines() {
+        let t = line.trim();
+        if t == "[workspace]" || t == COMMENT {
+            continue;
+        }
+        if t.is_empty() {
+            if prev_blank {
+                continue;
+            }
+            prev_blank = true;
+        } else {
+            prev_blank = false;
+        }
+        out.push_str(line);
+        out.push('\n');
+    }
+    out
 }
 
 // ---------------------------------------------------------------------------
@@ -786,6 +820,156 @@ category = "{category}"
 pub fn aura_toml_has_bundle(text: &str, bundle_id: &str) -> bool {
     let needle = format!("bundle_id = \"{bundle_id}\"");
     text.lines().any(|l| l.trim() == needle)
+}
+
+/// Insert `path` into `[workspace] members` of a root `Cargo.toml`.
+///
+/// Line-scan only (no toml crate). Preserves original line endings.
+/// Creates `[workspace]` / `members` when missing. Idempotent if `path` is listed.
+pub fn insert_workspace_member(text: &str, path: &str) -> Result<String, String> {
+    if path.is_empty() {
+        return Err("empty workspace member path".into());
+    }
+    let quoted = format!("\"{path}\"");
+    let nl = if text.contains("\r\n") { "\r\n" } else { "\n" };
+    let newline_at_end = text.ends_with('\n');
+    let mut lines: Vec<String> = text.lines().map(str::to_string).collect();
+
+    let Some(ws_idx) = lines.iter().position(|l| l.trim() == "[workspace]") else {
+        let mut out = format!("[workspace]{nl}members = [{nl}    {quoted},{nl}]{nl}");
+        if !text.is_empty() {
+            out.push_str(nl);
+            out.push_str(text);
+            if !newline_at_end && out.ends_with('\n') {
+                out.pop();
+                if out.ends_with('\r') {
+                    out.pop();
+                }
+            }
+        }
+        return Ok(out);
+    };
+
+    let table_end = lines[ws_idx + 1..]
+        .iter()
+        .position(|l| {
+            let t = l.trim();
+            t.starts_with('[')
+        })
+        .map_or(lines.len(), |p| ws_idx + 1 + p);
+
+    let members_idx = lines[ws_idx + 1..table_end].iter().position(|l| {
+        toml_code(l)
+            .trim()
+            .strip_prefix("members")
+            .is_some_and(|rest| rest.trim_start().starts_with('='))
+    });
+
+    let Some(members_idx) = members_idx.map(|p| ws_idx + 1 + p) else {
+        lines.insert(ws_idx + 1, "members = [".to_string());
+        lines.insert(ws_idx + 2, format!("    {quoted},"));
+        lines.insert(ws_idx + 3, "]".to_string());
+        return Ok(join_toml_lines(&lines, nl, newline_at_end));
+    };
+
+    if members_array_contains(&lines, members_idx, table_end, path) {
+        return Ok(text.to_string());
+    }
+
+    let trimmed = toml_code(&lines[members_idx]).trim().to_string();
+    if trimmed.contains(']') {
+        lines[members_idx] = insert_into_single_line_array(&lines[members_idx], &quoted)?;
+        return Ok(join_toml_lines(&lines, nl, newline_at_end));
+    }
+
+    let close_idx = lines[members_idx + 1..table_end]
+        .iter()
+        .position(|l| {
+            let t = toml_code(l).trim();
+            t == "]" || t.starts_with(']')
+        })
+        .map(|p| members_idx + 1 + p)
+        .ok_or_else(|| "Cargo.toml: [workspace] members array has no closing ]".to_string())?;
+
+    let indent = lines[members_idx + 1..close_idx]
+        .iter()
+        .rev()
+        .find(|l| l.contains('"'))
+        .map_or_else(|| "    ".to_string(), |l| leading_ws(l));
+
+    if let Some(prev) = (members_idx + 1..close_idx)
+        .rev()
+        .find(|&i| lines[i].contains('"'))
+    {
+        let code = toml_code(&lines[prev]).trim_end();
+        if !code.ends_with(',') {
+            lines[prev] = add_trailing_comma(&lines[prev]);
+        }
+    }
+
+    lines.insert(close_idx, format!("{indent}{quoted},"));
+    Ok(join_toml_lines(&lines, nl, newline_at_end))
+}
+
+fn toml_code(line: &str) -> &str {
+    line.split('#').next().unwrap_or(line)
+}
+
+fn leading_ws(line: &str) -> String {
+    line.chars()
+        .take_while(|c| *c == ' ' || *c == '\t')
+        .collect()
+}
+
+fn add_trailing_comma(line: &str) -> String {
+    match line.find('#') {
+        Some(i) => {
+            let (code, rest) = line.split_at(i);
+            format!("{}, {}", code.trim_end(), rest)
+        }
+        None => format!("{},", line.trim_end()),
+    }
+}
+
+fn join_toml_lines(lines: &[String], nl: &str, newline_at_end: bool) -> String {
+    let mut out = lines.join(nl);
+    if newline_at_end {
+        out.push_str(nl);
+    }
+    out
+}
+
+fn members_array_contains(
+    lines: &[String],
+    members_idx: usize,
+    table_end: usize,
+    path: &str,
+) -> bool {
+    let needle = format!("\"{path}\"");
+    let first = toml_code(&lines[members_idx]);
+    if first.contains(&needle) {
+        return true;
+    }
+    lines[members_idx + 1..table_end]
+        .iter()
+        .take_while(|l| {
+            let t = toml_code(l).trim();
+            t != "]" && !t.starts_with(']')
+        })
+        .any(|l| toml_code(l).contains(&needle))
+}
+
+fn insert_into_single_line_array(line: &str, quoted: &str) -> Result<String, String> {
+    let close = line
+        .rfind(']')
+        .ok_or_else(|| "Cargo.toml: members = [...] has no closing ]".to_string())?;
+    let before = line[..close].trim_end();
+    let after = &line[close..];
+    if before.ends_with('[') {
+        Ok(format!("{before}{quoted}{after}"))
+    } else {
+        Ok(format!("{before}, {quoted}{after}"))
+    }
 }
 
 /// Append a `[[plugin]]` block; ensures a trailing newline before it.
@@ -972,6 +1156,10 @@ mod tests {
         assert!(!paths.contains(&"agal.toml"));
         assert!(paths.contains(&"src/lib.rs"));
         assert!(paths.contains(&"Cargo.toml"));
+        let cargo = file(&out, "Cargo.toml");
+        assert!(!cargo.contains("[workspace]"), "{cargo}");
+        assert!(cargo.contains("name = \"extra\""), "{cargo}");
+        assert!(cargo.contains("[lib]"), "{cargo}");
     }
 
     #[test]
@@ -1037,5 +1225,63 @@ category = "effect"
         assert!(merged.contains("category = \"analyzer\""));
         // Original plugin still present.
         assert!(merged.contains("bundle_id = \"first\""));
+    }
+
+    #[test]
+    fn insert_member_into_catalog_style_list() {
+        let base = "\
+[workspace]\r
+members = [\r
+    \"crates/lx-ui-slint\",\r
+    # AURA cutover: all plugins migrated.\r
+    \"plugins/meridian\",\r
+    \"plugins/aether\",\r
+]\r
+resolver = \"3\"\r
+";
+        let out = insert_workspace_member(base, "plugins/loom").unwrap();
+        assert!(out.contains("\r\n"), "{out:?}");
+        assert!(out.contains("\"plugins/aether\",\r\n    \"plugins/loom\",\r\n]"));
+        // Idempotent.
+        let again = insert_workspace_member(&out, "plugins/loom").unwrap();
+        assert_eq!(out, again);
+    }
+
+    #[test]
+    fn insert_member_into_empty_workspace_table() {
+        let base = "\
+[package]
+name = \"foo\"
+
+[workspace]
+
+[lib]
+crate-type = [\"cdylib\", \"lib\"]
+";
+        let out = insert_workspace_member(base, "plugins/bar").unwrap();
+        assert!(
+            out.contains("members = [\n    \"plugins/bar\",\n]"),
+            "{out}"
+        );
+        assert!(out.contains("[package]"), "{out}");
+        assert!(out.contains("[lib]"), "{out}");
+    }
+
+    #[test]
+    fn insert_member_into_single_line_array() {
+        let base = "[workspace]\nmembers = [\"a\", \"b\"]\n";
+        let out = insert_workspace_member(base, "plugins/c").unwrap();
+        assert_eq!(
+            out,
+            "[workspace]\nmembers = [\"a\", \"b\", \"plugins/c\"]\n"
+        );
+    }
+
+    #[test]
+    fn insert_member_creates_workspace_table() {
+        let base = "[package]\nname = \"foo\"\n";
+        let out = insert_workspace_member(base, "plugins/bar").unwrap();
+        assert!(out.starts_with("[workspace]\nmembers = [\n    \"plugins/bar\",\n]\n"));
+        assert!(out.contains("[package]"), "{out}");
     }
 }

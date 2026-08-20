@@ -67,7 +67,7 @@ impl PluginLogic for MyPlugin {
 ```bash
 cargo aura new <name>          # scaffold plugin with derive(Params) + PluginLogic
 cargo aura init <name>         # init in existing dir
-cargo aura add <dep>           # add aura-* dependency
+cargo aura add <name>          # plugins/<name>/ + aura.toml [[plugin]] + Cargo.toml members
 cargo aura build --clap -plug <name>   # build CLAP bundle
 cargo aura install --clap -plug <name> # build + copy .clap to host dir
 cargo aura doctor              # check toolchain + config

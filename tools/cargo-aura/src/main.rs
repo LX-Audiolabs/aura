@@ -73,10 +73,11 @@ Commands:
                           Same scaffold, into an existing empty directory
                           (default: current dir; name comes from the dir name)
   add <name> [--vst3] [--lv2] [--kind <k>]
-                          Add another plugin under plugins/<name>/ and append
-                          [[plugin]] to the workspace aura.toml (re-open)
+                          Add another plugin under plugins/<name>/, append
+                          [[plugin]] to aura.toml, and add the crate to
+                          [workspace] members in Cargo.toml (re-open)
   add-ui <name>           Scaffold a shared Slint UI crate under crates/<name>/
-                          (minimal theme + barrel; add your own components)
+                          (minimal theme + barrel; add to workspace members)
   build [--clap|--vst3|--lv2] [--release] [-plug <crate> [<crate>...]]
                           cargo build with format feature(s)
                           (-plug builds each selected workspace member in turn)
@@ -394,8 +395,25 @@ fn cmd_init(args: &[String]) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// `cargo aura add <name>` — re-open: scaffold under `plugins/<name>/` and
-/// append `[[plugin]]` to the workspace `aura.toml`.
+/// Read `./Cargo.toml` and return `(path, original, original with member inserted)`.
+fn cargo_toml_with_member(member: &str) -> Result<(PathBuf, String, String), String> {
+    let path = PathBuf::from("Cargo.toml");
+    if !path.is_file() {
+        return Err(
+            "no Cargo.toml in current directory — run `add` / `add-ui` from the workspace root"
+                .into(),
+        );
+    }
+    let original =
+        fs::read_to_string(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
+    let merged = scaffold::insert_workspace_member(&original, member)
+        .map_err(|e| format!("update Cargo.toml members: {e}"))?;
+    Ok((path, original, merged))
+}
+
+/// `cargo aura add <name>` — re-open: scaffold under `plugins/<name>/`,
+/// append `[[plugin]]` to the workspace `aura.toml`, and add the crate to
+/// `[workspace] members` in `Cargo.toml`.
 fn cmd_add(args: &[String]) -> ExitCode {
     let (formats, kind, positional) = match parse_scaffold_args(args) {
         Ok(v) => v,
@@ -450,6 +468,14 @@ fn cmd_add(args: &[String]) -> ExitCode {
     };
 
     let crate_path = format!("plugins/{name}");
+    let (cargo_path, _cargo_text, cargo_merged) = match cargo_toml_with_member(&crate_path) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
     let files = scaffold::plugin_crate_files(&spec);
     if let Err(e) = scaffold::write_files(&dest, &files) {
         eprintln!("error: scaffold failed: {e}");
@@ -457,10 +483,18 @@ fn cmd_add(args: &[String]) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    let block = scaffold::plugin_table_block(&spec.display(), name, kind.category(), &crate_path);
+    // `crate` is the cargo package name (`-p`), not the members path.
+    let block = scaffold::plugin_table_block(&spec.display(), name, kind.category(), name);
     let merged = scaffold::append_plugin_table(&aura_text, &block);
     if let Err(e) = fs::write(&aura_path, merged) {
         eprintln!("error: update {}: {e}", aura_path.display());
+        let _ = fs::remove_dir_all(&dest);
+        return ExitCode::FAILURE;
+    }
+
+    if let Err(e) = fs::write(&cargo_path, cargo_merged) {
+        eprintln!("error: update {}: {e}", cargo_path.display());
+        let _ = fs::write(&aura_path, &aura_text);
         let _ = fs::remove_dir_all(&dest);
         return ExitCode::FAILURE;
     }
@@ -475,11 +509,11 @@ fn cmd_add(args: &[String]) -> ExitCode {
 
     println!("added {}", dest.display());
     println!("  updated aura.toml  (+ [[plugin]] {name})");
+    println!("  updated Cargo.toml (+ members \"{crate_path}\")");
     println!();
     println!("next:");
-    println!("  cd plugins/{name}");
-    println!("  cargo aura build {flags}");
-    println!("  cargo aura install {flags} --release");
+    println!("  cargo aura build {flags} -plug {name}");
+    println!("  cargo aura install {flags} --release -plug {name}");
     ExitCode::SUCCESS
 }
 
@@ -515,6 +549,15 @@ fn cmd_add_ui(args: &[String]) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
+    let member = format!("crates/{name}");
+    let (cargo_path, _cargo_text, cargo_merged) = match cargo_toml_with_member(&member) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
     let aura_root = match aura_root() {
         Ok(r) => strip_verbatim_prefix(&r)
             .to_string_lossy()
@@ -532,15 +575,21 @@ fn cmd_add_ui(args: &[String]) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
+    if let Err(e) = fs::write(&cargo_path, cargo_merged) {
+        eprintln!("error: update {}: {e}", cargo_path.display());
+        let _ = fs::remove_dir_all(&dest);
+        return ExitCode::FAILURE;
+    }
+
     println!("created {}", dest.display());
     println!("  Cargo.toml  build.rs  src/lib.rs  ui/{name}.slint  ui/{name}-theme.slint");
+    println!("  updated Cargo.toml (+ members \"{member}\")");
     println!();
     println!("next:");
-    println!("  1. add \"crates/{name}\" to [workspace] members in ./Cargo.toml");
     println!(
-        "  2. import from plugins: import {{ ... }} from \"../../../crates/{name}/ui/{name}.slint\";"
+        "  1. import from plugins: import {{ ... }} from \"../../../crates/{name}/ui/{name}.slint\";"
     );
-    println!("  3. add your shared components to ui/{name}.slint");
+    println!("  2. add your shared components to ui/{name}.slint");
     ExitCode::SUCCESS
 }
 
