@@ -8,11 +8,11 @@ use aura_core::{PluginLogic, TuningEvent, TuningInfo, TuningProvider};
 use clap_sys::ext::draft::tuning::{
     CLAP_EXT_TUNING, clap_event_tuning, clap_host_tuning, clap_plugin_tuning_t,
 };
-use clap_sys::string_sizes::CLAP_NAME_SIZE;
 use clap_sys::ext::event_registry::{CLAP_EXT_EVENT_REGISTRY, clap_host_event_registry};
 use clap_sys::host::clap_host;
 use clap_sys::id::CLAP_INVALID_ID;
 use clap_sys::plugin::clap_plugin;
+use clap_sys::string_sizes::CLAP_NAME_SIZE;
 
 use crate::Instance;
 
