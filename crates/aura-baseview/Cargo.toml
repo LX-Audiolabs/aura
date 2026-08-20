@@ -10,8 +10,7 @@ authors.workspace = true
 publish = false
 
 [dependencies]
-# version repeated so Dependabot cargo sees this dep (workspace-only lock patches get skipped).
-baseview = { workspace = true, version = "=0.3.0" }
+baseview = { workspace = true }
 slint = { workspace = true }
 raw-window-handle = { workspace = true }
 
