@@ -12,6 +12,7 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 ### Added
 
 - CLAP `clap.tuning/2` (draft) / MTS-ESP host tuning support. Plugins opt in with `PluginInfo.supports_tuning` and query `ProcessContext.tuning.relative_offset(...)` / `should_play(...)` per note. Tuning selection events split the block sample-accurately; `PluginLogic::tuning_changed` is called when the host tuning pool changes.
+- `TuningProvider::tuning_count` / `tuning_info` and corresponding `Tuning` accessors expose host tuning metadata (`clap.tuning/2` `get_tuning_count` / `get_info`).
 
 ### Changed
 
