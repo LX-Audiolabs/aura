@@ -204,8 +204,7 @@ fn save_png(
         .iter()
         .flat_map(|p| [p.r, p.g, p.b, p.a])
         .collect();
-    let img = image::RgbaImage::from_raw(width, height, rgba)
-        .ok_or("invalid image dimensions")?;
+    let img = image::RgbaImage::from_raw(width, height, rgba).ok_or("invalid image dimensions")?;
     img.save(path)?;
     Ok(())
 }
