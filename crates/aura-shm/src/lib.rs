@@ -100,7 +100,10 @@ pub const EQ_BANDS: usize = 5;
 // ----------------------------------------------------------------------------
 
 const fn magic_from_suffix(suffix: &[u8]) -> u32 {
-    assert!(suffix.len() == 4, "MAGIC_SUFFIX must be exactly four ASCII bytes");
+    assert!(
+        suffix.len() == 4,
+        "MAGIC_SUFFIX must be exactly four ASCII bytes"
+    );
     ((suffix[0] as u32) << 24)
         | ((suffix[1] as u32) << 16)
         | ((suffix[2] as u32) << 8)
@@ -200,15 +203,33 @@ unsafe impl Slot for SpectrumSlot {
     const MAGIC_SUFFIX: &str = "LXRD";
     const VERSION: u32 = 7;
 
-    fn seq(&self) -> &AtomicU32 { &self.seq }
-    fn claimed(&self) -> &AtomicU32 { &self.claimed }
-    fn generation(&self) -> &AtomicU32 { &self.generation }
-    fn heartbeat_ms(&self) -> &AtomicU64 { &self.heartbeat_ms }
-    fn active(&self) -> &AtomicU32 { &self.active }
-    fn name_len(&self) -> &UnsafeCell<u32> { &self.name_len }
-    fn name(&self) -> &UnsafeCell<[u8; MAX_NAME_LEN]> { &self.name }
-    fn target_len(&self) -> &UnsafeCell<u32> { &self.target_len }
-    fn target(&self) -> &UnsafeCell<[u8; MAX_NAME_LEN]> { &self.target }
+    fn seq(&self) -> &AtomicU32 {
+        &self.seq
+    }
+    fn claimed(&self) -> &AtomicU32 {
+        &self.claimed
+    }
+    fn generation(&self) -> &AtomicU32 {
+        &self.generation
+    }
+    fn heartbeat_ms(&self) -> &AtomicU64 {
+        &self.heartbeat_ms
+    }
+    fn active(&self) -> &AtomicU32 {
+        &self.active
+    }
+    fn name_len(&self) -> &UnsafeCell<u32> {
+        &self.name_len
+    }
+    fn name(&self) -> &UnsafeCell<[u8; MAX_NAME_LEN]> {
+        &self.name
+    }
+    fn target_len(&self) -> &UnsafeCell<u32> {
+        &self.target_len
+    }
+    fn target(&self) -> &UnsafeCell<[u8; MAX_NAME_LEN]> {
+        &self.target
+    }
 }
 
 /// One CV publisher's data. `#[repr(C)]` so the byte layout is identical across DLLs.
@@ -245,15 +266,33 @@ unsafe impl Slot for CvSlot {
     const MAGIC_SUFFIX: &str = "CVRD";
     const VERSION: u32 = 1;
 
-    fn seq(&self) -> &AtomicU32 { &self.seq }
-    fn claimed(&self) -> &AtomicU32 { &self.claimed }
-    fn generation(&self) -> &AtomicU32 { &self.generation }
-    fn heartbeat_ms(&self) -> &AtomicU64 { &self.heartbeat_ms }
-    fn active(&self) -> &AtomicU32 { &self.active }
-    fn name_len(&self) -> &UnsafeCell<u32> { &self.name_len }
-    fn name(&self) -> &UnsafeCell<[u8; MAX_NAME_LEN]> { &self.name }
-    fn target_len(&self) -> &UnsafeCell<u32> { &self.target_len }
-    fn target(&self) -> &UnsafeCell<[u8; MAX_NAME_LEN]> { &self.target }
+    fn seq(&self) -> &AtomicU32 {
+        &self.seq
+    }
+    fn claimed(&self) -> &AtomicU32 {
+        &self.claimed
+    }
+    fn generation(&self) -> &AtomicU32 {
+        &self.generation
+    }
+    fn heartbeat_ms(&self) -> &AtomicU64 {
+        &self.heartbeat_ms
+    }
+    fn active(&self) -> &AtomicU32 {
+        &self.active
+    }
+    fn name_len(&self) -> &UnsafeCell<u32> {
+        &self.name_len
+    }
+    fn name(&self) -> &UnsafeCell<[u8; MAX_NAME_LEN]> {
+        &self.name
+    }
+    fn target_len(&self) -> &UnsafeCell<u32> {
+        &self.target_len
+    }
+    fn target(&self) -> &UnsafeCell<[u8; MAX_NAME_LEN]> {
+        &self.target
+    }
 }
 
 /// One consumer instance advertising its name so publishers can target it.
@@ -1607,7 +1646,9 @@ mod cv_tests {
 
         let active = hub.read_active_cv("cv-consumer", now);
         assert!(
-            active.iter().any(|(s, n, v)| *s == slot && n == "cv-pub" && *v == values),
+            active
+                .iter()
+                .any(|(s, n, v)| *s == slot && n == "cv-pub" && *v == values),
             "read_active_cv missed publisher: {active:?}"
         );
 
@@ -1646,10 +1687,7 @@ mod cv_tests {
         hub.release_slot(slot);
         let (slot2, gen2) = hub.claim_slot(now).expect("reclaim cv slot");
 
-        assert_eq!(
-            slot, slot2,
-            "reclaim should return the same freed slot"
-        );
+        assert_eq!(slot, slot2, "reclaim should return the same freed slot");
         assert!(
             gen2 > gen1,
             "generation must bump after stale reclaim: {gen1} -> {gen2}"
