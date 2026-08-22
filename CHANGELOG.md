@@ -7,6 +7,12 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-08-22
+
+### Added
+
+- `aura-shm` CV channel: second OS segment `lxaudiolabs_cv_v1` (`CvHub` / `CvSlot`), generic `Hub<S>` shared with relay. Payload is 9 floats (`CV_LOCK`…`CV_RAND`: lock, gate, pitch, bus_a/b, eoc, env, lfo, rand). Analyse relay stays on `lxaudiolabs_lucent_relay_v7`.
+
 ## [0.8.0] - 2026-08-20
 
 ### Added

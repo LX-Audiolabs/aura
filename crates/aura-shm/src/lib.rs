@@ -23,6 +23,7 @@
 //! ([`RelayHub`] = `Hub<SpectrumSlot>`) and the CV channel
 //! ([`CvHub`] = `Hub<CvSlot>`). Each channel lives in its own OS segment so
 //! CV publishers never appear in the relay channel and vice versa.
+//! CV payload is nine named floats (`CV_LOCK`…`CV_RAND`); never audio-rate.
 //!
 //! ## Concurrency model
 //!
@@ -60,7 +61,28 @@ use shared_memory::{Shmem, ShmemConf};
 /// Number of spectrum bins per payload frame.
 pub const SPECTRUM_BINS: usize = 1024;
 /// Number of CV channels per payload frame.
-pub const CV_CHANNELS: usize = 8;
+///
+/// Layout (block/step rate, never audio-rate):
+/// `lock`, `gate`, `pitch`, `bus_a`, `bus_b`, `eoc`, `env`, `lfo`, `rand`.
+pub const CV_CHANNELS: usize = 9;
+/// CV index: register freeze amount (0…1).
+pub const CV_LOCK: usize = 0;
+/// CV index: pulse/level gate (not MIDI gate).
+pub const CV_GATE: usize = 1;
+/// CV index: 1V/oct-style or MIDI-float pitch for FX/glide.
+pub const CV_PITCH: usize = 2;
+/// CV index: cross-track layer bus A.
+pub const CV_BUS_A: usize = 3;
+/// CV index: cross-track layer bus B.
+pub const CV_BUS_B: usize = 4;
+/// CV index: end-of-cycle trigger (e.g. Nimbus freeze).
+pub const CV_EOC: usize = 5;
+/// CV index: envelope follower / Trace env.
+pub const CV_ENV: usize = 6;
+/// CV index: LFO.
+pub const CV_LFO: usize = 7;
+/// CV index: random / S&H.
+pub const CV_RAND: usize = 8;
 /// Maximum number of publisher slots.
 pub const MAX_SLOTS: usize = 16;
 /// Maximum number of consumer instances advertising a name.
@@ -190,6 +212,9 @@ unsafe impl Slot for SpectrumSlot {
 }
 
 /// One CV publisher's data. `#[repr(C)]` so the byte layout is identical across DLLs.
+///
+/// Admin field order matches [`SpectrumSlot`] (see [`Slot`] safety contract).
+/// Payload is [`CV_CHANNELS`] floats — see `CV_LOCK`…`CV_RAND`.
 #[repr(C)]
 pub struct CvSlot {
     /// Seqlock counter: even = stable, odd = write in progress.
@@ -200,10 +225,10 @@ pub struct CvSlot {
     generation: AtomicU32,
     /// Wall-clock millis of the last write (liveness).
     heartbeat_ms: AtomicU64,
-    /// Set to 1 atomically *after* the payload is fully written.
-    active: AtomicU32,
     /// Payload (seqlock-protected, accessed via raw pointers):
     name_len: UnsafeCell<u32>,
+    /// Set to 1 atomically *after* the payload is fully written.
+    active: AtomicU32,
     name: UnsafeCell<[u8; MAX_NAME_LEN]>,
     /// Target consumer instance name; empty = broadcast.
     target_len: UnsafeCell<u32>,
@@ -254,6 +279,8 @@ struct HubShared<S: Slot> {
 
 // Compile-time layout guarantees so the segment is byte-compatible everywhere.
 const _: () = {
+    assert!(CV_CHANNELS == 9);
+    assert!(CV_RAND == CV_CHANNELS - 1);
     assert!(core::mem::align_of::<SpectrumSlot>() == 8);
     assert!(core::mem::align_of::<ConsumerSlot>() == 8);
     assert!(core::mem::align_of::<CvSlot>() == 8);
@@ -1559,7 +1586,16 @@ mod cv_tests {
         release_all_cv_slots(hub);
 
         let (slot, generation) = hub.claim_slot(now).expect("claim cv slot");
-        let values: [f32; CV_CHANNELS] = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7];
+        let mut values = [0.0f32; CV_CHANNELS];
+        values[CV_LOCK] = 0.0;
+        values[CV_GATE] = 0.1;
+        values[CV_PITCH] = 0.2;
+        values[CV_BUS_A] = 0.3;
+        values[CV_BUS_B] = 0.4;
+        values[CV_EOC] = 0.5;
+        values[CV_ENV] = 0.6;
+        values[CV_LFO] = 0.7;
+        values[CV_RAND] = 0.8;
         assert!(
             hub.write_cv(slot, generation, "cv-pub", "cv-consumer", &values, now),
             "write_cv failed"
