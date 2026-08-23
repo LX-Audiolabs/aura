@@ -7,6 +7,14 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-08-23
+
+### Fixed
+
+- HiDPI editor scaling on hosts that never call `set_scale` (Bitwig on Win32): content scale stayed at `1.0` while the OS gave the per-monitor child a HiDPI backbuffer, so the FemtoVG viewport under-filled it — the UI rendered into a corner with grey margins. The editor now adopts the real OS DPI reported by baseview on open (host-silent path only), folded with UI zoom. Layout stays fixed at design logical size (uniform Slint scale, no reflow); no-op at 100% and when the host does drive scale.
+- VST3: implement `IPlugViewContentScaleSupport` and apply host content scale in `getSize` / `onSize` / `checkSizeConstraint` (Win/Linux; macOS identity).
+- Pedantic clippy warnings in `aura-shm` (CV publisher reads) and `aura-preview`.
+
 ## [0.9.2] - 2026-08-23
 
 ### Changed
