@@ -1137,6 +1137,10 @@ impl RelayHub {
     }
 
     /// Diagnostic dump of all publisher slots.
+    ///
+    /// # Panics
+    /// Never in practice — the internal integer conversions use compile-time
+    /// constants (`MAX_SLOTS`, `STALE_MS`) that always fit their target types.
     #[must_use]
     pub fn diagnose_publishers(
         &self,
@@ -1405,6 +1409,9 @@ impl CvHub {
     /// Returns `(slot_index, publisher_name, target_name, values)` for every
     /// live publisher whose target is empty (broadcast) or matches `my_name`.
     /// The returned `target_name` is empty for broadcasts.
+    ///
+    /// # Panics
+    /// Never in practice — `idx < MAX_SLOTS` (16) always fits `u8`.
     #[must_use]
     pub fn read_active_cv_with_target(
         &self,
@@ -1471,6 +1478,9 @@ impl CvHub {
     }
 
     /// Find a CV publisher by name and read its values.
+    ///
+    /// # Panics
+    /// Never in practice — `idx < MAX_SLOTS` (16) always fits `u8`.
     #[must_use]
     pub fn find_cv(&self, name: &str, now_ms: u64) -> Option<(u8, [f32; CV_CHANNELS])> {
         for idx in 0..MAX_SLOTS {
@@ -1630,11 +1640,13 @@ mod cv_tests {
     static CV_TEST_LOCK: Mutex<()> = Mutex::new(());
 
     fn release_all_cv_slots(hub: &CvHub) {
-        for i in 0..MAX_SLOTS as u8 {
+        for i in 0..u8::try_from(MAX_SLOTS).expect("MAX_SLOTS <= u8::MAX") {
             hub.release_slot(i);
         }
     }
 
+    // Exact f32 compares: values round-trip byte-identical through the shm ring.
+    #[allow(clippy::float_cmp)]
     #[test]
     fn cv_roundtrip() {
         let _guard = CV_TEST_LOCK.lock().unwrap();

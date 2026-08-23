@@ -168,15 +168,14 @@ impl Preview {
                 let dir = self
                     .entry
                     .parent()
-                    .map(std::path::PathBuf::from)
-                    .unwrap_or_else(std::env::temp_dir);
+                    .map_or_else(std::env::temp_dir, std::path::PathBuf::from);
                 let timestamp = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
                     .as_secs();
                 let filename = format!("aura-preview-{timestamp}.png");
                 let path = dir.join(filename);
-                match save_png(&path, buffer) {
+                match save_png(&path, &buffer) {
                     Ok(()) => self.set_status(&format!("saved {}", path.display()), true),
                     Err(e) => self.set_status(&format!("save failed: {e}"), false),
                 }
@@ -195,7 +194,7 @@ impl Preview {
 
 fn save_png(
     path: &std::path::Path,
-    buffer: slint_interpreter::SharedPixelBuffer<slint_interpreter::Rgba8Pixel>,
+    buffer: &slint_interpreter::SharedPixelBuffer<slint_interpreter::Rgba8Pixel>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let width = buffer.width();
     let height = buffer.height();
