@@ -1393,6 +1393,24 @@ impl CvHub {
         my_name: &str,
         now_ms: u64,
     ) -> Vec<(u8, String, [f32; CV_CHANNELS])> {
+        self.read_active_cv_with_target(my_name, now_ms)
+            .into_iter()
+            .map(|(slot, name, _target, values)| (slot, name, values))
+            .collect()
+    }
+
+    /// Read CV values from all live publishers targeting this consumer,
+    /// including each publisher's `target` name.
+    ///
+    /// Returns `(slot_index, publisher_name, target_name, values)` for every
+    /// live publisher whose target is empty (broadcast) or matches `my_name`.
+    /// The returned `target_name` is empty for broadcasts.
+    #[must_use]
+    pub fn read_active_cv_with_target(
+        &self,
+        my_name: &str,
+        now_ms: u64,
+    ) -> Vec<(u8, String, String, [f32; CV_CHANNELS])> {
         let mut out = Vec::new();
         for idx in 0..MAX_SLOTS {
             let s = unsafe { &(*self.shared).slots[idx] };
@@ -1443,7 +1461,7 @@ impl CvHub {
                     if target.is_empty() || target == my_name {
                         let name = String::from_utf8_lossy(&name_buf[..name_len]);
                         let slot = u8::try_from(idx).expect("idx < MAX_SLOTS <= u8::MAX");
-                        out.push((slot, name.into_owned(), values));
+                        out.push((slot, name.into_owned(), target.to_string(), values));
                     }
                     break;
                 }
