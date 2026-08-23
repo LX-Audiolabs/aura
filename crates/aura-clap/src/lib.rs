@@ -2024,6 +2024,15 @@ impl EditorBridge for ClapBridge {
         let (pw, ph) = gui_logical_to_host_px(w, h, self.host_scale());
         unsafe { rr(self.host, pw, ph) }
     }
+
+    fn set_scale_hint(&self, scale: f64) {
+        // Writes the same cell `gui_get_size` / `request_resize` read, so a
+        // Windows host that never called `gui.set_scale` (Bitwig) still gets a
+        // frame size = logical × real OS DPI, matching the rendered child.
+        if scale.is_finite() && scale > 0.0 {
+            self.host_scale.store(scale.to_bits(), Ordering::Relaxed);
+        }
+    }
 }
 
 /// Logical editor size → host GUI pixels (Win/Linux × `host_scale`; macOS identity).

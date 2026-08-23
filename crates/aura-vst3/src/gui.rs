@@ -4,6 +4,7 @@
 //! `Editor::open` (baseview/Slint) → `removed` → `Editor::close`.
 
 use std::ffi::{CStr, c_void};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use aura_core::editor::{Editor, EditorBridge, PluginContext, RawWindowHandle};
@@ -16,7 +17,8 @@ use vst3::Steinberg::kPlatformTypeNSView;
 #[cfg(target_os = "linux")]
 use vst3::Steinberg::kPlatformTypeX11EmbedWindowID;
 use vst3::Steinberg::{
-    FIDString, IPlugFrame, IPlugView, IPlugViewTrait, TBool, ViewRect, char16, int16, int32,
+    FIDString, IPlugFrame, IPlugView, IPlugViewContentScaleSupport,
+    IPlugViewContentScaleSupportTrait, IPlugViewTrait, TBool, ViewRect, char16, int16, int32,
     kInvalidArgument, kResultFalse, kResultOk, tresult,
 };
 use vst3::{Class, ComRef, ComWrapper};
@@ -34,6 +36,11 @@ pub(crate) struct GuiState {
     pub handler: Mutex<Option<*mut IComponentHandler>>,
     /// Host frame for resize (optional; raw; host-owned).
     pub frame: Mutex<Option<*mut IPlugFrame>>,
+    /// Host content scale — `setContentScaleFactor`, or the OS-DPI hint the
+    /// editor adopts on Windows when the host never calls it (Bitwig). Bits of
+    /// an `f64`, default 1.0. `getSize`/`onSize` use it: physical = logical ×
+    /// scale (Win/Linux), matching the rendered child.
+    pub host_scale: AtomicU64,
 }
 
 // SAFETY: host serializes GUI-thread access; raw pointers are only used there.
@@ -48,7 +55,18 @@ impl GuiState {
             sample_rate: Mutex::new(44_100.0),
             handler: Mutex::new(None),
             frame: Mutex::new(None),
+            host_scale: AtomicU64::new(1.0f64.to_bits()),
         })
+    }
+
+    fn host_scale(&self) -> f64 {
+        f64::from_bits(self.host_scale.load(Ordering::Relaxed))
+    }
+
+    fn set_host_scale(&self, scale: f64) {
+        if scale.is_finite() && scale > 0.0 {
+            self.host_scale.store(scale.to_bits(), Ordering::Relaxed);
+        }
     }
 
     fn lock_editor(&self) -> std::sync::MutexGuard<'_, Option<Box<dyn Editor>>> {
@@ -132,6 +150,51 @@ impl EditorBridge for Vst3Bridge {
         // if a host requires dynamic resize from the plugin side.
         false
     }
+
+    fn set_scale_hint(&self, scale: f64) {
+        // Feeds `getSize` so a Windows host that never called
+        // `setContentScaleFactor` still gets frame = logical × real OS DPI.
+        self.gui.set_host_scale(scale);
+    }
+}
+
+/// Logical editor size → host view pixels (Win/Linux × scale; macOS identity).
+///
+/// macOS `IPlugView` sizes are in points; the backing scale is applied by the
+/// window server, so report logical there (mirrors the CLAP wrapper).
+fn vst3_logical_to_host_px(lw: u32, lh: u32, scale: f64) -> (u32, u32) {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = scale;
+        (lw.max(1), lh.max(1))
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        if !scale.is_finite() || scale <= 0.0 || (scale - 1.0).abs() < f64::EPSILON {
+            return (lw.max(1), lh.max(1));
+        }
+        let pw = (f64::from(lw.max(1)) * scale).round().max(1.0) as u32;
+        let ph = (f64::from(lh.max(1)) * scale).round().max(1.0) as u32;
+        (pw, ph)
+    }
+}
+
+/// Host view pixels → logical editor size (inverse of the above).
+fn vst3_host_px_to_logical(pw: u32, ph: u32, scale: f64) -> (u32, u32) {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = scale;
+        (pw.max(1), ph.max(1))
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        if !scale.is_finite() || scale <= 0.0 || (scale - 1.0).abs() < f64::EPSILON {
+            return (pw.max(1), ph.max(1));
+        }
+        let lw = (f64::from(pw.max(1)) / scale).round().max(1.0) as u32;
+        let lh = (f64::from(ph.max(1)) / scale).round().max(1.0) as u32;
+        (lw, lh)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -153,7 +216,7 @@ impl PlugView {
 }
 
 impl Class for PlugView {
-    type Interfaces = (IPlugView,);
+    type Interfaces = (IPlugView, IPlugViewContentScaleSupport);
 }
 
 fn platform_type_bytes(ptr: FIDString) -> Option<&'static [u8]> {
@@ -274,13 +337,16 @@ impl IPlugViewTrait for PlugView {
             .lock_editor()
             .as_ref()
             .map_or((320, 200), |e| e.size());
+        // Editor size is logical; VST3 hosts on Win/Linux size the view in
+        // physical pixels = logical × content scale (macOS stays logical).
+        let (pw, ph) = vst3_logical_to_host_px(w, h, self.gui.host_scale());
         // SAFETY: non-null host out-struct.
         unsafe {
             *size = ViewRect {
                 left: 0,
                 top: 0,
-                right: w as int32,
-                bottom: h as int32,
+                right: pw as int32,
+                bottom: ph as int32,
             };
         }
         kResultOk
@@ -292,8 +358,10 @@ impl IPlugViewTrait for PlugView {
         }
         // SAFETY: non-null host struct for this call.
         let rect = unsafe { &*newSize };
-        let w = (rect.right - rect.left).max(1) as u32;
-        let h = (rect.bottom - rect.top).max(1) as u32;
+        let pw = (rect.right - rect.left).max(1) as u32;
+        let ph = (rect.bottom - rect.top).max(1) as u32;
+        // Host passes physical pixels; Editor::set_size is logical.
+        let (w, h) = vst3_host_px_to_logical(pw, ph, self.gui.host_scale());
         let mut slot = self.gui.lock_editor();
         let Some(editor) = slot.as_mut() else {
             return kResultFalse;
@@ -338,14 +406,35 @@ impl IPlugViewTrait for PlugView {
         };
         let (min_w, min_h) = editor.min_size();
         let (max_w, max_h) = editor.max_size();
+        let scale = self.gui.host_scale();
         // SAFETY: non-null host in/out rect.
         let r = unsafe { &mut *rect };
-        let mut w = (r.right - r.left).max(1) as u32;
-        let mut h = (r.bottom - r.top).max(1) as u32;
+        // Host rect is physical; clamp in logical space then convert back.
+        let pw = (r.right - r.left).max(1) as u32;
+        let ph = (r.bottom - r.top).max(1) as u32;
+        let (mut w, mut h) = vst3_host_px_to_logical(pw, ph, scale);
         w = w.clamp(min_w.max(1), max_w);
         h = h.clamp(min_h.max(1), max_h);
-        r.right = r.left + w as int32;
-        r.bottom = r.top + h as int32;
+        let (pw, ph) = vst3_logical_to_host_px(w, h, scale);
+        r.right = r.left + pw as int32;
+        r.bottom = r.top + ph as int32;
+        kResultOk
+    }
+}
+
+impl IPlugViewContentScaleSupportTrait for PlugView {
+    unsafe fn setContentScaleFactor(&self, factor: f32) -> tresult {
+        let scale = f64::from(factor);
+        if !scale.is_finite() || scale <= 0.0 {
+            return kResultFalse;
+        }
+        // Store for getSize/onSize and drive the editor's render scale. This
+        // also flags host-driven scale so the editor's Windows OS-DPI fallback
+        // stands down (no double scaling).
+        self.gui.set_host_scale(scale);
+        if let Some(editor) = self.gui.lock_editor().as_mut() {
+            editor.set_scale(scale);
+        }
         kResultOk
     }
 }

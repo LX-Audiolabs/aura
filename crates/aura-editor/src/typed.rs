@@ -5,7 +5,7 @@
 
 use std::ops::Deref;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use aura_baseview::SlintParentedWindow;
 use aura_baseview::slint_window::SlintWindow;
@@ -157,6 +157,9 @@ where
     ui_zoom: UiZoom,
     pending_size: Arc<AtomicU64>,
     native_handle: Option<RawWindowHandle>,
+    /// True once the host called `set_scale`. When it never does (Bitwig on
+    /// Win32), the editor adopts the real OS DPI itself on open.
+    host_scale_provided: Arc<AtomicBool>,
 }
 
 // SAFETY: baseview Window is GUI-thread only (host contract).
@@ -201,6 +204,7 @@ where
             ui_zoom,
             pending_size: Arc::new(AtomicU64::new(0)),
             native_handle: None,
+            host_scale_provided: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -307,6 +311,29 @@ where
                 let _ = w.resize(baseview::dpi::Size::Physical(
                     baseview::dpi::PhysicalSize::new(phys_w, phys_h),
                 ));
+
+                // Windows: hosts that never call `set_scale` (Bitwig on Win32)
+                // leave content scale at 1.0 while the OS gives the per-monitor
+                // child a HiDPI backbuffer — the FemtoVG viewport (logical ×
+                // content_scale) then under-fills it, so the UI renders into a
+                // corner with grey margins. baseview already knows the real DPI
+                // of the parented child, so adopt it: render scale becomes
+                // `os_dpi × ui_zoom`, and the hint feeds `get_size` so the host
+                // frame matches. Layout stays fixed (design logical) — Slint
+                // scales uniformly, nothing reflows. No-op at 100% (os == 1.0)
+                // and skipped when the host does drive scale.
+                #[cfg(target_os = "windows")]
+                if !self.host_scale_provided.load(Ordering::Relaxed) {
+                    let os_dpi = w.size().scale_factor;
+                    if os_dpi.is_finite() && os_dpi > 1.0 {
+                        self.ui_zoom.set_host_scale(os_dpi);
+                        if let Some(b) = &context.bridge {
+                            b.set_scale_hint(os_dpi);
+                            let _ = b.request_resize(zw, zh);
+                        }
+                    }
+                }
+
                 self.native_handle = map_baseview_handle(w.raw_handle());
                 self.window = Some(w);
             }
@@ -356,6 +383,8 @@ where
 
     fn set_scale(&mut self, factor: f64) {
         if factor.is_finite() && factor > 0.0 {
+            // Host drives scale — mark it so open() doesn't also adopt OS DPI.
+            self.host_scale_provided.store(true, Ordering::Relaxed);
             self.ui_zoom.set_host_scale(factor);
         }
     }

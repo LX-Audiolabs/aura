@@ -160,3 +160,27 @@ fn save_percent(percent: u32) {
         let _ = std::fs::write(path, percent.to_string());
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::UiZoom;
+
+    /// Effective content scale must be `os_dpi × ui_zoom` so the rendered
+    /// child and the host-reported frame (`design × zoom × os_dpi`) match.
+    /// This is the Windows-DPI adopt path (Bitwig never calls `set_scale`).
+    #[test]
+    fn host_scale_composes_with_zoom() {
+        let z = UiZoom::with_percent(940, 500, 100);
+        assert!((z.scale().get() - 1.0).abs() < 1e-9);
+        z.set_host_scale(1.5); // OS DPI adopted on open
+        assert!((z.scale().get() - 1.5).abs() < 1e-9);
+
+        let z = UiZoom::with_percent(940, 500, 125);
+        assert!((z.scale().get() - 1.25).abs() < 1e-9);
+        z.set_host_scale(1.5);
+        // 1.5 OS × 1.25 zoom
+        assert!((z.scale().get() - 1.875).abs() < 1e-9);
+        // Host frame stays design × zoom (OS DPI applied by wrapper get_size).
+        assert_eq!(z.zoomed_size(), (1175, 625));
+    }
+}

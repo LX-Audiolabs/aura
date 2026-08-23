@@ -30,6 +30,17 @@ pub trait EditorBridge: Send + Sync {
         let _ = (w, h);
         false
     }
+
+    /// Content-scale hint the editor discovered itself — e.g. the real OS DPI
+    /// on Windows when the host never called the format's `set_scale` (Bitwig
+    /// on Win32 sizes the embed frame from OS DPI, not `clap gui.set_scale`).
+    ///
+    /// Wrappers store it in the same cell `get_size` reads, so the reported
+    /// host frame becomes `logical × hint` and matches the rendered child.
+    /// Default: no-op (host owns the scale).
+    fn set_scale_hint(&self, scale: f64) {
+        let _ = scale;
+    }
 }
 
 /// Context passed to [`Editor::open`].
