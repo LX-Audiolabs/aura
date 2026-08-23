@@ -7,6 +7,13 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ## [Unreleased]
 
+## [0.9.4] - 2026-08-23
+
+### Fixed
+
+- `aura-shm` `open_or_create`: retry `open()` briefly when losing the segment `create()` race instead of caching a transient `None` in the hub's `OnceLock` for the whole process. Under parallel `cargo test --workspace` this made `relay_hub()` return `None` → `cv_hub_isolation` panicked → poisoned `CV_TEST_LOCK` → `PoisonError` cascade into the other CV tests. Also hardens real parallel plugin instances opening the hub concurrently.
+- CV tests lock `CV_TEST_LOCK` with `unwrap_or_else(PoisonError::into_inner)` so a single failure no longer poison-cascades into the others.
+
 ## [0.9.3] - 2026-08-23
 
 ### Fixed
