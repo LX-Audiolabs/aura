@@ -200,8 +200,9 @@ name = "{name}"
     let gitignore = "/target\n*.clap\n*.vst3\n*.lv2\n.DS_Store\n".to_string();
 
     let main_slint = match spec.kind {
-        Kind::Effect | Kind::EffectMono | Kind::Instrument => effect_main_slint(&display),
+        Kind::Effect | Kind::EffectMono => effect_main_slint(&display),
         Kind::Analyzer => analyzer_main_slint(&display),
+        Kind::Instrument => instrument_main_slint(&display),
     };
 
     let mut exports = format!("#[cfg(feature = \"clap\")]\naura::export!({struct_name});");
@@ -213,7 +214,7 @@ name = "{name}"
     }
 
     let lib_rs = match spec.kind {
-        Kind::Effect | Kind::EffectMono | Kind::Instrument => effect_lib_rs(
+        Kind::Effect | Kind::EffectMono => effect_lib_rs(
             &display,
             name,
             &struct_name,
@@ -224,6 +225,16 @@ name = "{name}"
             spec.kind,
         ),
         Kind::Analyzer => analyzer_lib_rs(
+            &display,
+            name,
+            &struct_name,
+            &params_name,
+            &formats_doc,
+            &flags,
+            &exports,
+            spec.kind,
+        ),
+        Kind::Instrument => instrument_lib_rs(
             &display,
             name,
             &struct_name,
@@ -253,6 +264,66 @@ import {{ Knob, AuraTheme }} from "@aura";
 
 // AURA standard fonts (bundled via aura-build): import registers them
 // compile-time, default-font-family makes text identical across OSes.
+import "NotoSans-Regular.ttf";
+import "NotoSans-Bold.ttf";
+
+export component AppWindow inherits Window {{
+    preferred-width: 320px;
+    preferred-height: 220px;
+    background: AuraTheme.surface;
+    default-font-family: "Noto Sans";
+
+    in-out property <float> gain: 0.0;
+    callback gain-changed(float);
+
+    VerticalLayout {{
+        padding: 16px;
+        spacing: 12px;
+
+        Rectangle {{
+            background: AuraTheme.surface-container;
+            border-radius: AuraTheme.radius-md;
+            border-width: 1px;
+            border-color: AuraTheme.outline-variant;
+            vertical-stretch: 1;
+
+            VerticalLayout {{
+                padding: 16px;
+                spacing: 12px;
+                alignment: center;
+
+                Text {{
+                    text: "{display}";
+                    color: AuraTheme.on-surface;
+                    font-size: AuraTheme.font-title;
+                    font-weight: 600;
+                    horizontal-alignment: center;
+                }}
+
+                HorizontalLayout {{
+                    alignment: center;
+                    Knob {{
+                        label: "Gain";
+                        minimum: -24.0;
+                        maximum: 24.0;
+                        value <=> root.gain;
+                        value-text: round(root.gain * 10) / 10 + " dB";
+                        changed(v) => {{ root.gain-changed(v); }}
+                    }}
+                }}
+            }}
+        }}
+    }}
+}}
+"#
+    )
+}
+
+fn instrument_main_slint(display: &str) -> String {
+    format!(
+        r#"// {display} — AURA instrument (Material 3–aligned @aura tokens)
+import {{ Knob, AuraTheme }} from "@aura";
+
 import "NotoSans-Regular.ttf";
 import "NotoSans-Bold.ttf";
 
@@ -500,6 +571,312 @@ impl PluginLogic for {struct_name} {{
             .into_editor(),
         )
     }}
+}}
+
+{exports}
+"#
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn instrument_lib_rs(
+    display: &str,
+    name: &str,
+    struct_name: &str,
+    params_name: &str,
+    formats_doc: &str,
+    flags: &str,
+    exports: &str,
+    kind: Kind,
+) -> String {
+    let category = kind.plugin_category_rs();
+    let kind_doc = kind.kind_doc();
+    format!(
+        r#"//! {display} — AURA {kind_doc} ({formats_doc} via `aura-*` wrappers).
+//!
+//! ```bash
+//! cargo aura build {flags} --release
+//! cargo aura install {flags} --release
+//! ```
+
+use std::sync::Arc;
+
+use aura::dsp::envelope::Adsr;
+use aura::dsp::oscillator::{{Oscillator, Waveform}};
+use aura::midi::midi_note_to_freq;
+use aura::prelude::*;
+
+slint::include_modules!();
+
+use {params_name}ParamId as P;
+
+const MAX_VOICES: usize = 16;
+
+// ---------------------------------------------------------------------------
+// Params
+// ---------------------------------------------------------------------------
+
+#[derive(Params)]
+pub struct {params_name} {{
+    #[param(
+        id = 1,
+        name = "Gain",
+        range = "linear(-24, 24)",
+        default = 0.0,
+        unit = "db",
+        flags = "automatable | modulatable | modulatable_per_note"
+    )]
+    pub gain: FloatParam,
+}}
+
+// ---------------------------------------------------------------------------
+// Plugin
+// ---------------------------------------------------------------------------
+
+pub struct {struct_name};
+
+struct Voice {{
+    osc: Oscillator,
+    env: Adsr,
+    gain_mod: f64,
+}}
+
+pub struct DspState {{
+    table: NoteVoiceTable,
+    voices: Vec<Voice>,
+    sr: f32,
+}}
+
+fn make_voice(sr: f32) -> Voice {{
+    Voice {{
+        osc: Oscillator::new(Waveform::Sine, 440.0, sr)
+            .unwrap_or_else(|_| Oscillator::new(Waveform::Sine, 440.0, 44_100.0).unwrap()),
+        env: Adsr::with_sample_rate(0.01, 0.1, 0.7, 0.2, sr)
+            .unwrap_or_else(|_| Adsr::new(0.01, 0.1, 0.7, 0.2).unwrap()),
+        gain_mod: 0.0,
+    }}
+}}
+
+impl PluginLogic for {struct_name} {{
+    type Params = {params_name};
+    type DspState = DspState;
+
+    fn info() -> PluginInfo {{
+        let mut info = PluginInfo::new(
+            "{display}",
+            "LX Audiolabs",
+            env!("CARGO_PKG_VERSION"),
+            "{name}",
+        );
+        info.clap_id = "com.lx-audiolabs.{name}";
+        info.category = {category};
+        info.accepts_midi_in = true;
+        info.midi_input_dialect = aura::MidiDialect::Clap;
+        info.voice_count = 8;
+        info.voice_capacity = 16;
+        info
+    }}
+
+    fn bus_layouts() -> Vec<BusLayout> {{
+        vec![BusLayout::output_only(ChannelConfig::Stereo)]
+    }}
+
+    fn init(_params: &Self::Params, sample_rate: f64) -> Self::DspState {{
+        #[allow(clippy::cast_possible_truncation)]
+        let sr = sample_rate as f32;
+        DspState {{
+            table: NoteVoiceTable::new(MAX_VOICES),
+            voices: (0..MAX_VOICES).map(|_| make_voice(sr)).collect(),
+            sr,
+        }}
+    }}
+
+    fn reset(state: &mut Self::DspState, _params: &Self::Params, config: &AudioConfig) {{
+        #[allow(clippy::cast_possible_truncation)]
+        let sr = config.sample_rate as f32;
+        state.sr = sr;
+        for v in &mut state.voices {{
+            *v = make_voice(sr);
+        }}
+        release_all(state, 0);
+    }}
+
+    fn process(
+        state: &mut Self::DspState,
+        params: &Self::Params,
+        buffer: &mut AudioBuffer<'_, f32>,
+        context: &mut ProcessContext,
+    ) -> ProcessStatus {{
+        ingest(state, &context.notes);
+        if context.notes.is_empty() {{
+            let mut inbound = NoteBuffer::new();
+            inbound.reserve(64);
+            midi_to_notes(&context.midi, &mut inbound);
+            ingest(state, &inbound);
+        }}
+
+        let n = buffer.num_samples();
+        let outs = buffer.num_outputs();
+        for c in 0..outs {{
+            buffer.output(c).fill(0.0);
+        }}
+
+        let knob = params.gain.raw_target();
+        for i in 0..MAX_VOICES {{
+            let tv = state.table.voices()[i];
+            let v = &mut state.voices[i];
+            if !tv.is_occupied() && !v.env.is_active() {{
+                continue;
+            }}
+            if tv.is_occupied() {{
+                let key = u8::try_from(tv.key.clamp(0, 127)).unwrap_or(69);
+                let hz = midi_note_to_freq(key) * 2.0f32.powf(tv.tuning / 12.0);
+                let _ = v.osc.set_frequency(hz);
+            }}
+            let gain_plain = knob;
+            #[allow(clippy::cast_possible_truncation)]
+            let gain_db = (gain_plain + v.gain_mod) as f32;
+            let vel = if tv.is_occupied() {{ tv.velocity }} else {{ 1.0 }};
+            let volume = if tv.is_occupied() {{ tv.volume }} else {{ 1.0 }};
+            let pressure = if tv.is_occupied() {{ tv.pressure }} else {{ 1.0 }};
+            let lin = 10.0f32.powf(gain_db / 20.0)
+                * vel.clamp(0.0, 1.0)
+                * volume.clamp(0.0, 4.0)
+                * pressure.clamp(0.0, 1.0);
+
+            for s in 0..n {{
+                let sample = v.osc.next_sample() * v.env.next_value() * lin;
+                if outs >= 2 {{
+                    buffer.output(0)[s] += sample * 0.5;
+                    buffer.output(1)[s] += sample * 0.5;
+                }} else {{
+                    buffer.output(0)[s] += sample;
+                }}
+            }}
+        }}
+
+        #[allow(clippy::cast_possible_truncation)]
+        let end_at = n.saturating_sub(1) as u32;
+        for (i, voice) in state.voices.iter().enumerate() {{
+            if !voice.env.is_active() {{
+                state.table.mark_silent(i, end_at);
+            }}
+        }}
+        state.table.flush_ends(&mut context.notes_out);
+        ProcessStatus::Continue
+    }}
+
+    fn editor(_params: Arc<Self::Params>) -> Option<Box<dyn Editor>> {{
+        Some(
+            aura_editor::AuraSlintEditor::new(
+                (320, 200),
+                |ctx| {{
+                    let ui = AppWindow::new().expect("slint component");
+                    let params = ctx.params.clone();
+                    ui.on_gain_changed(move |v| params.set_plain(P::Gain.id(), f64::from(v)));
+                    ui
+                }},
+                |ui, ctx| {{
+                    #[allow(clippy::cast_possible_truncation)]
+                    let v = ctx.params.get_plain(P::Gain.id()).unwrap_or(0.0) as f32;
+                    if (v - ui.get_gain()).abs() > 1.0e-4 {{
+                        ui.set_gain(v);
+                    }}
+                }},
+            )
+            .into_editor(),
+        )
+    }}
+}}
+
+fn release_all(state: &mut DspState, sample_offset: u32) {{
+    for v in &mut state.voices {{
+        v.env.gate_off();
+    }}
+    state.table.mark_all_silent(sample_offset);
+}}
+
+fn midi_to_notes(midi: &MidiBuffer, dest: &mut NoteBuffer) {{
+    for ev in midi.iter() {{
+        let msg = ev.message;
+        if let Some(note) = msg.note_number() {{
+            let key = i16::from(note);
+            let note_id = i32::from(note);
+            if msg.is_note_on() {{
+                dest.push(NoteEvent::on(
+                    ev.sample_offset,
+                    note_id,
+                    key,
+                    f64::from(msg.data2) / 127.0,
+                ));
+            }} else if msg.is_note_off() {{
+                dest.push(NoteEvent::off(ev.sample_offset, note_id, key, 0.0));
+            }}
+        }}
+    }}
+}}
+
+fn ingest(state: &mut DspState, notes: &NoteBuffer) {{
+    for ev in notes.iter() {{
+        if matches!(ev.kind, NoteEventKind::Off {{ .. }} | NoteEventKind::Choke) {{
+            release_matching(state, ev);
+        }}
+    }}
+    state.table.apply(notes);
+    for ev in notes.iter() {{
+        if let NoteEventKind::On {{ velocity: _ }} = ev.kind {{
+            if let Some(i) = find_slot(&state.table, ev) {{
+                let tv = state.table.voices()[i];
+                start_voice(&mut state.voices[i], tv.key, tv.tuning, state.sr);
+            }}
+        }}
+    }}
+    for ev in notes.iter() {{
+        match ev.kind {{
+            NoteEventKind::ParamMod {{ param_id, amount }} => {{
+                if param_id == P::Gain.id() {{
+                    for (i, tv) in state.table.voices().iter().enumerate() {{
+                        if tv.is_occupied() && ev.matches_voice(tv.note_id, tv.key) {{
+                            state.voices[i].gain_mod = amount;
+                        }}
+                    }}
+                }}
+            }}
+            NoteEventKind::ParamValue {{ param_id, plain: _ }} => {{
+                let _ = param_id;
+            }}
+            NoteEventKind::Expression {{ id, value }} => {{
+                let _ = (id, value);
+            }}
+            _ => {{}}
+        }}
+    }}
+}}
+
+fn find_slot(table: &NoteVoiceTable, ev: NoteEvent) -> Option<usize> {{
+    table
+        .voices()
+        .iter()
+        .position(|v| v.is_occupied() && ev.matches_voice(v.note_id, v.key))
+}}
+
+fn release_matching(state: &mut DspState, ev: NoteEvent) {{
+    for i in 0..MAX_VOICES {{
+        let tv = state.table.voices()[i];
+        if tv.is_occupied() && ev.matches_voice(tv.note_id, tv.key) {{
+            state.voices[i].env.gate_off();
+        }}
+    }}
+}}
+
+fn start_voice(v: &mut Voice, key: i16, tuning_semis: f32, sr: f32) {{
+    let key = u8::try_from(key.clamp(0, 127)).unwrap_or(69);
+    let hz = midi_note_to_freq(key) * 2.0f32.powf(tuning_semis / 12.0);
+    let _ = v.osc.set_frequency(hz);
+    v.env = Adsr::with_sample_rate(0.01, 0.1, 0.7, 0.2, sr)
+        .unwrap_or_else(|_| Adsr::new(0.01, 0.1, 0.7, 0.2).unwrap());
+    v.env.gate_on();
+    v.gain_mod = 0.0;
 }}
 
 {exports}
