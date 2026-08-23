@@ -29,7 +29,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.9.1"
+version = "0.9.2"
 edition = "2024"
 license = "GPL-3.0-or-later"
 rust-version = "1.92"
@@ -56,9 +56,9 @@ aura-build = { path = "crates/aura-build" }
 aura-test = { path = "crates/aura-test" }
 
 # --- Slint + windowing (pinned with aura-baseview) ---
-# 0.3.1 does not compile Linux --release: leftover `dbg!(&visibility_state)`
-# while `Debug` is only derived under `debug_assertions`. Hold until 0.3.2+.
-baseview = "=0.3.0"
+# 0.3.1 had Linux --release dbg! breakage; 0.3.2 removes it + Win32 destroy/X11 fixes.
+# WGL path unchanged vs 0.3.0. Master has vsync deprecation (#322) not yet released.
+baseview = "=0.3.2"
 slint = { version = "=1.17.1", default-features = false, features = [
     "std",
     "raw-window-handle-06",

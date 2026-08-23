@@ -7,6 +7,28 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-08-23
+
+### Changed
+
+- `baseview` `=0.3.0` → `=0.3.2` (Win32 destroy fix, X11 viewability/events; WGL path unchanged). 0.3.1 skipped (Linux `--release` `dbg!` breakage).
+
+### Fixed
+
+- FemtoVG `on_frame`: swallow transient render errors instead of returning `Err` (baseview closes the editor window on `on_frame` failure).
+
+## [0.9.1] - 2026-08-23
+
+### Fixed
+
+- Keep the FemtoVG/WGL context current across frames (no per-frame `make_not_current`).
+- Soft-fail when Windows returns OpenGL 1.1 (software loader) instead of a driver context.
+- Aggressive early host/child size re-assert on Windows to reduce clipped plugin UIs.
+
+### Changed
+
+- Expose `UiZoom::host_scale`.
+
 ## [0.9.0] - 2026-08-22
 
 ### Added

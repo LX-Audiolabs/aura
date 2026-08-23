@@ -867,7 +867,12 @@ where
         // HiDPI / size reconcile before author sync + paint (truce-slint).
         self.reconcile_pending();
         (self.update)(&self.component, &mut *self.state.borrow_mut());
-        self.adapter.renderer.render().map_err(HandlerError::from)
+        // baseview closes the window on on_frame Err — swallow transient GL
+        // glitches (DAW context steal / driver hiccup) so the editor stays open.
+        if let Err(_e) = self.adapter.renderer.render() {
+            return Ok(());
+        }
+        Ok(())
     }
 
     #[cfg(all(
