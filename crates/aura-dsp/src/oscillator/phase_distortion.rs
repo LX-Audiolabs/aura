@@ -170,13 +170,7 @@ mod tests {
 
     #[test]
     fn vector_morph_sweeps_shape_axes() {
-        let shape_pairs = [
-            (0.0, 0.0),
-            (1.0, 0.0),
-            (0.0, 1.0),
-            (1.0, 1.0),
-            (0.5, 0.5),
-        ];
+        let shape_pairs = [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0), (1.0, 1.0), (0.5, 0.5)];
         for (shape_x, shape_y) in shape_pairs {
             let mut osc = PhaseDistortionOscillator::new(48_000.0);
             osc.set_shape_x(shape_x);
@@ -194,13 +188,7 @@ mod tests {
 
     #[test]
     fn next_sample_sweeps_shape_axes() {
-        let shape_pairs = [
-            (0.0, 0.0),
-            (1.0, 0.0),
-            (0.0, 1.0),
-            (1.0, 1.0),
-            (0.5, 0.5),
-        ];
+        let shape_pairs = [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0), (1.0, 1.0), (0.5, 0.5)];
         for (shape_x, shape_y) in shape_pairs {
             let mut osc = PhaseDistortionOscillator::new(48_000.0);
             osc.set_shape_x(shape_x);
@@ -273,22 +261,13 @@ mod tests {
         for _ in 0..100 {
             let sample = osc.next_sample_with_drive(440.0, 2.0);
             assert!(sample.is_finite(), "non-finite driven sample {sample}");
-            assert!(
-                sample.abs() <= 1.0,
-                "driven sample {sample} out of bounds"
-            );
+            assert!(sample.abs() <= 1.0, "driven sample {sample} out of bounds");
         }
     }
 
     #[test]
     fn next_sample_with_drive_sweeps_shape_axes() {
-        let shape_pairs = [
-            (0.0, 0.0),
-            (1.0, 0.0),
-            (0.0, 1.0),
-            (1.0, 1.0),
-            (0.5, 0.5),
-        ];
+        let shape_pairs = [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0), (1.0, 1.0), (0.5, 0.5)];
         for (shape_x, shape_y) in shape_pairs {
             let mut osc = PhaseDistortionOscillator::new(48_000.0);
             osc.set_shape_x(shape_x);
