@@ -68,7 +68,7 @@ Commands:
                           Scaffold a plugin project in ./<name>
                           (Slint + derive + aura.toml + agal)
                           CLAP is always on; flags add VST3 / LV2 feature + export
-                          kinds: effect (default) | effect-mono | analyzer
+                          kinds: effect (default) | effect-mono | analyzer | instrument
   init [path] [--vst3] [--lv2] [--kind <k>]
                           Same scaffold, into an existing empty directory
                           (default: current dir; name comes from the dir name)

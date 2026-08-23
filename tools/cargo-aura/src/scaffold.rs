@@ -18,16 +18,19 @@ pub enum Kind {
     EffectMono,
     /// Stereo pass-through with level meters (no FFT — product keeps analysis DSP).
     Analyzer,
+    /// Polyphonic synthesizer / instrument (stereo main bus default).
+    Instrument,
 }
 
 impl Kind {
-    pub const SUPPORTED: &'static str = "effect, effect-mono, analyzer";
+    pub const SUPPORTED: &'static str = "effect, effect-mono, analyzer, instrument";
 
     pub fn parse(s: &str) -> Result<Self, String> {
         match s {
             "effect" => Ok(Self::Effect),
             "effect-mono" => Ok(Self::EffectMono),
             "analyzer" => Ok(Self::Analyzer),
+            "instrument" => Ok(Self::Instrument),
             other => Err(format!(
                 "unknown kind '{other}' (supported: {})",
                 Self::SUPPORTED
@@ -40,6 +43,7 @@ impl Kind {
         match self {
             Self::Effect | Self::EffectMono => "effect",
             Self::Analyzer => "analyzer",
+            Self::Instrument => "instrument",
         }
     }
 
@@ -48,6 +52,7 @@ impl Kind {
         match self {
             Self::Effect | Self::EffectMono => "PluginCategory::Effect",
             Self::Analyzer => "PluginCategory::Analyzer",
+            Self::Instrument => "PluginCategory::Instrument",
         }
     }
 
@@ -61,7 +66,7 @@ impl Kind {
     }
 "
             }
-            Self::Effect | Self::Analyzer => "",
+            Self::Effect | Self::Analyzer | Self::Instrument => "",
         }
     }
 
@@ -70,6 +75,7 @@ impl Kind {
             Self::Effect => "stereo effect",
             Self::EffectMono => "mono effect",
             Self::Analyzer => "analyzer (meter stub)",
+            Self::Instrument => "instrument",
         }
     }
 }
@@ -194,7 +200,7 @@ name = "{name}"
     let gitignore = "/target\n*.clap\n*.vst3\n*.lv2\n.DS_Store\n".to_string();
 
     let main_slint = match spec.kind {
-        Kind::Effect | Kind::EffectMono => effect_main_slint(&display),
+        Kind::Effect | Kind::EffectMono | Kind::Instrument => effect_main_slint(&display),
         Kind::Analyzer => analyzer_main_slint(&display),
     };
 
@@ -207,7 +213,7 @@ name = "{name}"
     }
 
     let lib_rs = match spec.kind {
-        Kind::Effect | Kind::EffectMono => effect_lib_rs(
+        Kind::Effect | Kind::EffectMono | Kind::Instrument => effect_lib_rs(
             &display,
             name,
             &struct_name,
@@ -1113,7 +1119,19 @@ mod tests {
         assert_eq!(Kind::parse("effect"), Ok(Kind::Effect));
         assert_eq!(Kind::parse("effect-mono"), Ok(Kind::EffectMono));
         assert_eq!(Kind::parse("analyzer"), Ok(Kind::Analyzer));
-        assert!(Kind::parse("instrument").is_err());
+        assert_eq!(Kind::parse("instrument"), Ok(Kind::Instrument));
+    }
+
+    #[test]
+    fn instrument_template_category_and_no_bus_override() {
+        let mut s = spec("smoke-synth", &[]);
+        s.kind = Kind::Instrument;
+        let out = files(&s);
+        let lib = file(&out, "src/lib.rs");
+        let aura = file(&out, "aura.toml");
+        assert!(lib.contains("PluginCategory::Instrument"), "{lib}");
+        assert!(aura.contains("category = \"instrument\""), "{aura}");
+        assert!(!lib.contains("BusLayout::mono()"), "{lib}");
     }
 
     #[test]
