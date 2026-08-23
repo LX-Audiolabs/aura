@@ -30,7 +30,7 @@ pub mod unison;
 
 pub use core::{Oscillator, Waveform, polyblep};
 pub use dsf::{DsfSaw, DsfSquare};
-pub use phase_distortion::PhaseDistortionOscillator;
+pub use phase_distortion::{PhaseDistortionOscillator, wavefold};
 pub use pluck::Pluck;
 pub use soft_saw::SoftSaw;
 pub use sub::{SubOctave, SubOscillator};

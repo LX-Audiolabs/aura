@@ -5,6 +5,24 @@
 //! phasor is distorted using a CZ-style mapping, then four corner waveforms
 //! (sine, cosine, saw, square) are blended according to the 2-D shape vector.
 
+/// Triangle wave-folder: maps any finite input into `[-1, 1]` by reflecting at
+/// the `±1` boundaries. `drive` scales the input as `sample * (1 + drive)`;
+/// higher values produce more folds.
+#[inline]
+#[must_use]
+pub fn wavefold(sample: f32, drive: f32) -> f32 {
+    let driven = sample * (1.0 + drive);
+    // Simple triangle folding: fold the driven signal into [-1, 1].
+    let folded = (driven + 1.0).rem_euclid(4.0) - 2.0;
+    if folded > 1.0 {
+        2.0 - folded
+    } else if folded < -1.0 {
+        -2.0 - folded
+    } else {
+        folded
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct PhaseDistortionOscillator {
     phase: f32,
@@ -64,6 +82,16 @@ impl PhaseDistortionOscillator {
         let phase = self.advance(frequency);
         let distorted = Self::distort_phase(phase, self.shape_x);
         self.vector_morph(distorted)
+    }
+
+    /// Generate the next sample with optional wave-folder drive applied.
+    ///
+    /// `drive` scales the oscillator output before folding; `0.0` leaves the
+    /// amplitude unchanged, while larger values produce more aggressive folding.
+    #[inline]
+    #[must_use]
+    pub fn next_sample_with_drive(&mut self, frequency: f32, drive: f32) -> f32 {
+        wavefold(self.next_sample(frequency), drive)
     }
 }
 
@@ -186,6 +214,94 @@ mod tests {
                 assert!(
                     sample.abs() <= 1.0,
                     "sample {sample} out of bounds at ({shape_x}, {shape_y})"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn wavefold_known_values() {
+        // Drive 0.0: the function is a triangle wave with period 4, shifted so
+        // sample 0 maps to -1.
+        assert!((wavefold(0.0, 0.0) - -1.0).abs() < 1e-6);
+        assert!((wavefold(1.0, 0.0) - 0.0).abs() < 1e-6);
+        assert!((wavefold(2.0, 0.0) - 1.0).abs() < 1e-6);
+        assert!((wavefold(3.0, 0.0) - 0.0).abs() < 1e-6);
+        assert!((wavefold(4.0, 0.0) - -1.0).abs() < 1e-6);
+
+        // Negative samples mirror the same period.
+        assert!((wavefold(-1.0, 0.0) - 0.0).abs() < 1e-6);
+        assert!((wavefold(-2.0, 0.0) - 1.0).abs() < 1e-6);
+
+        // Drive doubles the effective input.
+        assert!((wavefold(0.5, 1.0) - wavefold(1.0, 0.0)).abs() < 1e-6);
+        assert!((wavefold(1.0, 2.0) - wavefold(3.0, 0.0)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn wavefold_output_in_bounds() {
+        for i in -20..=20 {
+            let sample = i as f32 * 0.25;
+            for drive in [0.0, 0.5, 1.0, 3.0, 10.0] {
+                let out = wavefold(sample, drive);
+                assert!(
+                    out.abs() <= 1.0,
+                    "wavefold({sample}, {drive}) = {out} out of bounds"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn wavefold_periodicity() {
+        let drive = 2.0;
+        let period = 4.0 / (1.0 + drive);
+        for i in -5..=5 {
+            let sample = i as f32 * 0.3;
+            let a = wavefold(sample, drive);
+            let b = wavefold(sample + period, drive);
+            assert!(
+                (a - b).abs() < 1e-5,
+                "wavefold not periodic at sample {sample}, drive {drive}: {a} vs {b}"
+            );
+        }
+    }
+
+    #[test]
+    fn next_sample_with_drive_is_finite_and_bounded() {
+        let mut osc = PhaseDistortionOscillator::new(48_000.0);
+        for _ in 0..100 {
+            let sample = osc.next_sample_with_drive(440.0, 2.0);
+            assert!(sample.is_finite(), "non-finite driven sample {sample}");
+            assert!(
+                sample.abs() <= 1.0,
+                "driven sample {sample} out of bounds"
+            );
+        }
+    }
+
+    #[test]
+    fn next_sample_with_drive_sweeps_shape_axes() {
+        let shape_pairs = [
+            (0.0, 0.0),
+            (1.0, 0.0),
+            (0.0, 1.0),
+            (1.0, 1.0),
+            (0.5, 0.5),
+        ];
+        for (shape_x, shape_y) in shape_pairs {
+            let mut osc = PhaseDistortionOscillator::new(48_000.0);
+            osc.set_shape_x(shape_x);
+            osc.set_shape_y(shape_y);
+            for _ in 0..100 {
+                let sample = osc.next_sample_with_drive(440.0, 1.5);
+                assert!(
+                    sample.is_finite(),
+                    "non-finite driven sample {sample} at ({shape_x}, {shape_y})"
+                );
+                assert!(
+                    sample.abs() <= 1.0,
+                    "driven sample {sample} out of bounds at ({shape_x}, {shape_y})"
                 );
             }
         }
