@@ -76,6 +76,11 @@ impl UiZoom {
         self.inner.scale.clone()
     }
 
+    #[must_use]
+    pub fn host_scale(&self) -> f64 {
+        f64::from_bits(self.inner.host_scale_bits.load(Ordering::Relaxed))
+    }
+
     pub fn set_percent(&self, percent: u32) {
         let percent = snap_percent(percent);
         self.inner.percent.store(percent, Ordering::Relaxed);

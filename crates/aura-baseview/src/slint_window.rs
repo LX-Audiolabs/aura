@@ -373,17 +373,21 @@ where
         let phys_mismatch = got_w != want_w || got_h != want_h;
 
         // Full geometry only when content scale or design logical size moved.
-        // Physical mismatch alone → cheap child re-assert (throttled).
+        // Physical mismatch alone → child re-assert (aggressive briefly after open).
         if scale_changed || logical_changed {
             self.apply_geometry(lw, lh, scale);
-        } else if phys_mismatch && n.is_multiple_of(15) {
-            // ~4 Hz: enough to win after host layout, not every paint.
-            self.resize_child_physical(want_w, want_h);
+        } else if phys_mismatch {
+            // First ~2s (timer ~15ms): every frame. Then ~4 Hz.
+            if n <= 120 || n.is_multiple_of(15) {
+                self.resize_child_physical(want_w, want_h);
+            }
         }
 
         // Host frame push-back (non-Linux only — see host_resize_pushback_allowed).
         let host_correct = self.pending_host_correct.take();
-        let retry = phys_mismatch && n.is_multiple_of(30); // ~0.5s at 60fps
+        // Early open: push host every ~150ms while mismatched; later ~0.5s.
+        let retry = phys_mismatch
+            && ((n <= 120 && n.is_multiple_of(10)) || (n > 120 && n.is_multiple_of(30)));
         if Self::host_resize_pushback_allowed() && (host_correct.is_some() || retry) {
             if let Some(ref req) = self.request_resize {
                 let _ = req(lw, lh);
@@ -448,6 +452,15 @@ where
                 )),
             ));
         }
+        // SAFETY: context is current on this GUI thread.
+        if let Err(e) = unsafe { crate::open_gl_interface::reject_software_gl11(&gl_context) } {
+            let _ = unsafe { gl_context.make_not_current() };
+            return Err(HandlerError::from(
+                crate::baseview_slint_window_adapter::GlInitError::new(format!(
+                    "LX UI: {e} — editor left closed"
+                )),
+            ));
+        }
 
         let open_scale = if policy.host_driven_scale {
             policy.scale.get()
@@ -489,9 +502,8 @@ where
                 });
         }
 
-        let _ = unsafe { gl_context.make_not_current() };
-
         // Force child HWND to content physical size (not OS-DPI logical).
+        // Leave GL current on the GUI thread for subsequent FemtoVG frames.
         let _ = window.resize(dpi::PhysicalSize::new(phys_w, phys_h));
 
         let (
@@ -504,6 +516,12 @@ where
             request_resize,
             frames,
         ) = Self::init_policy_fields(policy, request_resize, open_scale);
+
+        // Windows: ask host to match our frame immediately (Bitwig/Reaper/FL
+        // often open the parent too small, then clip the child).
+        if Self::host_resize_pushback_allowed() {
+            pending_host_correct.set(Some((lw, lh)));
+        }
 
         Ok(SlintWindow {
             update,
