@@ -483,10 +483,26 @@ impl<S: Slot> Hub<S> {
         let size = core::mem::size_of::<HubShared<S>>();
         let magic = magic_from_suffix(S::MAGIC_SUFFIX.as_bytes());
 
-        let (shmem, is_creator) = match ShmemConf::new().os_id(S::OS_ID).size(size).create() {
-            Ok(m) => (m, true),
-            Err(_) => (ShmemConf::new().os_id(S::OS_ID).open().ok()?, false),
-        };
+        let (shmem, is_creator) =
+            if let Ok(m) = ShmemConf::new().os_id(S::OS_ID).size(size).create() {
+                (m, true)
+            } else {
+                // Lost the create race — another process (or parallel test
+                // binary) is creating the segment but may not have it fully
+                // open yet, so a single `open()` can transiently fail. Retry
+                // briefly instead of caching a `None` in the `OnceLock` for the
+                // whole process. The magic-spin below then waits for the
+                // creator to finish initialization.
+                let mut opened = None;
+                for _ in 0..10_000 {
+                    if let Ok(m) = ShmemConf::new().os_id(S::OS_ID).open() {
+                        opened = Some(m);
+                        break;
+                    }
+                    std::thread::yield_now();
+                }
+                (opened?, false)
+            };
 
         // SAFETY: `shmem.as_ptr()` comes from the OS allocator and is page-aligned,
         // which satisfies `HubShared<S>`'s 8-byte alignment requirement.
@@ -1649,7 +1665,9 @@ mod cv_tests {
     #[allow(clippy::float_cmp)]
     #[test]
     fn cv_roundtrip() {
-        let _guard = CV_TEST_LOCK.lock().unwrap();
+        let _guard = CV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let hub = cv_hub().expect("cv hub");
         let now = now_ms();
         release_all_cv_slots(hub);
@@ -1687,7 +1705,9 @@ mod cv_tests {
 
     #[test]
     fn cv_hub_isolation() {
-        let _guard = CV_TEST_LOCK.lock().unwrap();
+        let _guard = CV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let cv = cv_hub().expect("cv hub");
         let relay = relay_hub().expect("relay hub");
         let now = now_ms();
@@ -1708,7 +1728,9 @@ mod cv_tests {
 
     #[test]
     fn cv_stale_reclaim() {
-        let _guard = CV_TEST_LOCK.lock().unwrap();
+        let _guard = CV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let hub = cv_hub().expect("cv hub");
         let now = now_ms();
         release_all_cv_slots(hub);
