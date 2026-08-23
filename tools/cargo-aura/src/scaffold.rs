@@ -131,7 +131,7 @@ pub fn files(spec: &ScaffoldSpec) -> Vec<(String, String)> {
     }
     let formats_doc = human.join(" + ");
 
-    let cargo_toml = format!(
+    let mut cargo_toml = format!(
         r#"[package]
 name = "{name}"
 version = "0.1.0"
@@ -158,6 +158,17 @@ aura-build = {{ path = "{}/crates/aura-build" }}
 "#,
         spec.aura_root, spec.aura_root, spec.aura_root
     );
+
+    if spec.kind == Kind::Instrument {
+        let _ = write!(
+            cargo_toml,
+            r#"
+[dev-dependencies]
+aura-test = {{ path = "{}/crates/aura-test" }}
+"#,
+            spec.aura_root
+        );
+    }
 
     let build_rs = r#"fn main() {
     aura_build::compile("ui/main.slint").expect("slint compile");
@@ -246,7 +257,7 @@ name = "{name}"
         ),
     };
 
-    vec![
+    let mut files = vec![
         ("Cargo.toml".to_string(), cargo_toml),
         ("build.rs".to_string(), build_rs),
         ("aura.toml".to_string(), aura_toml),
@@ -254,7 +265,16 @@ name = "{name}"
         (".gitignore".to_string(), gitignore),
         ("ui/main.slint".to_string(), main_slint),
         ("src/lib.rs".to_string(), lib_rs),
-    ]
+    ];
+
+    if spec.kind == Kind::Instrument {
+        files.push((
+            "src/editor.rs".to_string(),
+            instrument_editor_rs(&display, &struct_name, &params_name),
+        ));
+    }
+
+    files
 }
 
 fn effect_main_slint(display: &str) -> String {
@@ -578,7 +598,7 @@ impl PluginLogic for {struct_name} {{
     )
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 fn instrument_lib_rs(
     display: &str,
     name: &str,
@@ -606,7 +626,7 @@ use aura::dsp::oscillator::{{Oscillator, Waveform}};
 use aura::midi::midi_note_to_freq;
 use aura::prelude::*;
 
-slint::include_modules!();
+mod editor;
 
 use {params_name}ParamId as P;
 
@@ -766,26 +786,8 @@ impl PluginLogic for {struct_name} {{
         ProcessStatus::Continue
     }}
 
-    fn editor(_params: Arc<Self::Params>) -> Option<Box<dyn Editor>> {{
-        Some(
-            aura_editor::AuraSlintEditor::new(
-                (320, 200),
-                |ctx| {{
-                    let ui = AppWindow::new().expect("slint component");
-                    let params = ctx.params.clone();
-                    ui.on_gain_changed(move |v| params.set_plain(P::Gain.id(), f64::from(v)));
-                    ui
-                }},
-                |ui, ctx| {{
-                    #[allow(clippy::cast_possible_truncation)]
-                    let v = ctx.params.get_plain(P::Gain.id()).unwrap_or(0.0) as f32;
-                    if (v - ui.get_gain()).abs() > 1.0e-4 {{
-                        ui.set_gain(v);
-                    }}
-                }},
-            )
-            .into_editor(),
-        )
+    fn editor(params: Arc<Self::Params>) -> Option<Box<dyn Editor>> {{
+        editor::create_editor(params)
     }}
 }}
 
@@ -880,6 +882,45 @@ fn start_voice(v: &mut Voice, key: i16, tuning_semis: f32, sr: f32) {{
 }}
 
 {exports}
+"#
+    )
+}
+
+fn instrument_editor_rs(display: &str, struct_name: &str, params_name: &str) -> String {
+    let _ = struct_name;
+    format!(
+        r#"//! {display} editor.
+
+use std::sync::Arc;
+
+use aura::prelude::*;
+use aura_editor::AuraSlintEditor;
+
+use crate::{{{params_name} as Params, {params_name}ParamId as P}};
+
+slint::include_modules!();
+
+pub fn create_editor(_params: Arc<Params>) -> Option<Box<dyn Editor>> {{
+    Some(
+        AuraSlintEditor::new(
+            (320, 200),
+            |ctx| {{
+                let ui = AppWindow::new().expect("slint component");
+                let params = ctx.params.clone();
+                ui.on_gain_changed(move |v| params.set_plain(P::Gain.id(), f64::from(v)));
+                ui
+            }},
+            |ui, ctx| {{
+                #[allow(clippy::cast_possible_truncation)]
+                let v = ctx.params.get_plain(P::Gain.id()).unwrap_or(0.0) as f32;
+                if (v - ui.get_gain()).abs() > 1.0e-4 {{
+                    ui.set_gain(v);
+                }}
+            }},
+        )
+        .into_editor(),
+    )
+}}
 "#
     )
 }
