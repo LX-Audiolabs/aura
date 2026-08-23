@@ -49,18 +49,15 @@ impl PhaseDistortionOscillator {
     }
 
     fn vector_morph(&self, phase: f32) -> f32 {
-        let a = (phase * std::f32::consts::TAU).sin();
-        let b = (phase * std::f32::consts::TAU).cos();
-        let c = 2.0 * phase - 1.0; // saw
-        let d = if phase < 0.5 { 1.0 } else { -1.0 }; // square
+        let sine = (phase * std::f32::consts::TAU).sin();
+        let cosine = (phase * std::f32::consts::TAU).cos();
+        let saw = 2.0 * phase - 1.0;
+        let square = if phase < 0.5 { 1.0 } else { -1.0 };
 
-        let x = self.shape_x;
-        let y = self.shape_y;
+        let top = sine * (1.0 - self.shape_x) + saw * self.shape_x;
+        let bottom = cosine * (1.0 - self.shape_x) + square * self.shape_x;
 
-        let top = a * (1.0 - x) + c * x;
-        let bottom = b * (1.0 - x) + d * x;
-
-        top * (1.0 - y) + bottom * y
+        top * (1.0 - self.shape_y) + bottom * self.shape_y
     }
 
     pub fn next_sample(&mut self, frequency: f32) -> f32 {
@@ -126,6 +123,71 @@ mod tests {
             let sample = osc.next_sample(440.0);
             assert!(sample.is_finite(), "non-finite sample {sample}");
             assert!(sample.abs() <= 1.0, "sample {sample} out of bounds");
+        }
+    }
+
+    #[test]
+    fn distort_phase_sweeps_shape() {
+        for shape in [0.0, 0.5, 1.0] {
+            for i in 0..=10 {
+                let phase = i as f32 / 10.0;
+                let out = PhaseDistortionOscillator::distort_phase(phase, shape);
+                assert!(
+                    (0.0..=1.0).contains(&out),
+                    "distorted {out} out of bounds at shape {shape}, phase {phase}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn vector_morph_sweeps_shape_axes() {
+        let shape_pairs = [
+            (0.0, 0.0),
+            (1.0, 0.0),
+            (0.0, 1.0),
+            (1.0, 1.0),
+            (0.5, 0.5),
+        ];
+        for (shape_x, shape_y) in shape_pairs {
+            let mut osc = PhaseDistortionOscillator::new(48_000.0);
+            osc.set_shape_x(shape_x);
+            osc.set_shape_y(shape_y);
+            for i in 0..=10 {
+                let phase = i as f32 / 10.0;
+                let out = osc.vector_morph(phase);
+                assert!(
+                    out.abs() <= 1.0,
+                    "morph output {out} out of bounds at ({shape_x}, {shape_y}), phase {phase}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn next_sample_sweeps_shape_axes() {
+        let shape_pairs = [
+            (0.0, 0.0),
+            (1.0, 0.0),
+            (0.0, 1.0),
+            (1.0, 1.0),
+            (0.5, 0.5),
+        ];
+        for (shape_x, shape_y) in shape_pairs {
+            let mut osc = PhaseDistortionOscillator::new(48_000.0);
+            osc.set_shape_x(shape_x);
+            osc.set_shape_y(shape_y);
+            for _ in 0..100 {
+                let sample = osc.next_sample(440.0);
+                assert!(
+                    sample.is_finite(),
+                    "non-finite sample {sample} at ({shape_x}, {shape_y})"
+                );
+                assert!(
+                    sample.abs() <= 1.0,
+                    "sample {sample} out of bounds at ({shape_x}, {shape_y})"
+                );
+            }
         }
     }
 }
