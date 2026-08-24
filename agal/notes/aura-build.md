@@ -9,7 +9,7 @@
 | path | `crates/aura-build` |
 | description | AURA build helper: @aura Slint widgets + bundled fonts for slint-build 1.17.1 |
 | frameworks | slint |
-| generated | `2026-08-18T19:22:55Z` |
+| generated | `2026-08-24T16:17:07Z` |
 
 ## Graph atoms (auto)
 
@@ -38,7 +38,8 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 - `enum CompileError` · `src/lib.rs`
 - `fn compile(slint_entry: impl AsRef<Path>) -> Result<(),CompileError>` · `src/lib.rs`
 - `fn materialize_assets(dir: &Path) -> Result<AssetPaths,CompileError>` · `src/lib.rs`
-- … +3 more public symbols
+- `impl Display for CompileError` · `src/lib.rs`
+- … +2 more public symbols
 
 ## agent focus
 **L1:** scan **Graph atoms** above first, then human body below HUMAN.  

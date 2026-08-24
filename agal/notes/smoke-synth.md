@@ -9,7 +9,7 @@
 | path | `examples/smoke-synth` |
 | description | AURA in-tree CLAP smoke — 8-voice synth (NoteVoiceTable + NOTE_END) |
 | frameworks | aura |
-| generated | `2026-08-18T19:22:55Z` |
+| generated | `2026-08-24T16:17:07Z` |
 
 ## Graph atoms (auto)
 
@@ -28,14 +28,14 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 
 ## structure
 - logic: SmokeSynth
-- params: SynthParams (1 fields)
+- params: SynthParams (2 fields)
 - process: PluginLogic::process @ src/lib.rs
 - roles: entry, manifest
 
 ## api surface
 - `struct DspState { … }` · `src/lib.rs`
 - `struct SmokeSynth` · `src/lib.rs`
-- `struct SynthParams { gain: FloatParam }` · `src/lib.rs`
+- `struct SynthParams { gain: FloatParam, pan: FloatParam }` · `src/lib.rs`
 - `impl PluginLogic for SmokeSynth` · `src/lib.rs`
 
 ## agent focus

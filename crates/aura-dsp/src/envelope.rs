@@ -221,6 +221,274 @@ impl Adsr {
     }
 }
 
+// ---------------------------------------------------------------------------
+// AR envelope
+// ---------------------------------------------------------------------------
+
+/// AR (Attack/Release) envelope — single-shot transient with no sustain.
+///
+/// Useful for click/pluck transients: `gate_on` starts the rise; the envelope
+/// falls automatically once the attack completes. Calling `gate_off` during
+/// attack or release cuts immediately to the release phase from the current
+/// value.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Ar {
+    /// Attack time in seconds.
+    pub attack_time: f32,
+    /// Release time in seconds.
+    pub release_time: f32,
+    sample_rate: f32,
+    state: ArState,
+    current: f32,
+    release_start: f32,
+    stage_samples: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+enum ArState {
+    Idle,
+    Attack,
+    Release,
+}
+
+impl Ar {
+    /// Create an AR envelope with explicit sample rate.
+    pub fn new(attack: f32, release: f32, sample_rate: f32) -> Self {
+        Self {
+            attack_time: attack.max(0.0),
+            release_time: release.max(0.0),
+            sample_rate: sample_rate.max(1.0),
+            state: ArState::Idle,
+            current: 0.0,
+            release_start: 1.0,
+            stage_samples: 0.0,
+        }
+    }
+
+    /// Trigger the envelope (note on) — resets to attack phase.
+    pub fn gate_on(&mut self) {
+        self.current = 0.0;
+        self.state = ArState::Attack;
+        self.stage_samples = 0.0;
+    }
+
+    /// Cut to release from the current level (note off).
+    pub fn gate_off(&mut self) {
+        if self.state != ArState::Idle {
+            self.release_start = self.current;
+            self.state = ArState::Release;
+            self.stage_samples = 0.0;
+        }
+    }
+
+    /// Returns `true` when the envelope is producing non-zero output.
+    #[must_use]
+    pub fn is_active(&self) -> bool {
+        self.state != ArState::Idle
+    }
+
+    /// Generate the next envelope value (0..1).
+    #[inline]
+    #[must_use]
+    pub fn next_value(&mut self) -> f32 {
+        let sr = self.sample_rate;
+        match self.state {
+            ArState::Idle => {
+                self.current = 0.0;
+            }
+            ArState::Attack => {
+                let attack_samples = self.attack_time * sr;
+                if attack_samples <= 0.0 {
+                    self.current = 1.0;
+                    self.release_start = 1.0;
+                    self.state = ArState::Release;
+                    self.stage_samples = 0.0;
+                } else {
+                    self.current = (self.stage_samples / attack_samples).min(1.0);
+                    self.stage_samples += 1.0;
+                    if self.current >= 1.0 {
+                        self.current = 1.0;
+                        self.release_start = 1.0;
+                        self.state = ArState::Release;
+                        self.stage_samples = 0.0;
+                    }
+                }
+            }
+            ArState::Release => {
+                let release_samples = self.release_time * sr;
+                if release_samples <= 0.0 {
+                    self.current = 0.0;
+                    self.state = ArState::Idle;
+                } else {
+                    let progress = self.stage_samples / release_samples;
+                    self.current = self.release_start * (1.0 - progress);
+                    self.stage_samples += 1.0;
+                    if self.current <= 0.0 {
+                        self.current = 0.0;
+                        self.state = ArState::Idle;
+                    }
+                }
+            }
+        }
+        self.current
+    }
+}
+
+// ---------------------------------------------------------------------------
+// AHDSR envelope
+// ---------------------------------------------------------------------------
+
+/// AHDSR (Attack/Hold/Decay/Sustain/Release) envelope.
+///
+/// Extends [`Adsr`] with a Hold stage that keeps the output at 1.0 for
+/// `hold_time` seconds before entering decay. Setting `hold_time = 0.0`
+/// gives standard ADSR behaviour.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Ahdsr {
+    /// Attack time in seconds.
+    pub attack_time: f32,
+    /// Hold time in seconds (0 = skip hold, behaves like ADSR).
+    pub hold_time: f32,
+    /// Decay time in seconds.
+    pub decay_time: f32,
+    /// Sustain level (0.0 to 1.0).
+    pub sustain_level: f32,
+    /// Release time in seconds.
+    pub release_time: f32,
+    sample_rate: f32,
+    state: AhdsrState,
+    current: f32,
+    release_start: f32,
+    stage_samples: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+enum AhdsrState {
+    Idle,
+    Attack,
+    Hold,
+    Decay,
+    Sustain,
+    Release,
+}
+
+impl Ahdsr {
+    /// Create an AHDSR envelope with explicit sample rate.
+    pub fn new(
+        attack: f32,
+        hold: f32,
+        decay: f32,
+        sustain: f32,
+        release: f32,
+        sample_rate: f32,
+    ) -> Self {
+        Self {
+            attack_time: attack.max(0.0),
+            hold_time: hold.max(0.0),
+            decay_time: decay.max(0.0),
+            sustain_level: sustain.clamp(0.0, 1.0),
+            release_time: release.max(0.0),
+            sample_rate: sample_rate.max(1.0),
+            state: AhdsrState::Idle,
+            current: 0.0,
+            release_start: 0.0,
+            stage_samples: 0.0,
+        }
+    }
+
+    /// Trigger the envelope (note on).
+    pub fn gate_on(&mut self) {
+        self.state = AhdsrState::Attack;
+        self.stage_samples = 0.0;
+    }
+
+    /// Release the envelope (note off).
+    pub fn gate_off(&mut self) {
+        if self.state != AhdsrState::Idle {
+            self.release_start = self.current;
+            self.state = AhdsrState::Release;
+            self.stage_samples = 0.0;
+        }
+    }
+
+    /// Returns `true` when the envelope is active (not idle).
+    #[must_use]
+    pub fn is_active(&self) -> bool {
+        self.state != AhdsrState::Idle
+    }
+
+    /// Generate the next envelope value (0..1).
+    #[inline]
+    #[must_use]
+    pub fn next_value(&mut self) -> f32 {
+        let sr = self.sample_rate;
+        match self.state {
+            AhdsrState::Idle => {
+                self.current = 0.0;
+            }
+            AhdsrState::Attack => {
+                let attack_samples = self.attack_time * sr;
+                if attack_samples <= 0.0 {
+                    self.current = 1.0;
+                    self.state = AhdsrState::Hold;
+                    self.stage_samples = 0.0;
+                } else {
+                    self.current = (self.stage_samples / attack_samples).min(1.0);
+                    self.stage_samples += 1.0;
+                    if self.current >= 1.0 {
+                        self.current = 1.0;
+                        self.state = AhdsrState::Hold;
+                        self.stage_samples = 0.0;
+                    }
+                }
+            }
+            AhdsrState::Hold => {
+                self.current = 1.0;
+                let hold_samples = self.hold_time * sr;
+                self.stage_samples += 1.0;
+                if self.stage_samples > hold_samples {
+                    self.state = AhdsrState::Decay;
+                    self.stage_samples = 0.0;
+                }
+            }
+            AhdsrState::Decay => {
+                let decay_samples = self.decay_time * sr;
+                if decay_samples <= 0.0 {
+                    self.current = self.sustain_level;
+                    self.state = AhdsrState::Sustain;
+                } else {
+                    let progress = self.stage_samples / decay_samples;
+                    self.current = 1.0 + (self.sustain_level - 1.0) * progress;
+                    self.stage_samples += 1.0;
+                    if self.current <= self.sustain_level {
+                        self.current = self.sustain_level;
+                        self.state = AhdsrState::Sustain;
+                    }
+                }
+            }
+            AhdsrState::Sustain => {
+                self.current = self.sustain_level;
+            }
+            AhdsrState::Release => {
+                let release_samples = self.release_time * sr;
+                if release_samples <= 0.0 {
+                    self.current = 0.0;
+                    self.state = AhdsrState::Idle;
+                } else {
+                    let progress = self.stage_samples / release_samples;
+                    self.current = self.release_start * (1.0 - progress);
+                    self.stage_samples += 1.0;
+                    if self.current <= 0.0 {
+                        self.current = 0.0;
+                        self.state = AhdsrState::Idle;
+                    }
+                }
+            }
+        }
+        self.current
+    }
+}
+
 /// A single segment in a multi-stage envelope.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EnvelopeSegment {
@@ -498,6 +766,122 @@ impl CatmullRomEnvelope {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_ar_attack_then_release() {
+        let sr = 1000.0;
+        let mut env = Ar::new(0.1, 0.1, sr); // 100 samples each
+        assert!(!env.is_active());
+        env.gate_on();
+        assert!(env.is_active());
+        // After 100 samples attack should reach ~1.0 then auto-release
+        for _ in 0..100 {
+            let _ = env.next_value();
+        }
+        let peak = env.next_value();
+        // Should be near or starting release
+        assert!(peak <= 1.0, "peak={peak}");
+        // After 200 more samples release should complete
+        for _ in 0..200 {
+            let _ = env.next_value();
+        }
+        assert!(!env.is_active(), "should be idle after full AR cycle");
+    }
+
+    #[test]
+    fn test_ar_gate_off_mid_attack() {
+        let sr = 1000.0;
+        let mut env = Ar::new(1.0, 0.1, sr); // 1s attack
+        env.gate_on();
+        // Advance halfway through attack
+        for _ in 0..500 {
+            let _ = env.next_value();
+        }
+        let mid = env.next_value();
+        assert!(mid > 0.0 && mid < 1.0, "mid-attack mid={mid}");
+        // Cut early
+        env.gate_off();
+        // Release from current level, run to completion
+        for _ in 0..200 {
+            let _ = env.next_value();
+        }
+        assert!(!env.is_active());
+    }
+
+    #[test]
+    fn test_ar_zero_attack_auto_releases() {
+        let sr = 1000.0;
+        let mut env = Ar::new(0.0, 0.05, sr);
+        env.gate_on();
+        // First tick: zero attack → jump to 1.0 then enter release
+        let first = env.next_value();
+        assert!(first > 0.0, "first={first}");
+        // Should eventually go idle
+        for _ in 0..200 {
+            let _ = env.next_value();
+        }
+        assert!(!env.is_active());
+    }
+
+    #[test]
+    fn test_ahdsr_hold_stage() {
+        let sr = 1000.0;
+        // 10ms attack, 50ms hold, 10ms decay, sustain 0.5, 10ms release
+        let mut env = Ahdsr::new(0.01, 0.05, 0.01, 0.5, 0.01, sr);
+        env.gate_on();
+        // Run past attack (10 samples)
+        for _ in 0..15 {
+            let _ = env.next_value();
+        }
+        // Should be in hold: value = 1.0
+        let hold_val = env.next_value();
+        assert!((hold_val - 1.0).abs() < 0.01, "hold_val={hold_val}");
+        // Run past hold (50 more samples) + decay (10)
+        for _ in 0..70 {
+            let _ = env.next_value();
+        }
+        // Should be in sustain at 0.5
+        let sus = env.next_value();
+        assert!((sus - 0.5).abs() < 0.05, "sustain={sus}");
+    }
+
+    #[test]
+    fn test_ahdsr_zero_hold_behaves_like_adsr() {
+        let sr = 1000.0;
+        let mut ahdsr = Ahdsr::new(0.01, 0.0, 0.01, 0.5, 0.01, sr);
+        ahdsr.gate_on();
+        // Run attack + decay
+        for _ in 0..100 {
+            let _ = ahdsr.next_value();
+        }
+        let sus = ahdsr.next_value();
+        assert!((sus - 0.5).abs() < 0.05, "sustain={sus}");
+        ahdsr.gate_off();
+        for _ in 0..200 {
+            let _ = ahdsr.next_value();
+        }
+        assert!(!ahdsr.is_active());
+    }
+
+    #[test]
+    fn test_ahdsr_gate_off_from_hold() {
+        let sr = 1000.0;
+        let mut env = Ahdsr::new(0.001, 1.0, 0.01, 0.5, 0.05, sr);
+        env.gate_on();
+        // Get past attack
+        for _ in 0..10 {
+            let _ = env.next_value();
+        }
+        // Should now be in hold at 1.0; cut early
+        env.gate_off();
+        // Should release from ~1.0
+        let release_start = env.next_value();
+        assert!(release_start > 0.5, "release_start={release_start}");
+        for _ in 0..200 {
+            let _ = env.next_value();
+        }
+        assert!(!env.is_active());
+    }
 
     #[test]
     fn test_adsr_basic() {

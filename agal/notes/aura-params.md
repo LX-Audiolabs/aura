@@ -8,7 +8,7 @@
 | kind | `crate` |
 | path | `crates/aura-params` |
 | description | AURA parameter system (ranges, smoothers, atomic params) |
-| generated | `2026-08-18T19:22:55Z` |
+| generated | `2026-08-24T16:17:07Z` |
 
 ## Graph atoms (auto)
 
@@ -41,7 +41,8 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 - `trait Sealed` · `src/lib.rs`
 - `trait Float` · `src/sample.rs`
 - `trait Sample` · `src/sample.rs`
-- … +38 more public symbols
+- `trait Sealed` · `src/sample.rs`
+- … +37 more public symbols
 
 ## agent focus
 **L1:** scan **Graph atoms** above first, then human body below HUMAN.  

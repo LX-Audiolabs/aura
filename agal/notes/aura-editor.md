@@ -9,7 +9,7 @@
 | path | `crates/aura-editor` |
 | description | AURA host Editor adapter (Slint on aura-baseview) for CLAP/VST3/LV2 GUI |
 | frameworks | aura, aura-baseview, aura-editor, baseview, raw-window-handle, slint |
-| generated | `2026-08-18T19:22:55Z` |
+| generated | `2026-08-24T16:17:07Z` |
 
 ## Graph atoms (auto)
 
@@ -42,7 +42,8 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 - `struct AuraSlintEditor<C> { … }` · `src/lib.rs`
 - `struct LxPluginContext<P> { params: Arc<P>, host: PluginContext }` · `src/typed.rs`
 - `struct LxSlintEditor<P, C> { … }` · `src/typed.rs`
-- … +23 more public symbols
+- `struct UiZoom { inner: Arc<UiZoomInner> }` · `src/ui_zoom.rs`
+- … +22 more public symbols
 
 ## agent focus
 **L1:** scan **Graph atoms** above first, then human body below HUMAN.  

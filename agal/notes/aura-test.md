@@ -9,7 +9,7 @@
 | path | `crates/aura-test` |
 | description | Test helpers for AURA plugins (state round-trip, process smoke) |
 | frameworks | aura |
-| generated | `2026-08-18T19:22:55Z` |
+| generated | `2026-08-24T16:17:07Z` |
 
 ## Graph atoms (auto)
 
@@ -43,7 +43,8 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 - `fn assert_empty_state_no_crash<L>()` · `src/lib.rs`
 - `fn assert_no_duplicate_param_ids<L>()` · `src/lib.rs`
 - `fn assert_no_nans(channels: &[Vec<f32>])` · `src/lib.rs`
-- … +12 more public symbols
+- `fn assert_nonzero(channels: &[Vec<f32>])` · `src/lib.rs`
+- … +11 more public symbols
 
 ## findings
 - [info] **crate_no_dependents**: aura-test has no inbound workspace edges — unused or only path-included? · `crates/aura-test` · fix: wire `aura-test` as a path dep from a plugin/crate, or remove from workspace

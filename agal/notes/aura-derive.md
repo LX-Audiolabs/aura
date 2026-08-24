@@ -8,7 +8,7 @@
 | kind | `crate` |
 | path | `crates/aura-derive` |
 | description | Proc macros for AURA plugins: #[derive(Params)] and #[derive(ParamEnum)] |
-| generated | `2026-08-18T19:22:55Z` |
+| generated | `2026-08-24T16:17:07Z` |
 
 ## Graph atoms (auto)
 

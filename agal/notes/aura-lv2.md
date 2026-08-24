@@ -9,7 +9,7 @@
 | path | `crates/aura-lv2` |
 | description | AURA LV2 format wrapper (thin, over PluginLogic) |
 | frameworks | aura, lv2 |
-| generated | `2026-08-18T19:22:55Z` |
+| generated | `2026-08-24T16:17:07Z` |
 
 ## Graph atoms (auto)
 
@@ -43,7 +43,7 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 - process: PluginLogic::process @ src/ui.rs
 - editor: yes
 - process methods (DSP): 2
-- public_api symbols: 16 (see json)
+- public_api symbols: 15 (see json)
 - roles: entry, manifest, source
 
 ## api surface
@@ -51,7 +51,8 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 - `fn bundle_ttl_for<L>(binary_stem: &str) -> BundleTtl` · `src/lib.rs`
 - `fn bundle_ttl_from_parts(info: &PluginInfo, params: &[ParamInfo], binary_stem: &str) -> BundleTtl` · `src/lib.rs`
 - `fn descriptor<L>(index: u32) -> *const LV2_Descriptor` · `src/lib.rs`
-- … +12 more public symbols
+- `fn plugin_uri(info: &PluginInfo) -> String` · `src/lib.rs`
+- … +10 more public symbols
 
 ## agent focus
 **L1:** scan **Graph atoms** above first, then human body below HUMAN.  
