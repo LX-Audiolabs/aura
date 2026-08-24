@@ -193,6 +193,20 @@ impl MatrixFdn {
     /// Returns [`DspError::ComputationError`] if `target_rt60 <= 0`,
     /// `sample_rate == 0`, or numerical setup fails.
     pub fn new(target_rt60: f32, sample_rate: u32, mix: f32) -> Result<Self> {
+        Self::with_size(target_rt60, sample_rate, mix, 1.0)
+    }
+
+    /// Create an FDN with a room-size scale on the delay lengths.
+    ///
+    /// `size_scale` multiplies the base delay lengths (30–80 ms primes):
+    /// `1.0` is the default medium-room spread, `0.5` halves them (small
+    /// room), `1.5` widens them (larger room). Clamped to a sane range.
+    pub fn with_size(
+        target_rt60: f32,
+        sample_rate: u32,
+        mix: f32,
+        size_scale: f32,
+    ) -> Result<Self> {
         if target_rt60 <= 0.0 || !target_rt60.is_finite() {
             return Err(DspError::ComputationError {
                 message: "target_rt60 must be positive and finite".into(),
@@ -206,11 +220,12 @@ impl MatrixFdn {
 
         // Delay lengths in milliseconds, scaled to sample rate. Primes
         // chosen to be mutually coprime, spanning ~30–80 ms — typical for
-        // medium-room reverberators.
+        // medium-room reverberators. `size_scale` scales the whole spread.
+        let size_scale = size_scale.clamp(0.25, 4.0);
         let ms = [29.7f32, 37.1, 41.3, 43.7, 53.9, 59.1, 67.3, 73.7];
         let mut delay_lengths = [0usize; MATRIX_FDN_N];
         for (i, m) in ms.iter().enumerate() {
-            delay_lengths[i] = ((*m * 0.001) * sample_rate as f32).max(1.0) as usize;
+            delay_lengths[i] = ((*m * size_scale * 0.001) * sample_rate as f32).max(1.0) as usize;
         }
 
         // Damping gains: g_i = 10^(-3 * D_i / (RT60 * SR))
