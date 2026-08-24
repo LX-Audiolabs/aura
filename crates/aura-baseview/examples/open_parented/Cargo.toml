@@ -10,7 +10,7 @@ slint = { workspace = true }
 aura-baseview = { workspace = true, features = ["backend-femtovg"] }
 
 softbuffer = "0.4.2"
-rtrb = "0.3.4"
+rtrb = "0.4.0"
 
 [build-dependencies]
 slint-build = { workspace = true }
