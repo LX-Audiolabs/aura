@@ -12,6 +12,16 @@ use crate::info::PluginInfo;
 use crate::preset::FactoryPreset;
 use crate::process::{ProcessContext, ProcessStatus};
 
+/// One entry in a plugin's custom note-name table (`CLAP_EXT_NOTE_NAME`).
+///
+/// Set `port`, `channel`, or `key` to `-1` to match any value (wildcard).
+pub struct NoteNameEntry {
+    pub port: i16,
+    pub channel: i16,
+    pub key: i16,
+    pub name: &'static str,
+}
+
 /// What plugin authors implement for realtime DSP + optional GUI factory.
 ///
 /// Format wrappers (CLAP/VST3/LV2) call these methods.
@@ -102,4 +112,24 @@ pub trait PluginLogic: 'static {
     /// the host's `clap.tuning` `changed()` callback. Plugins can rebuild any
     /// cached tuning tables here. Default: no-op.
     fn tuning_changed(_state: &mut Self::DspState, _params: &Self::Params) {}
+
+    /// Custom note names for the host's note display (`CLAP_EXT_NOTE_NAME`).
+    ///
+    /// Return a non-empty slice to activate the extension. Useful for
+    /// scale-aware sequencers (degree labels) or drum machines (pad names).
+    /// Default: empty — host uses standard MIDI note names.
+    fn note_names() -> &'static [NoteNameEntry] {
+        &[]
+    }
+
+    /// Host notified the plugin that a hardware control mapping changed for a
+    /// parameter (`CLAP_EXT_PARAM_INDICATION` `set_mapping`). Called on the
+    /// main thread. Default: no-op. Override to reflect mapping state in the UI.
+    fn on_param_mapping(_params: &Self::Params, _param_id: u32, _has_mapping: bool) {}
+
+    /// Host notified the plugin that automation state changed for a parameter
+    /// (`CLAP_EXT_PARAM_INDICATION` `set_automation`). Called on the main
+    /// thread. `automation_state` is `CLAP_PARAM_INDICATION_AUTOMATION_*`.
+    /// Default: no-op. Override to reflect automation state in the UI.
+    fn on_param_automation(_params: &Self::Params, _param_id: u32, _automation_state: u32) {}
 }

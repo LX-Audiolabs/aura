@@ -63,6 +63,10 @@ use clap_sys::ext::audio_ports_config::{
     CLAP_EXT_AUDIO_PORTS_CONFIG, clap_audio_ports_config, clap_plugin_audio_ports_config,
 };
 use clap_sys::ext::draft::tuning::CLAP_EXT_TUNING;
+use clap_sys::ext::note_name::{CLAP_EXT_NOTE_NAME, clap_plugin_note_name};
+use clap_sys::ext::param_indication::{
+    CLAP_EXT_PARAM_INDICATION, CLAP_EXT_PARAM_INDICATION_COMPAT, clap_plugin_param_indication,
+};
 use clap_sys::ext::gui::{
     CLAP_EXT_GUI, CLAP_WINDOW_API_COCOA, CLAP_WINDOW_API_WIN32, CLAP_WINDOW_API_X11, clap_host_gui,
     clap_plugin_gui, clap_window,
@@ -1399,6 +1403,12 @@ unsafe extern "C" fn plugin_get_extension<L: PluginLogic>(
     if id == CLAP_EXT_TUNING && L::info().supports_tuning {
         return tuning::tuning_ext::<L>() as *const _ as *const c_void;
     }
+    if id == CLAP_EXT_NOTE_NAME && !L::note_names().is_empty() {
+        return note_name_ext::<L>() as *const _ as *const c_void;
+    }
+    if id == CLAP_EXT_PARAM_INDICATION || id == CLAP_EXT_PARAM_INDICATION_COMPAT {
+        return param_indication_ext::<L>() as *const _ as *const c_void;
+    }
     ptr::null()
 }
 
@@ -1546,6 +1556,77 @@ unsafe extern "C" fn note_ports_get<L: PluginLogic>(
 // ---------------------------------------------------------------------------
 // voice-info (Bitwig Voice Stack / poly-mod needs a voice pool > 1)
 // ---------------------------------------------------------------------------
+
+fn note_name_ext<L: PluginLogic>() -> &'static clap_plugin_note_name {
+    static CELL: OnceLock<clap_plugin_note_name> = OnceLock::new();
+    CELL.get_or_init(|| clap_plugin_note_name {
+        count: Some(note_name_count::<L>),
+        get: Some(note_name_get::<L>),
+    })
+}
+
+unsafe extern "C" fn note_name_count<L: PluginLogic>(_plugin: *const clap_plugin) -> u32 {
+    L::note_names().len() as u32
+}
+
+unsafe extern "C" fn note_name_get<L: PluginLogic>(
+    _plugin: *const clap_plugin,
+    index: u32,
+    out: *mut clap_sys::ext::note_name::clap_note_name,
+) -> bool {
+    let names = L::note_names();
+    let Some(entry) = names.get(index as usize) else {
+        return false;
+    };
+    if out.is_null() {
+        return false;
+    }
+    let out = unsafe { &mut *out };
+    out.port = entry.port;
+    out.channel = entry.channel;
+    out.key = entry.key;
+    let bytes = entry.name.as_bytes();
+    let len = bytes.len().min(clap_sys::string_sizes::CLAP_NAME_SIZE - 1);
+    for (i, &b) in bytes.iter().take(len).enumerate() {
+        out.name[i] = b as std::ffi::c_char;
+    }
+    out.name[len] = 0;
+    true
+}
+
+fn param_indication_ext<L: PluginLogic>() -> &'static clap_plugin_param_indication {
+    static CELL: OnceLock<clap_plugin_param_indication> = OnceLock::new();
+    CELL.get_or_init(|| clap_plugin_param_indication {
+        set_mapping: Some(param_indication_set_mapping::<L>),
+        set_automation: Some(param_indication_set_automation::<L>),
+    })
+}
+
+unsafe extern "C" fn param_indication_set_mapping<L: PluginLogic>(
+    plugin: *const clap_plugin,
+    param_id: clap_id,
+    has_mapping: bool,
+    _color: *const clap_sys::color::clap_color,
+    _label: *const std::ffi::c_char,
+    _description: *const std::ffi::c_char,
+) {
+    let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
+        return;
+    };
+    L::on_param_mapping(&inst.params, param_id, has_mapping);
+}
+
+unsafe extern "C" fn param_indication_set_automation<L: PluginLogic>(
+    plugin: *const clap_plugin,
+    param_id: clap_id,
+    automation_state: u32,
+    _color: *const clap_sys::color::clap_color,
+) {
+    let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
+        return;
+    };
+    L::on_param_automation(&inst.params, param_id, automation_state);
+}
 
 fn voice_info_ext<L: PluginLogic>() -> &'static clap_plugin_voice_info {
     static CELL: OnceLock<clap_plugin_voice_info> = OnceLock::new();

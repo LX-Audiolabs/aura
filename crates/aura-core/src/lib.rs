@@ -38,7 +38,7 @@ pub use note_events::{
     append_notes_as_midi, route_param_mod, route_param_value,
 };
 pub use note_voices::{NoteVoice, NoteVoiceTable};
-pub use plugin::PluginLogic;
+pub use plugin::{NoteNameEntry, PluginLogic};
 pub use preset::{FactoryPreset, FactoryPresetState, apply_factory_preset, load_preset_file};
 pub use process::{ProcessContext, ProcessStatus};
 pub use state::{decode_state, encode_state};
