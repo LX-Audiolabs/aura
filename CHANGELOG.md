@@ -7,6 +7,18 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ## [Unreleased]
 
+## [0.9.5] - 2026-08-24
+
+### Added
+
+- `aura-clap`: note-name and param-indication CLAP extensions.
+- `aura-dsp`: AR and AHDSR envelope generators with tests.
+- `aura-dsp`: `size_scale` parameter on `MatrixFdn` for room-size delay scaling.
+
+### Changed
+
+- Dependabot: bump `rtrb` 0.3.4 → 0.4.0.
+
 ## [0.9.4] - 2026-08-23
 
 ### Fixed
