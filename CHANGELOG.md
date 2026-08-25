@@ -7,6 +7,8 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ## [Unreleased]
 
+## [0.9.6] - 2026-08-25
+
 ### Fixed
 
 - Bitwig (Win32 CLAP sandbox) abort when closing the plugin UI: Slint's
@@ -14,8 +16,16 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
   `WM_DESTROY`. Bitwig tears the parent HWND down before `gui_destroy`, so
   `wglMakeCurrent` fails with `ERROR_INVALID_HANDLE` and the panic aborts
   the sandbox (`0xC000041D`). `ensure_current` now continues without a
-  current context on that path; GL objects are reclaimed with the WGL
-  context. Reload/re-open still worked — only close crashed, all plugins.
+  current context on that path (warn once per process); GL objects are
+  reclaimed with the WGL context. Reload/re-open still worked — only close
+  crashed, all plugins. `gui_destroy` is also fenced with `catch_unwind`.
+- Leftover Slint window adapter after a panicked `Component::new()` was
+  dropped on the *next* editor open, while a different GL/Skia context was
+  current — `clear_next_adapter` now drops it immediately.
+- CLAP/VST3 advertised stereo sidechain as extra *ports* (channel count
+  used as port count, duplicate port ids). `BusLayout::input_port_count`
+  counts main + optional sidechain as ports; Bitwig dry-passthrough routing
+  no longer breaks.
 
 ## [0.9.5] - 2026-08-24
 

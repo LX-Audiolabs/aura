@@ -118,6 +118,7 @@ pub trait PluginLogic: 'static {
     /// Return a non-empty slice to activate the extension. Useful for
     /// scale-aware sequencers (degree labels) or drum machines (pad names).
     /// Default: empty — host uses standard MIDI note names.
+    #[must_use]
     fn note_names() -> &'static [NoteNameEntry] {
         &[]
     }
