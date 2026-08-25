@@ -44,6 +44,7 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 [ATOM] type=constraint | detail=PeakMeter/FFT/Spectrum widgets stay product design system; @aura basics incl XYPad only
 [ATOM] type=decision | detail=notes_out + NOTE_END are the plugin→host note path (arp/seq + poly-mod teardown); DSP still owns smoothing/routing
 [ATOM] type=lesson | detail=CLAP/VST3/LV2 process must not heap-alloc; Bitwig note-expression flood crashed the host (2026-08-18) — scratch reserved in activate, events capped at 4096
+[ATOM] type=lesson | detail=Bitwig UI-close sandbox abort (0xC000041D): parent HWND dies before clap gui_destroy → child WM_DESTROY → Slint Drop → free_graphics_resources.expect. ensure_current must not return Err; catch_unwind around Editor::close cannot catch wnd_proc abort
 [ATOM] type=constraint | detail=No AU/egui zoo; product shm/vault/*Shared stay product
 [ATOM] type=decision | detail=JUCE-shaped: aura-dsp (signal) + aura-midi (messages)
 [ATOM] type=decision | detail=Portable DSP algos land under aura-dsp modules (docs/dsp-layout.md)

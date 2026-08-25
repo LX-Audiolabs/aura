@@ -127,3 +127,15 @@ pub fn set_next_adapter(adapter: Rc<dyn WindowAdapter>) {
     });
     NEXT_ADAPTER.with(|slot| *slot.borrow_mut() = Some(adapter));
 }
+
+/// Drop any adapter the component build did not consume.
+///
+/// Must run right after `Component::new()`. A leftover adapter would otherwise
+/// be dropped by the *next* `set_next_adapter`, i.e. while a different, live
+/// GL/Skia context is current — its renderer teardown would then delete object
+/// ids belonging to that other context. Only reachable when the build closure
+/// panics (`Editor::open` catches that), so this is a cheap guard, not a
+/// hot path.
+pub fn clear_next_adapter() {
+    NEXT_ADAPTER.with(|slot| drop(slot.borrow_mut().take()));
+}

@@ -104,6 +104,18 @@ impl BusLayout {
         }
     }
 
+    /// CLAP/VST3 input *port* count (main + optional sidechain), not channels.
+    ///
+    /// Stereo sidechain is still one port with two channels. Using
+    /// [`Self::sidechain_input_channels`] here advertises extra ports with
+    /// duplicate ids and breaks host routing (Bitwig dry-passthrough).
+    #[must_use]
+    pub const fn input_port_count(self) -> u32 {
+        let main = if self.main_in.is_some() { 1 } else { 0 };
+        let sc = if self.sidechain_in.is_some() { 1 } else { 0 };
+        main + sc
+    }
+
     /// Total audio input channels passed to [`AudioBuffer`](crate::AudioBuffer):
     /// main inputs followed by sidechain inputs.
     #[must_use]
@@ -178,6 +190,15 @@ mod tests {
         assert_eq!(sc.sidechain_input_channels(), 1);
         assert_eq!(sc.total_input_channels(), 3);
         assert_eq!(sc.main_output_channels(), 2);
+        assert_eq!(sc.input_port_count(), 2);
         assert!(sc.config_name().contains("Mono sidechain"));
+    }
+
+    #[test]
+    fn stereo_sidechain_is_two_input_ports() {
+        let sc = BusLayout::stereo().with_sidechain(ChannelConfig::Stereo);
+        assert_eq!(sc.sidechain_input_channels(), 2);
+        assert_eq!(sc.total_input_channels(), 4);
+        assert_eq!(sc.input_port_count(), 2);
     }
 }

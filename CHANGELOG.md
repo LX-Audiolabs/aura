@@ -7,6 +7,16 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ## [Unreleased]
 
+### Fixed
+
+- Bitwig (Win32 CLAP sandbox) abort when closing the plugin UI: Slint's
+  `unregister_item_tree` `expect`s a live OpenGL context from inside
+  `WM_DESTROY`. Bitwig tears the parent HWND down before `gui_destroy`, so
+  `wglMakeCurrent` fails with `ERROR_INVALID_HANDLE` and the panic aborts
+  the sandbox (`0xC000041D`). `ensure_current` now continues without a
+  current context on that path; GL objects are reclaimed with the WGL
+  context. Reload/re-open still worked — only close crashed, all plugins.
+
 ## [0.9.5] - 2026-08-24
 
 ### Added

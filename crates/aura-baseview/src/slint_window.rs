@@ -486,6 +486,7 @@ where
         platform::set_next_adapter(adapter.clone() as Rc<dyn slint::platform::WindowAdapter>);
 
         let component = build(&mut state);
+        platform::clear_next_adapter();
 
         // Announce open-time scale + logical size (truce-slint parity).
         #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
@@ -574,6 +575,7 @@ where
         platform::set_next_adapter(adapter.clone() as Rc<dyn slint::platform::WindowAdapter>);
 
         let component = build(&mut state);
+        platform::clear_next_adapter();
 
         #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
         {
@@ -655,6 +657,7 @@ where
         platform::set_next_adapter(slint_window.clone() as Rc<dyn slint::platform::WindowAdapter>);
 
         let component = build(&mut state);
+        platform::clear_next_adapter();
 
         #[allow(clippy::cast_possible_truncation)]
         {

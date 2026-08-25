@@ -1682,7 +1682,7 @@ unsafe extern "C" fn audio_ports_count<L: PluginLogic>(
     };
     let layout = inst.selected_layout();
     if is_input {
-        u32::from(layout.main_in.is_some()) + layout.sidechain_input_channels()
+        layout.input_port_count()
     } else {
         1
     }
@@ -1708,7 +1708,7 @@ unsafe extern "C" fn audio_ports_get<L: PluginLogic>(
                 return false;
             };
             (ch, "Input", true, 0)
-        } else if index < main_count + layout.sidechain_input_channels() {
+        } else if index < layout.input_port_count() {
             let Some(ch) = layout.sidechain_in else {
                 return false;
             };
@@ -1763,7 +1763,7 @@ unsafe extern "C" fn audio_ports_config_get<L: PluginLogic>(
     let out = unsafe { &mut *config };
     out.id = index;
     write_name(&mut out.name, &layout.config_name());
-    out.input_port_count = u32::from(layout.main_in.is_some()) + layout.sidechain_input_channels();
+    out.input_port_count = layout.input_port_count();
     out.output_port_count = 1;
     out.has_main_input = layout.main_in.is_some();
     out.main_input_channel_count = layout.main_input_channels();
@@ -2236,11 +2236,16 @@ unsafe extern "C" fn gui_create<L: PluginLogic>(
 }
 
 unsafe extern "C" fn gui_destroy<L: PluginLogic>(plugin: *const clap_plugin) {
-    if let Some(inst) = unsafe { Instance::<L>::from_plugin(plugin) }
-        && let Some(editor) = inst.editor.as_mut()
-    {
-        editor.close();
-    }
+    // Catch panics *outside* wnd_proc. A panic *inside* WM_DESTROY still
+    // aborts at the `extern "system"` boundary — that path is handled by
+    // `SlintGlContext::ensure_current` swallowing a dead WGL DC.
+    host_callback("CLAP", "gui_destroy", || {
+        if let Some(inst) = unsafe { Instance::<L>::from_plugin(plugin) }
+            && let Some(editor) = inst.editor.as_mut()
+        {
+            editor.close();
+        }
+    });
 }
 
 unsafe extern "C" fn gui_set_scale<L: PluginLogic>(plugin: *const clap_plugin, scale: f64) -> bool {

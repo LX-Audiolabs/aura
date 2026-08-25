@@ -1,6 +1,7 @@
 use baseview::gl::GlContext;
 use slint::platform::femtovg_renderer::OpenGLInterface;
 use std::ffi::CStr;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 #[derive(Clone)]
 pub struct SlintGlContext {
@@ -58,7 +59,33 @@ unsafe impl OpenGLInterface for SlintGlContext {
     fn ensure_current(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let gl_context = &self.gl_context;
         if let Err(e) = unsafe { gl_context.make_current() } {
-            return Err(format!("make_current failed: {e}").into());
+            // Must NOT be reported as Err. Slint's `unregister_item_tree` does
+            // `renderer().free_graphics_resources(..).expect(..)`, and that runs
+            // from the Slint component's `Drop` — which we reach from inside the
+            // Win32 `WM_DESTROY` window procedure. Hosts that tear the parent
+            // HWND down before calling `gui_destroy` (Bitwig's plugin sandbox)
+            // leave the child's CS_OWNDC HDC dead, so `wglMakeCurrent` fails
+            // with ERROR_INVALID_HANDLE, Slint panics, and the panic aborts at
+            // the `extern "system"` boundary — killing the whole host/sandbox
+            // process (exit 0xC000041D). `catch_unwind` around `Editor::close`
+            // cannot help: the abort happens before the unwind leaves wnd_proc.
+            //
+            // With no context current the follow-up `glDelete*` calls are
+            // no-ops, and every GL object dies anyway with `wglDeleteContext`
+            // when the window's `GlContext` drops — so nothing leaks.
+            // Genuine init failures are still caught: `SlintWindow::new` calls
+            // `make_current` directly and soft-fails the whole editor there.
+            //
+            // Warn once per process: on a lost device this is hit from the
+            // render path on *every* frame, and 60 lines/s into the host's
+            // stderr is its own bug.
+            static WARNED: AtomicBool = AtomicBool::new(false);
+            if !WARNED.swap(true, Ordering::Relaxed) {
+                eprintln!(
+                    "[AURA UI] GL make_current failed ({e}) — continuing without a current \
+                     context (window teardown or lost device)"
+                );
+            }
         }
         Ok(())
     }
