@@ -1,7 +1,7 @@
 # AURA
 
 [![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/rust-1.97-orange.svg)](rust-toolchain.toml)
+[![Rust](https://img.shields.io/badge/rust-1.92-orange.svg)](rust-toolchain.toml)
 [![CI](https://github.com/LX-Audiolabs/aura/actions/workflows/framework.yml/badge.svg)](https://github.com/LX-Audiolabs/aura/actions/workflows/framework.yml)
 [![Slint](https://img.shields.io/badge/UI-Slint-2379F4.svg)](https://slint.dev)
 [![agal](https://img.shields.io/badge/powered%20by-agal-00ADD8.svg)](https://github.com/LX-Audiolabs/agal)
@@ -14,10 +14,10 @@ Runtime + formats + build + CLI live here. Agent orientation: **[agal](https://g
 
 | | |
 |--|--|
-| **Status** | **0.6.x** — basis complete; used in production LX plugins ([lx-audiolabs-plugins](https://github.com/LX-Audiolabs/lx-audiolabs-plugins)) |
+| **Status** | **0.9.x** — basis complete; used in production LX plugins ([lx-audiolabs-plugins](https://github.com/LX-Audiolabs/lx-audiolabs-plugins)) |
 | **Dependency** | path / git deps today (`publish = false`); crates.io later |
 | **License** | [GPL-3.0-or-later](./LICENSE) — see [docs/licensing-compliance.md](./docs/licensing-compliance.md) |
-| **Rust** | 1.97+ (pinned in `rust-toolchain.toml`), edition 2024 |
+| **Rust** | 1.92+ MSRV (stable channel in `rust-toolchain.toml`), edition 2024 |
 
 Commercial LX product plugins (aether, lucent, meridian, …) are **not** in this repository. The official public catalog is **[lx-audiolabs-plugins](https://github.com/LX-Audiolabs/lx-audiolabs-plugins)**. This repo is the **framework only** — smoke examples prove the ship path.
 
@@ -168,6 +168,7 @@ cargo clippy --workspace --all-targets
 | `aura-clap` / `aura-vst3` / `aura-lv2` | Thin format wrappers |
 | `aura-baseview` + `aura-editor` + `aura-build` | Slint window stack + host adapter + `@aura` widgets |
 | `aura-dsp` + `aura-midi` | Portable DSP / MIDI helpers |
+| `aura-shm` + `aura-hot` | Shared-memory IPC hub + CLAP hot-reload proxy (`cargo aura watch --hot`) |
 | `aura-test` | State round-trip + process smokes (dev-dep) |
 | `cargo-aura` | Scaffold, build, install, doctor, preview |
 | `aura-preview` / `aura-gui` | Slint preview + optional project console |
