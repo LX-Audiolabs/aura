@@ -7,6 +7,15 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ## [Unreleased]
 
+### Fixed
+
+- Windows CI `aura-shm` `cv_hub_isolation`: `relay_hub()` returned `None` and
+  panicked. `shared_memory` can leave a `%TEMP%\shared_memory-rs` backing file
+  after a failed `create()`, `yield_now` retries were too short, and
+  `OnceLock<Option<Hub>>` cached that `None` for the process. Retry create/open
+  with a short sleep, delete the leftover file when both fail, cache only a
+  live hub.
+
 ## [0.9.6] - 2026-08-25
 
 ### Fixed

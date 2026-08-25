@@ -54,7 +54,7 @@
 use std::cell::UnsafeCell;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering, fence};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use shared_memory::{Shmem, ShmemConf};
 
@@ -483,26 +483,7 @@ impl<S: Slot> Hub<S> {
         let size = core::mem::size_of::<HubShared<S>>();
         let magic = magic_from_suffix(S::MAGIC_SUFFIX.as_bytes());
 
-        let (shmem, is_creator) =
-            if let Ok(m) = ShmemConf::new().os_id(S::OS_ID).size(size).create() {
-                (m, true)
-            } else {
-                // Lost the create race — another process (or parallel test
-                // binary) is creating the segment but may not have it fully
-                // open yet, so a single `open()` can transiently fail. Retry
-                // briefly instead of caching a `None` in the `OnceLock` for the
-                // whole process. The magic-spin below then waits for the
-                // creator to finish initialization.
-                let mut opened = None;
-                for _ in 0..10_000 {
-                    if let Ok(m) = ShmemConf::new().os_id(S::OS_ID).open() {
-                        opened = Some(m);
-                        break;
-                    }
-                    std::thread::yield_now();
-                }
-                (opened?, false)
-            };
+        let (shmem, is_creator) = map_segment::<S>(size)?;
 
         // SAFETY: `shmem.as_ptr()` comes from the OS allocator and is page-aligned,
         // which satisfies `HubShared<S>`'s 8-byte alignment requirement.
@@ -1547,22 +1528,69 @@ impl CvHub {
     }
 }
 
+/// Create or open the OS segment, retrying through the Windows leftover-file
+/// and lost-create-race cases.
+///
+/// `shared_memory` on Win32 `create_new`s a file under `%TEMP%\shared_memory-rs`.
+/// If `CreateFileMapping` then fails, that file is left behind; the next
+/// `create()` returns `MappingIdExists` and `open()` can also fail (AV lock,
+/// `ERROR_ALREADY_EXISTS` treated as error). `yield_now` × 10k is not enough
+/// on GitHub `windows-latest` — `cv_hub_isolation` then saw `relay_hub() == None`.
+fn map_segment<S: Slot>(size: usize) -> Option<(Shmem, bool)> {
+    const ATTEMPTS: u32 = 50;
+    const PAUSE: Duration = Duration::from_millis(2);
+
+    for attempt in 0..ATTEMPTS {
+        if let Ok(m) = ShmemConf::new().os_id(S::OS_ID).size(size).create() {
+            return Some((m, true));
+        }
+        if let Ok(m) = ShmemConf::new().os_id(S::OS_ID).size(size).open() {
+            return Some((m, false));
+        }
+        // Only when *both* failed: leftover backing file from a previous
+        // process that created the file then died before mapping it.
+        #[cfg(windows)]
+        {
+            let mut path = std::env::temp_dir();
+            path.push("shared_memory-rs");
+            path.push(S::OS_ID.trim_start_matches('/'));
+            let _ = std::fs::remove_file(&path);
+        }
+        if attempt + 1 < ATTEMPTS {
+            std::thread::sleep(PAUSE);
+        }
+    }
+    None
+}
+
 /// Get the process-global relay hub.
 ///
 /// Returns a reference to the shared-memory hub, creating it if this is the
 /// first call. The hub is initialized once and never dropped.
+#[must_use]
 pub fn relay_hub() -> Option<&'static RelayHub> {
-    static HUB: OnceLock<Option<RelayHub>> = OnceLock::new();
-    HUB.get_or_init(RelayHub::open_or_create).as_ref()
+    static HUB: OnceLock<RelayHub> = OnceLock::new();
+    once_hub(&HUB)
 }
 
 /// Get the process-global CV hub.
 ///
 /// Returns a reference to the CV shared-memory hub, creating it if this is the
 /// first call. The hub is initialized once and never dropped.
+#[must_use]
 pub fn cv_hub() -> Option<&'static CvHub> {
-    static HUB: OnceLock<Option<CvHub>> = OnceLock::new();
-    HUB.get_or_init(CvHub::open_or_create).as_ref()
+    static HUB: OnceLock<CvHub> = OnceLock::new();
+    once_hub(&HUB)
+}
+
+/// Cache only a live hub. A transient `open_or_create` failure must not poison
+/// every later caller in this process (`OnceLock<Option<_>>` stored `None`).
+fn once_hub<S: Slot>(lock: &'static OnceLock<Hub<S>>) -> Option<&'static Hub<S>> {
+    if let Some(h) = lock.get() {
+        return Some(h);
+    }
+    let hub = Hub::<S>::open_or_create()?;
+    Some(lock.get_or_init(|| hub))
 }
 
 /// Resolve which consumer name a relay publisher should target.
