@@ -52,3 +52,7 @@ Keep this file short (~80 lines). Prefer `[ATOM]` one-liners.
 [ATOM] type=decision | detail=AURA state = flat param blob (truce-like); no vault/MD/SNAP migration tools in framework core
 [ATOM] type=decision | detail=crates.io last — only after framework test pass (CI smokes + host proofs); keep publish = false
 ```
+[ATOM] type=lesson | detail=BiquadFilter state variables z1/z2 müssen in prepare() auf 0.0 resettet werden nach SR-Change
+[ATOM] type=decision | detail=aura-gui zurückgestellt — Cheatsheet reicht als primäre Developer-UX; kein GUI-Overhead bis aura-host konkreter ist
+[ATOM] type=decision | detail=aura-host geplant — angelehnt an clap-host, erste Ideen in docs; ersetzt aura-gui langfristig als Host-Infrastruktur
+[ATOM] type=fact | detail=aura-host Erstidee: docs/aura-host-idea.md
