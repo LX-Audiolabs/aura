@@ -1,0 +1,21 @@
+[package]
+name = "aura-host"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Minimal CLAP host — load .clap, list params, run audio (Phase 1 CLI)"
+publish = false
+
+[[bin]]
+name = "aura-host"
+path = "src/main.rs"
+
+[dependencies]
+clap-sys = "0.5"
+libloading = "0.8"
+cpal = "0.15"
+
+[lints]
+workspace = true
