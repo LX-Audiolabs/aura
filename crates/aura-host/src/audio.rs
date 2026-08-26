@@ -9,7 +9,7 @@ use std::ptr;
 use clap_sys::{audio_buffer::clap_audio_buffer, plugin::clap_plugin, process::clap_process};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
-use crate::events::{Dialect, EvList, RawMidi, sink_output_events};
+use crate::events::{Dialect, EvList, Queue, RawMidi, UiEvent, sink_output_events};
 use crate::loader::{self, PluginPtr};
 
 /// Frames per `process()` call at most — also the `max_frames_count` we activate with.
@@ -33,7 +33,8 @@ pub struct Engine {
     /// Index into `bufs` where output port 0 starts.
     main_out_offset: usize,
     events: EvList,
-    midi_rx: rtrb::Consumer<RawMidi>,
+    midi_rx: Queue<RawMidi>,
+    ui_rx: Queue<UiEvent>,
     dialect: Dialect,
     steady_time: i64,
 }
@@ -48,7 +49,8 @@ impl Engine {
     pub fn new(
         plugin: *const clap_plugin,
         device_channels: usize,
-        midi_rx: rtrb::Consumer<RawMidi>,
+        midi_rx: Queue<RawMidi>,
+        ui_rx: Queue<UiEvent>,
     ) -> Self {
         let in_counts = loader::audio_port_channels(plugin, true);
         let mut out_counts = loader::audio_port_channels(plugin, false);
@@ -97,6 +99,7 @@ impl Engine {
             main_out_offset,
             events: EvList::with_capacity(256),
             midi_rx,
+            ui_rx,
             dialect: loader::note_dialect(plugin),
             steady_time: 0,
         }
@@ -123,8 +126,14 @@ impl Engine {
         // ponytail: every queued MIDI message lands at frame 0 of the next block —
         // sample-accurate timestamps need cpal's OutputCallbackInfo, add if it matters.
         self.events.clear();
-        while let Ok(msg) = self.midi_rx.pop() {
+        while let Some(msg) = self.midi_rx.pop() {
             self.events.push_midi(msg, self.dialect, 0);
+        }
+        while let Some(ev) = self.ui_rx.pop() {
+            match ev {
+                UiEvent::Param { id, value } => self.events.push_param(id, value, 0),
+                UiEvent::Midi(msg) => self.events.push_midi(msg, self.dialect, 0),
+            }
         }
 
         let total = data.len() / self.device_channels;
@@ -186,71 +195,134 @@ impl Engine {
     }
 }
 
-/// Activate the plugin, open the default output device, and block forever.
-pub fn run(plugin: *const clap_plugin, midi_rx: rtrb::Consumer<RawMidi>) {
+/// Names of the available output devices, in `open()` order.
+#[must_use]
+pub fn output_devices() -> Vec<String> {
+    let Ok(devices) = cpal::default_host().output_devices() else {
+        return Vec::new();
+    };
+    devices
+        .map(|d| d.name().unwrap_or_else(|_| "<unnamed>".into()))
+        .collect()
+}
+
+/// A running stream plus the plugin activation that belongs to it. Dropping it
+/// stops processing and deactivates, so switching devices is drop + `open`.
+pub struct Session {
+    // Declared first: the stream must stop before the plugin is deactivated.
+    _stream: cpal::Stream,
+    plugin: PluginPtr,
+    pub sample_rate: f64,
+    pub device_channels: usize,
+    pub in_ports: Vec<u32>,
+    pub out_ports: Vec<u32>,
+    pub dialect: Dialect,
+}
+
+impl Drop for Session {
+    fn drop(&mut self) {
+        let p = self.plugin.0;
+        if let Some(stop) = unsafe { (*p).stop_processing } {
+            unsafe { stop(p) };
+        }
+        if let Some(deactivate) = unsafe { (*p).deactivate } {
+            unsafe { deactivate(p) };
+        }
+    }
+}
+
+/// Activate the plugin at the device's rate and start streaming. `device_name`
+/// of `None` picks the default output device.
+pub fn open(
+    plugin: *const clap_plugin,
+    device_name: Option<&str>,
+    midi_rx: Queue<RawMidi>,
+    ui_rx: Queue<UiEvent>,
+) -> Result<Session, String> {
     let audio_host = cpal::default_host();
-    let device = audio_host.default_output_device().unwrap_or_else(|| {
-        eprintln!("error: no default output device");
-        std::process::exit(1);
-    });
-    let config = device.default_output_config().unwrap_or_else(|e| {
-        eprintln!("error: output config: {e}");
-        std::process::exit(1);
-    });
+    let device = match device_name {
+        Some(want) => audio_host
+            .output_devices()
+            .map_err(|e| format!("output devices: {e}"))?
+            .find(|d| d.name().is_ok_and(|n| n == want))
+            .ok_or_else(|| format!("no output device named {want:?}"))?,
+        None => audio_host
+            .default_output_device()
+            .ok_or("no default output device")?,
+    };
+    let config = device
+        .default_output_config()
+        .map_err(|e| format!("output config: {e}"))?;
+
+    if config.sample_format() != cpal::SampleFormat::F32 {
+        // ponytail: every current backend gives us f32; add conversion if one doesn't.
+        return Err(format!(
+            "unsupported sample format {:?} — add conversion if needed",
+            config.sample_format()
+        ));
+    }
 
     let sample_rate = f64::from(config.sample_rate().0);
-    let channels = config.channels() as usize;
+    let device_channels = config.channels() as usize;
 
     if let Some(activate) = unsafe { (*plugin).activate }
         && !unsafe { activate(plugin, sample_rate, 1, MAX_FRAMES as u32) }
     {
-        eprintln!("error: plugin.activate returned false");
-        std::process::exit(1);
+        return Err("plugin.activate returned false".into());
     }
     if let Some(start) = unsafe { (*plugin).start_processing }
         && !unsafe { start(plugin) }
     {
-        eprintln!("error: plugin.start_processing returned false");
-        std::process::exit(1);
+        if let Some(deactivate) = unsafe { (*plugin).deactivate } {
+            unsafe { deactivate(plugin) };
+        }
+        return Err("plugin.start_processing returned false".into());
     }
 
-    let mut engine = Engine::new(plugin, channels, midi_rx);
-    let (ins, outs) = engine.port_layout();
-    println!(
-        "audio ports: in {ins:?} / out {outs:?} (channels per port), note dialect {:?}",
-        engine.dialect()
-    );
+    let mut engine = Engine::new(plugin, device_channels, midi_rx, ui_rx);
+    let (in_ports, out_ports) = engine.port_layout();
+    let dialect = engine.dialect();
 
     let stream_config = cpal::StreamConfig {
         channels: config.channels(),
         sample_rate: config.sample_rate(),
         buffer_size: cpal::BufferSize::Default,
     };
+    let stream = device
+        .build_output_stream::<f32, _, _>(
+            &stream_config,
+            move |data: &mut [f32], _| engine.process(data),
+            |e| eprintln!("audio error: {e}"),
+            None,
+        )
+        .map_err(|e| format!("build_output_stream: {e}"))?;
+    stream.play().map_err(|e| format!("stream.play: {e}"))?;
 
-    let stream = match config.sample_format() {
-        cpal::SampleFormat::F32 => device
-            .build_output_stream::<f32, _, _>(
-                &stream_config,
-                move |data: &mut [f32], _| engine.process(data),
-                |e| eprintln!("audio error: {e}"),
-                None,
-            )
-            .unwrap_or_else(|e| {
-                eprintln!("error: build_output_stream: {e}");
-                std::process::exit(1);
-            }),
-        fmt => {
-            eprintln!("error: unsupported sample format {fmt:?} — add conversion if needed");
-            std::process::exit(1);
-        }
-    };
+    Ok(Session {
+        _stream: stream,
+        plugin: PluginPtr(plugin),
+        sample_rate,
+        device_channels,
+        in_ports,
+        out_ports,
+        dialect,
+    })
+}
 
-    stream.play().unwrap_or_else(|e| {
-        eprintln!("error: stream.play: {e}");
+/// CLI `--play`: open the default device and block until ctrl+c.
+pub fn run(plugin: *const clap_plugin, midi_rx: Queue<RawMidi>, ui_rx: Queue<UiEvent>) {
+    let session = open(plugin, None, midi_rx, ui_rx).unwrap_or_else(|e| {
+        eprintln!("error: {e}");
         std::process::exit(1);
     });
-
-    println!("playing at {sample_rate} Hz, {channels}ch — ctrl+c to stop");
+    println!(
+        "audio ports: in {:?} / out {:?} (channels per port), note dialect {:?}",
+        session.in_ports, session.out_ports, session.dialect
+    );
+    println!(
+        "playing at {} Hz, {}ch — ctrl+c to stop",
+        session.sample_rate, session.device_channels
+    );
     loop {
         std::thread::sleep(std::time::Duration::from_secs(60));
     }

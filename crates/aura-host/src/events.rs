@@ -1,4 +1,4 @@
-//! CLAP event plumbing: MIDI ring buffer (midir thread → audio thread),
+//! CLAP event plumbing: the lock-free queues feeding the audio thread, the
 //! input event list, and raw-MIDI → CLAP dialect conversion.
 
 #![allow(clippy::cast_possible_truncation)]
@@ -6,6 +6,9 @@
 
 use std::ffi::c_void;
 use std::ptr;
+use std::sync::Arc;
+
+use crossbeam_queue::ArrayQueue;
 
 use clap_sys::{
     events::{
@@ -19,8 +22,25 @@ use clap_sys::{
 /// Raw 3-byte MIDI message, as delivered by midir.
 pub type RawMidi = [u8; 3];
 
-/// SPSC queue depth. 1024 short messages is far more than one audio block sees.
-pub const MIDI_QUEUE_CAP: usize = 1024;
+/// Queue depth. 1024 short messages is far more than one audio block sees.
+pub const QUEUE_CAP: usize = 1024;
+
+/// Anything the main/UI thread sends to the audio thread mid-stream.
+#[derive(Copy, Clone, Debug)]
+pub enum UiEvent {
+    Param { id: clap_id, value: f64 },
+    Midi(RawMidi),
+}
+
+/// Lock-free MPMC queue. Shared by `Arc` rather than split into producer and
+/// consumer halves: the MIDI thread, the UI thread and a rebuilt audio Engine
+/// all need to hold on to the same queue across device switches.
+pub type Queue<T> = Arc<ArrayQueue<T>>;
+
+#[must_use]
+pub fn queue<T>() -> Queue<T> {
+    Arc::new(ArrayQueue::new(QUEUE_CAP))
+}
 
 /// Which note dialect the plugin's first input note port wants.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

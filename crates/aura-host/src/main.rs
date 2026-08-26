@@ -1,26 +1,38 @@
-//! aura-host — minimal CLAP host (Phase 1: CLI, params, MIDI, audio)
+//! aura-host — minimal CLAP host.
+//!
+//! Phase 1 is the CLI (params, MIDI, audio); `--gui` opens the Phase 2 Slint
+//! shell with device pick, param sliders and computer-keyboard notes.
 //!
 //! Usage:
-//!   aura-host <path.clap> [--plugin <id>] [--list-params] [--set <id>=<val>]
-//!                         [--play] [--list-midi] [--midi-in <name>]
+//!   aura-host <path.clap> [--plugin <id>] [--gui] [--list-params]
+//!                         [--set <id>=<val>] [--play] [--list-midi]
+//!                         [--midi-in <name>]
 
 #![allow(clippy::missing_safety_doc)]
 
 mod audio;
 mod events;
+mod gui;
 mod loader;
 mod midi;
+mod plugin_gui;
+#[cfg(windows)]
+mod win32_embed;
 
 use std::ffi::CStr;
 
-const USAGE: &str = "usage: aura-host <path.clap> [--plugin <id>] [--list-params] \
+const USAGE: &str = "usage: aura-host <path.clap> [--plugin <id>] [--gui] [--list-params] \
                      [--set <id>=<val>] [--play] [--list-midi] [--midi-in <name>]";
 
+// A CLI flag struct is exactly the case this lint doesn't help — each bool
+// is an independent switch, not related state that wants an enum.
+#[allow(clippy::struct_excessive_bools)]
 struct Args {
     path: String,
     plugin_id: Option<String>,
     list_params: bool,
     play: bool,
+    gui: bool,
     list_midi: bool,
     midi_in: Option<String>,
     sets: Vec<(u32, f64)>,
@@ -38,6 +50,7 @@ fn parse_args() -> Args {
         plugin_id: None,
         list_params: false,
         play: false,
+        gui: false,
         list_midi: false,
         midi_in: None,
         sets: Vec::new(),
@@ -68,6 +81,7 @@ fn parse_args() -> Args {
             }
             "--list-params" => a.list_params = true,
             "--play" => a.play = true,
+            "--gui" => a.gui = true,
             "--list-midi" => a.list_midi = true,
             arg => eprintln!("warn: unknown arg {arg}"),
         }
@@ -80,6 +94,25 @@ fn parse_args() -> Args {
 fn parse_set(s: &str) -> Option<(u32, f64)> {
     let (id, val) = s.split_once('=')?;
     Some((id.trim().parse().ok()?, val.trim().parse().ok()?))
+}
+
+/// Name and id of the plugin the GUI is showing — same pick as `Loader::create`.
+fn descriptor_strings(loader: &loader::Loader, want_id: Option<&str>) -> (String, String) {
+    for idx in 0..loader.plugin_count() {
+        let Some(d) = loader.descriptor(idx) else {
+            continue;
+        };
+        let id = unsafe { CStr::from_ptr(d.id) }
+            .to_string_lossy()
+            .into_owned();
+        if want_id.is_none_or(|want| want == id) {
+            let name = unsafe { CStr::from_ptr(d.name) }
+                .to_string_lossy()
+                .into_owned();
+            return (name, id);
+        }
+    }
+    (String::new(), String::new())
 }
 
 fn main() {
@@ -105,7 +138,7 @@ fn main() {
         }
     }
 
-    if !args.list_params && !args.play && args.sets.is_empty() {
+    if !args.list_params && !args.play && !args.gui && args.sets.is_empty() {
         return;
     }
 
@@ -136,16 +169,19 @@ fn main() {
         loader::list_params(plugin);
     }
 
-    if args.play {
+    if args.gui {
+        let (name, id) = descriptor_strings(&loader, args.plugin_id.as_deref());
+        if let Err(e) = gui::run(plugin, &name, &id, args.midi_in.as_deref()) {
+            eprintln!("error: gui: {e}");
+            std::process::exit(1);
+        }
+    } else if args.play {
+        let midi_q = events::queue();
         // Connection must outlive the stream: dropping it closes the MIDI port.
-        let (midi_rx, _conn) = match midi::open(args.midi_in.as_deref()) {
-            Ok(pair) => (pair.0, Some(pair.1)),
-            Err(e) => {
-                eprintln!("warn: {e} — running without MIDI");
-                (rtrb::RingBuffer::new(1).1, None)
-            }
-        };
-        audio::run(plugin, midi_rx);
+        let _conn = midi::open(args.midi_in.as_deref(), &midi_q)
+            .inspect_err(|e| eprintln!("warn: {e} — running without MIDI"))
+            .ok();
+        audio::run(plugin, midi_q, events::queue());
         // run() loops forever; if it returns, fall through to destroy.
     }
 

@@ -7,9 +7,9 @@
 |---|---|
 | kind | `crate` |
 | path | `crates/aura-host` |
-| description | Minimal CLAP host — load .clap, params, MIDI in, run audio (Phase 1 CLI) |
-| frameworks | clap |
-| generated | `2026-08-26T06:01:31Z` |
+| description | Minimal CLAP host — CLI + Slint GUI, load .clap, params, MIDI in, run audio |
+| frameworks | aura, clap, raw-window-handle, slint |
+| generated | `2026-08-26T11:53:59Z` |
 
 ## Graph atoms (auto)
 
@@ -17,22 +17,26 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 
 ```text
 [ATOM] type=fact | detail=kind=crate id=crates/aura-host
-[ATOM] type=fact | detail=frameworks=clap
-[ATOM] type=fact | detail=roles=entry+manifest+source
+[ATOM] type=fact | detail=frameworks=aura+clap+raw-window-handle+slint
+[ATOM] type=fact | detail=roles=build+entry+manifest+slint+source
 [ATOM] type=fact | detail=has_process=true
+[ATOM] type=fact | detail=depends_on=aura-build
 ```
+
+## deps (workspace)
+- `aura-build`
 
 ## structure
 - process methods (DSP): 1
-- public_api symbols: 22 (see json)
-- roles: entry, manifest, source
+- public_api symbols: 43 (see json)
+- roles: build, entry, manifest, slint, source
 
 ## api surface
 - `struct Engine { … }` · `src/audio.rs`
+- `struct Session { … }` · `src/audio.rs`
 - `struct EvList { items: Vec<EvStorage> }` · `src/events.rs`
 - `struct Loader { … }` · `src/loader.rs`
-- `struct PluginPtr {  }` · `src/loader.rs`
-- … +18 more public symbols
+- … +41 more public symbols
 
 ## findings
 - [info] **crate_no_dependents**: aura-host has no inbound workspace edges — unused or only path-included? · `crates/aura-host` · fix: wire `aura-host` as a path dep from a plugin/crate, or remove from workspace
@@ -52,17 +56,29 @@ else in the workspace implements the *plugin* side; this crate is the mirror,
 and the fast dev loop for testing plugins without a DAW. Plan:
 [docs/aura-host-idea.md](../../docs/aura-host-idea.md).
 
-Phase 1 (CLI: load, params, MIDI in, audio) is done. Phase 2 is the Slint shell.
+Phase 1 (CLI: load, params, MIDI in, audio), Phase 2 (Slint shell: device
+pick, param sliders, keyboard→notes, plugin GUI), and Phase 3 (Windows GUI
+embed) are all done.
 
 ## Open
 
-- [ ] Phase 2: Slint shell — device picker, param sliders, keyboard→notes,
-      plugin GUI floating (`gui_create(floating=true)`).
-- [ ] Phase 2 needs host `params` (`request_flush`, `rescan`) + `gui`
-      extensions, and a Main→Audio param ring (Phase 1 sets params only while
-      deactivated, so it has no such ring).
 - [ ] No audio *input* path — plugin inputs are fed silence.
 - [ ] Only `f32` cpal streams; other sample formats exit with an error.
+- [ ] Param sliders poll `params.get_value` at 50 Hz instead of reading the
+      plugin's output events — fine for UI, not for automation/recording.
+- [ ] `--midi-in` on `--gui` is untested on real hardware (dev machine has no
+      MIDI input ports).
+- [ ] Embedded plugin GUI (`win32_embed.rs`) is structurally verified (correct
+      `HWND` parent/child nesting, clean teardown, no crash — tested live
+      against `smoke-gain`/`smoke-synth`) but not visually confirmed:
+      `GetWindowRect` on the socket reports a physically impossible position
+      (~-32000 on both axes). Likely an artifact of the remote-desktop dev
+      session (screenshots/`SetForegroundWindow` were already unreliable there
+      in Phase 2), not necessarily a real bug — re-check on a normal desktop
+      session before trusting the on-screen position.
+- [ ] Embed socket is placed at a fixed offset (`EMBED_X`/`EMBED_Y` in
+      `gui.rs`) and never repositioned — resizing the host window doesn't move
+      it, and a small window can clip it.
 
 ## Decisions
 
@@ -73,6 +89,22 @@ Phase 1 (CLI: load, params, MIDI in, audio) is done. Phase 2 is the Slint shell.
 - MIDI dialect is decided once from `note-ports.preferred_dialect`, not
   per-event: MIDI dialect → raw `CLAP_EVENT_MIDI`, otherwise notes are
   converted to `CLAP_EVENT_NOTE_ON/OFF` and CC/pitchbend are dropped.
+- Floating plugin GUI (`plugin_gui.rs`) only serves third-party plugins —
+  `aura-clap` answers `is_api_supported(is_floating=true)` with `false`
+  ([crates/aura-clap/src/lib.rs:2204](../../crates/aura-clap/src/lib.rs:2204)),
+  so AURA's own plugins are embed-only. `gui.rs`'s toggle button tries embed
+  first (`win32_embed::supports_embedded`) and falls back to floating.
+- Embed socket (`win32_embed.rs`) is a bare `WNDCLASSW` with `DefWindowProcW` —
+  we don't paint or handle input in it ourselves, the plugin's own child window
+  (created inside it via `set_parent`) does all of that. Sized to the plugin's
+  `gui.get_size()` (fallback `400x300`), not to a host-chosen size.
+- No `windows` crate — `windows-sys` only, version-pinned to match what
+  `baseview` already resolves to (0.61.2) so it's not a second copy in the
+  dependency tree.
+- Main↔Audio queues are `Arc<crossbeam_queue::ArrayQueue>`, not SPSC: the GUI
+  rebuilds the audio `Engine` on every device switch (drop + reopen), and the
+  same queue instance has to survive that — an SPSC ring's producer/consumer
+  split doesn't.
 
 ## Atoms (human)
 
@@ -82,6 +114,10 @@ _Graph atoms live **above** in AUTO. Add durable decisions/lessons here:_
 [ATOM] type=decision | detail=aura-host is a bin; crate_no_dependents finding is expected
 [ATOM] type=decision | detail=host side uses raw clap-sys, not aura-clap (PluginLogic-shaped)
 [ATOM] type=constraint | detail=one clap_audio_buffer per declared port, not per channel — smoke-sidechain declares in [2,1]
-[ATOM] type=constraint | detail=params set via params.flush only while deactivated; live edits need a Main→Audio ring (Phase 2)
+[ATOM] type=constraint | detail=params set via params.flush only while deactivated; live edits during playback go through the Main->Audio queue instead
 [ATOM] type=lesson | detail=cpal callback must not allocate — buffers are preallocated for MAX_FRAMES=4096 and blocks are chunked
+[ATOM] type=decision | detail=Main<->Audio queues are Arc<ArrayQueue>, not SPSC — must survive Engine rebuild on device switch
+[ATOM] type=constraint | detail=floating plugin GUI only works for third-party plugins; aura-clap rejects is_floating=true
+[ATOM] type=decision | detail=embed toggle tries win32_embed first, falls back to plugin_gui floating
+[ATOM] type=lesson | detail=embed live-verified against smoke-gain/smoke-synth via HWND tree (EnumChildWindows), not by screenshot -- remote-desktop session made GetWindowRect/screenshots unreliable
 ```

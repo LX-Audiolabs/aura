@@ -9,7 +9,7 @@
 | path | `examples/smoke-midi-fx` |
 | description | AURA in-tree CLAP smoke — MIDI FX (thru + transpose) |
 | frameworks | aura |
-| generated | `2026-08-26T06:01:31Z` |
+| generated | `2026-08-26T11:53:59Z` |
 
 ## Graph atoms (auto)
 

@@ -9,7 +9,7 @@
 | path | `crates/aura-build` |
 | description | AURA build helper: @aura Slint widgets + bundled fonts for slint-build 1.17.1 |
 | frameworks | slint |
-| generated | `2026-08-26T06:01:31Z` |
+| generated | `2026-08-26T11:53:59Z` |
 
 ## Graph atoms (auto)
 
@@ -19,12 +19,13 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 [ATOM] type=fact | detail=kind=crate id=crates/aura-build
 [ATOM] type=fact | detail=frameworks=slint
 [ATOM] type=fact | detail=roles=entry+manifest+slint
+[ATOM] type=fact | detail=used_by=aura-host via build_depends_on
 [ATOM] type=fact | detail=used_by=examples/smoke-gain via build_depends_on
 [ATOM] type=fact | detail=used_by=tools/aura-gui via build_depends_on
-[ATOM] type=fact | detail=used_by=tools/aura-preview via depends_on
 ```
 
 ## dependents (inbound)
+- `aura-host` --build_depends_on--> `aura-build`
 - `examples/smoke-gain` --build_depends_on--> `aura-build`
 - `tools/aura-gui` --build_depends_on--> `aura-build`
 - `tools/aura-preview` --depends_on--> `aura-build`

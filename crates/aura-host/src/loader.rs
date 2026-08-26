@@ -7,6 +7,7 @@ use clap_sys::{
     entry::clap_plugin_entry,
     ext::{
         audio_ports::{CLAP_EXT_AUDIO_PORTS, clap_audio_port_info, clap_plugin_audio_ports},
+        gui::{CLAP_EXT_GUI, clap_host_gui},
         log::{
             CLAP_EXT_LOG, CLAP_LOG_ERROR, CLAP_LOG_FATAL, CLAP_LOG_HOST_MISBEHAVING, CLAP_LOG_INFO,
             CLAP_LOG_PLUGIN_MISBEHAVING, CLAP_LOG_WARNING, clap_host_log, clap_log_severity,
@@ -15,7 +16,10 @@ use clap_sys::{
             CLAP_EXT_NOTE_PORTS, CLAP_NOTE_DIALECT_CLAP, CLAP_NOTE_DIALECT_MIDI,
             clap_note_port_info, clap_plugin_note_ports,
         },
-        params::{CLAP_EXT_PARAMS, CLAP_PARAM_IS_HIDDEN, clap_param_info, clap_plugin_params},
+        params::{
+            CLAP_EXT_PARAMS, CLAP_PARAM_IS_HIDDEN, clap_host_params, clap_param_clear_flags,
+            clap_param_info, clap_param_rescan_flags, clap_plugin_params,
+        },
         thread_check::{CLAP_EXT_THREAD_CHECK, clap_host_thread_check},
     },
     factory::plugin_factory::{CLAP_PLUGIN_FACTORY_ID, clap_plugin_factory},
@@ -27,6 +31,7 @@ use clap_sys::{
 use std::ffi::{CStr, CString, c_char, c_void};
 use std::ptr;
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::ThreadId;
 
 use crate::events::{Dialect, EvList, sink_output_events};
@@ -73,8 +78,68 @@ unsafe extern "C" fn host_is_audio_thread(_: *const clap_host) -> bool {
     AUDIO_THREAD.get() == Some(&std::thread::current().id())
 }
 
+/// Set by `request_callback`; drained on the main thread by [`pump_main_thread`].
+static CALLBACK_REQUESTED: AtomicBool = AtomicBool::new(false);
+/// Set by `request_restart`; the GUI reopens the audio session when it sees it.
+static RESTART_REQUESTED: AtomicBool = AtomicBool::new(false);
+/// Set by the plugin's `gui.closed` callback — the window is gone.
+static GUI_CLOSED: AtomicBool = AtomicBool::new(false);
+
+/// Run the plugin's pending main-thread work. Call from the UI event loop.
+pub fn pump_main_thread(plugin: *const clap_plugin) {
+    if CALLBACK_REQUESTED.swap(false, Ordering::AcqRel)
+        && let Some(cb) = unsafe { (*plugin).on_main_thread }
+    {
+        unsafe { cb(plugin) };
+    }
+}
+
+/// True once per `request_restart` from the plugin.
+pub fn take_restart_request() -> bool {
+    RESTART_REQUESTED.swap(false, Ordering::AcqRel)
+}
+
+/// True once per `gui.closed` from the plugin.
+pub fn take_gui_closed() -> bool {
+    GUI_CLOSED.swap(false, Ordering::AcqRel)
+}
+
+unsafe extern "C" fn host_gui_resize_hints_changed(_: *const clap_host) {}
+unsafe extern "C" fn host_gui_request_resize(_: *const clap_host, _: u32, _: u32) -> bool {
+    // Floating windows size themselves; nothing for us to resize.
+    false
+}
+unsafe extern "C" fn host_gui_request_show(_: *const clap_host) -> bool {
+    false
+}
+unsafe extern "C" fn host_gui_request_hide(_: *const clap_host) -> bool {
+    false
+}
+unsafe extern "C" fn host_gui_closed(_: *const clap_host, _was_destroyed: bool) {
+    GUI_CLOSED.store(true, Ordering::Release);
+}
+
+unsafe extern "C" fn host_params_rescan(_: *const clap_host, _: clap_param_rescan_flags) {}
+unsafe extern "C" fn host_params_clear(_: *const clap_host, _: clap_id, _: clap_param_clear_flags) {
+}
+unsafe extern "C" fn host_params_request_flush(_: *const clap_host) {}
+
 static LOG_EXT: clap_host_log = clap_host_log {
     log: Some(host_log),
+};
+static GUI_EXT: clap_host_gui = clap_host_gui {
+    resize_hints_changed: Some(host_gui_resize_hints_changed),
+    request_resize: Some(host_gui_request_resize),
+    request_show: Some(host_gui_request_show),
+    request_hide: Some(host_gui_request_hide),
+    closed: Some(host_gui_closed),
+};
+// The UI polls `params.get_value` instead of tracking output events, so these
+// are accept-and-ignore. Plugins still expect the extension to exist.
+static PARAMS_EXT: clap_host_params = clap_host_params {
+    rescan: Some(host_params_rescan),
+    clear: Some(host_params_clear),
+    request_flush: Some(host_params_request_flush),
 };
 static THREAD_CHECK_EXT: clap_host_thread_check = clap_host_thread_check {
     is_main_thread: Some(host_is_main_thread),
@@ -92,11 +157,21 @@ unsafe extern "C" fn host_get_extension(_: *const clap_host, id: *const c_char) 
     if id == CLAP_EXT_THREAD_CHECK {
         return ptr::from_ref(&THREAD_CHECK_EXT).cast();
     }
+    if id == CLAP_EXT_GUI {
+        return ptr::from_ref(&GUI_EXT).cast();
+    }
+    if id == CLAP_EXT_PARAMS {
+        return ptr::from_ref(&PARAMS_EXT).cast();
+    }
     ptr::null()
 }
-unsafe extern "C" fn host_request_restart(_: *const clap_host) {}
+unsafe extern "C" fn host_request_restart(_: *const clap_host) {
+    RESTART_REQUESTED.store(true, Ordering::Release);
+}
 unsafe extern "C" fn host_request_process(_: *const clap_host) {}
-unsafe extern "C" fn host_request_callback(_: *const clap_host) {}
+unsafe extern "C" fn host_request_callback(_: *const clap_host) {
+    CALLBACK_REQUESTED.store(true, Ordering::Release);
+}
 
 /// Leak a `clap_host` with stable identity strings. Call once, from the main thread.
 pub fn make_host() -> &'static clap_host {
@@ -234,7 +309,7 @@ impl Drop for Loader {
 // ---------------------------------------------------------------------------
 
 /// Fetch a plugin extension by id. Returns `None` if unsupported.
-fn plugin_ext(plugin: *const clap_plugin, id: &CStr) -> Option<*const c_void> {
+pub fn plugin_ext(plugin: *const clap_plugin, id: &CStr) -> Option<*const c_void> {
     let get_ext = unsafe { (*plugin).get_extension }?;
     let raw = unsafe { get_ext(plugin, id.as_ptr()) };
     if raw.is_null() { None } else { Some(raw) }
@@ -308,39 +383,97 @@ pub fn set_param(plugin: *const clap_plugin, id: clap_id, value: f64) -> Result<
     Ok(())
 }
 
-pub fn list_params(plugin: *const clap_plugin) {
+/// One visible parameter, as the UI and the CLI listing both want it.
+#[derive(Clone, Debug)]
+pub struct ParamInfo {
+    pub id: clap_id,
+    pub name: String,
+    pub min: f64,
+    pub max: f64,
+    pub value: f64,
+}
+
+/// Every non-hidden parameter, with its current value. Main thread only.
+#[must_use]
+pub fn params(plugin: *const clap_plugin) -> Vec<ParamInfo> {
     let Some(params) = params_ext(plugin) else {
-        println!("  (no clap.params extension)");
-        return;
+        return Vec::new();
     };
-    let count = params.count.map_or(0, |f| unsafe { f(plugin) });
-    println!("{count} param(s):");
+    let (Some(get_info), count) = (
+        params.get_info,
+        params.count.map_or(0, |f| unsafe { f(plugin) }),
+    ) else {
+        return Vec::new();
+    };
     let mut info: clap_param_info = unsafe { std::mem::zeroed() };
-    for i in 0..count {
-        let Some(get_info) = params.get_info else {
-            break;
-        };
-        if !unsafe { get_info(plugin, i, &raw mut info) } {
-            continue;
-        }
-        if info.flags & CLAP_PARAM_IS_HIDDEN != 0 {
-            continue;
-        }
-        let name = unsafe { CStr::from_ptr(info.name.as_ptr()) }.to_string_lossy();
-        let val = params
-            .get_value
-            .and_then(|f| {
-                let mut v = 0.0f64;
-                if unsafe { f(plugin, info.id, &raw mut v) } {
-                    Some(v)
-                } else {
-                    None
-                }
+    (0..count)
+        .filter_map(|i| {
+            if !unsafe { get_info(plugin, i, &raw mut info) }
+                || info.flags & CLAP_PARAM_IS_HIDDEN != 0
+            {
+                return None;
+            }
+            Some(ParamInfo {
+                id: info.id,
+                name: unsafe { CStr::from_ptr(info.name.as_ptr()) }
+                    .to_string_lossy()
+                    .into_owned(),
+                min: info.min_value,
+                max: info.max_value,
+                value: param_value(plugin, info.id).unwrap_or(f64::NAN),
             })
-            .unwrap_or(f64::NAN);
+        })
+        .collect()
+}
+
+/// Current value of one parameter. Main thread only.
+#[must_use]
+pub fn param_value(plugin: *const clap_plugin, id: clap_id) -> Option<f64> {
+    let get = params_ext(plugin)?.get_value?;
+    let mut v = 0.0f64;
+    unsafe { get(plugin, id, &raw mut v) }.then_some(v)
+}
+
+/// The plugin's own formatting for a value ("-6.0 dB"). Falls back to the
+/// plain number when the plugin has no `value_to_text`.
+#[must_use]
+pub fn param_text(plugin: *const clap_plugin, id: clap_id, value: f64) -> String {
+    let fallback = || format!("{value:.2}");
+    let Some(to_text) = params_ext(plugin).and_then(|p| p.value_to_text) else {
+        return fallback();
+    };
+    let mut buf = [0u8; 64];
+    if !unsafe {
+        to_text(
+            plugin,
+            id,
+            value,
+            buf.as_mut_ptr().cast::<c_char>(),
+            buf.len() as u32,
+        )
+    } {
+        return fallback();
+    }
+    CStr::from_bytes_until_nul(&buf)
+        .map_or_else(|_| fallback(), |s| s.to_string_lossy().into_owned())
+}
+
+pub fn list_params(plugin: *const clap_plugin) {
+    let all = params(plugin);
+    if all.is_empty() {
+        println!("  (no params)");
+        return;
+    }
+    println!("{} param(s):", all.len());
+    for (i, p) in all.iter().enumerate() {
         println!(
-            "  [{i}] id={} {name} = {val:.4}  [{:.4}..{:.4}]",
-            info.id, info.min_value, info.max_value
+            "  [{i}] id={} {} = {:.4} ({})  [{:.4}..{:.4}]",
+            p.id,
+            p.name,
+            p.value,
+            param_text(plugin, p.id, p.value),
+            p.min,
+            p.max
         );
     }
 }

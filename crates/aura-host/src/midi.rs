@@ -2,7 +2,7 @@
 
 use midir::{Ignore, MidiInput, MidiInputConnection};
 
-use crate::events::{MIDI_QUEUE_CAP, RawMidi};
+use crate::events::{Queue, RawMidi};
 
 fn input(name: &str) -> Result<MidiInput, String> {
     let mut mi = MidiInput::new(name).map_err(|e| format!("midi init: {e}"))?;
@@ -10,25 +10,30 @@ fn input(name: &str) -> Result<MidiInput, String> {
     Ok(mi)
 }
 
-pub fn list_ports() {
+/// Names of the available MIDI input ports.
+#[must_use]
+pub fn port_names() -> Vec<String> {
     let Ok(mi) = input("aura-host-list") else {
-        eprintln!("warn: no MIDI backend");
-        return;
+        return Vec::new();
     };
-    let ports = mi.ports();
-    println!("{} MIDI input port(s):", ports.len());
-    for (i, p) in ports.iter().enumerate() {
-        let name = mi.port_name(p).unwrap_or_else(|e| format!("<{e}>"));
+    mi.ports()
+        .iter()
+        .map(|p| mi.port_name(p).unwrap_or_else(|e| format!("<{e}>")))
+        .collect()
+}
+
+pub fn list_ports() {
+    let names = port_names();
+    println!("{} MIDI input port(s):", names.len());
+    for (i, name) in names.iter().enumerate() {
         println!("  [{i}] {name}");
     }
 }
 
 /// Open the first port whose name contains `want` (or the first port when
-/// `want` is `None`), and return the reader end plus the live connection.
-/// The connection must be kept alive — dropping it closes the port.
-pub fn open(
-    want: Option<&str>,
-) -> Result<(rtrb::Consumer<RawMidi>, MidiInputConnection<()>), String> {
+/// `want` is `None`) and feed it into `queue`. The returned connection must be
+/// kept alive — dropping it closes the port.
+pub fn open(want: Option<&str>, queue: &Queue<RawMidi>) -> Result<MidiInputConnection<()>, String> {
     let mi = input("aura-host")?;
     let ports = mi.ports();
     let port = ports
@@ -46,7 +51,7 @@ pub fn open(
         .clone();
 
     let name = mi.port_name(&port).unwrap_or_else(|_| "?".into());
-    let (mut tx, rx) = rtrb::RingBuffer::<RawMidi>::new(MIDI_QUEUE_CAP);
+    let tx = Queue::clone(queue);
 
     let conn = mi
         .connect(
@@ -69,5 +74,5 @@ pub fn open(
         .map_err(|e| format!("midi connect: {e}"))?;
 
     println!("MIDI in: {name}");
-    Ok((rx, conn))
+    Ok(conn)
 }

@@ -1,0 +1,219 @@
+// aura-host shell — device pick, param sliders, computer-keyboard notes,
+// and a button for the plugin's own (floating) window.
+
+import { AuraTheme, ParamSlider } from "@aura";
+import { Button, ComboBox, ScrollView } from "std-widgets.slint";
+
+export struct ParamRow {
+    id: int,
+    name: string,
+    value: float,
+    minimum: float,
+    maximum: float,
+    text: string,
+}
+
+export component HostWindow inherits Window {
+    title: "aura-host";
+    preferred-width: 620px;
+    preferred-height: 660px;
+    min-width: 460px;
+    min-height: 420px;
+    background: AuraTheme.surface;
+
+    in property <string> plugin-name: "";
+    in property <string> plugin-id: "";
+    in property <string> audio-status: "";
+    in property <string> midi-status: "";
+    in property <bool> gui-available: false;
+    in property <bool> gui-open: false;
+    in property <[ParamRow]> params: [];
+    in property <[string]> audio-devices: [];
+    in property <[string]> midi-ports: [];
+    in-out property <int> audio-index: 0;
+    in-out property <int> midi-index: 0;
+    in-out property <int> octave: 4;
+    in-out property <string> log-text: "";
+
+    callback param-changed(int, float);
+    callback audio-device-changed(int);
+    callback midi-port-changed(int);
+    callback toggle-gui();
+    callback note-on(int);
+    callback note-off(int);
+
+    // Two rows of the classic tracker layout, starting at C of `octave`.
+    function key-semitone(k: string) -> int {
+        return k == "a" ? 0 : k == "w" ? 1 : k == "s" ? 2 : k == "e" ? 3
+            : k == "d" ? 4 : k == "f" ? 5 : k == "t" ? 6 : k == "g" ? 7
+            : k == "z" ? 8 : k == "h" ? 9 : k == "u" ? 10 : k == "j" ? 11
+            : k == "k" ? 12 : k == "o" ? 13 : k == "l" ? 14 : -1;
+    }
+
+    keys := FocusScope {
+        key-pressed(event) => {
+            if (event.repeat) {
+                return accept;
+            }
+            if (event.text == Key.UpArrow) {
+                root.octave = min(root.octave + 1, 8);
+                return accept;
+            }
+            if (event.text == Key.DownArrow) {
+                root.octave = max(root.octave - 1, 0);
+                return accept;
+            }
+            if (root.key-semitone(event.text) >= 0) {
+                root.note-on((root.octave + 1) * 12 + root.key-semitone(event.text));
+                return accept;
+            }
+            return reject;
+        }
+        key-released(event) => {
+            if (root.key-semitone(event.text) >= 0) {
+                root.note-off((root.octave + 1) * 12 + root.key-semitone(event.text));
+                return accept;
+            }
+            return reject;
+        }
+
+        VerticalLayout {
+            padding: 0px;
+            spacing: 0px;
+
+            Rectangle {
+                height: 3px;
+                background: AuraTheme.primary;
+            }
+
+            VerticalLayout {
+                padding: 16px;
+                spacing: 12px;
+
+                HorizontalLayout {
+                    spacing: 12px;
+                    VerticalLayout {
+                        horizontal-stretch: 1;
+                        spacing: 2px;
+                        Text {
+                            text: root.plugin-name;
+                            color: AuraTheme.primary;
+                            font-size: 20px;
+                            font-weight: 700;
+                        }
+                        Text {
+                            text: root.plugin-id;
+                            color: AuraTheme.on-surface-variant;
+                            font-size: 12px;
+                        }
+                    }
+                    Button {
+                        text: root.gui-open ? "Close plugin GUI" : "Open plugin GUI";
+                        enabled: root.gui-available;
+                        clicked => { root.toggle-gui(); }
+                    }
+                }
+
+                Rectangle {
+                    background: AuraTheme.surface-container;
+                    border-radius: AuraTheme.radius-md;
+                    border-width: 1px;
+                    border-color: AuraTheme.outline-variant;
+
+                    VerticalLayout {
+                        padding: 14px;
+                        spacing: 10px;
+
+                        Text {
+                            text: "Output device";
+                            color: AuraTheme.on-surface-variant;
+                            font-size: AuraTheme.font-label;
+                        }
+                        ComboBox {
+                            model: root.audio-devices;
+                            current-index <=> root.audio-index;
+                            selected => { root.audio-device-changed(root.audio-index); }
+                        }
+                        Text {
+                            text: root.audio-status;
+                            color: AuraTheme.on-surface-variant;
+                            font-size: 12px;
+                        }
+
+                        Text {
+                            text: "MIDI input";
+                            color: AuraTheme.on-surface-variant;
+                            font-size: AuraTheme.font-label;
+                        }
+                        ComboBox {
+                            model: root.midi-ports;
+                            current-index <=> root.midi-index;
+                            selected => { root.midi-port-changed(root.midi-index); }
+                        }
+                        Text {
+                            text: root.midi-status;
+                            color: AuraTheme.on-surface-variant;
+                            font-size: 12px;
+                        }
+                    }
+                }
+
+                Rectangle {
+                    vertical-stretch: 1;
+                    background: AuraTheme.surface-container;
+                    border-radius: AuraTheme.radius-md;
+                    border-width: 1px;
+                    border-color: AuraTheme.outline-variant;
+
+                    VerticalLayout {
+                        padding: 14px;
+                        spacing: 8px;
+
+                        Text {
+                            text: root.params.length > 0 ? "Parameters" : "No parameters";
+                            color: AuraTheme.on-surface-variant;
+                            font-size: AuraTheme.font-label;
+                        }
+
+                        ScrollView {
+                            VerticalLayout {
+                                spacing: 6px;
+                                for p[i] in root.params: ParamSlider {
+                                    label: p.name;
+                                    value: p.value;
+                                    minimum: p.minimum;
+                                    maximum: p.maximum;
+                                    value-text: p.text;
+                                    changed(v) => { root.param-changed(p.id, v); }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                HorizontalLayout {
+                    spacing: 8px;
+                    Text {
+                        horizontal-stretch: 1;
+                        text: "Keys a-l / w-o play notes · ↑↓ octave \{root.octave}"
+                            + (keys.has-focus ? "" : " · click Focus keys first");
+                        color: AuraTheme.on-surface-variant;
+                        font-size: 12px;
+                        vertical-alignment: center;
+                    }
+                    Button {
+                        text: "Focus keys";
+                        clicked => { keys.focus(); }
+                    }
+                }
+
+                Text {
+                    text: root.log-text;
+                    color: AuraTheme.on-surface-variant;
+                    font-size: 12px;
+                    wrap: word-wrap;
+                }
+            }
+        }
+    }
+}

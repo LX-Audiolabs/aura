@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "Minimal CLAP host — load .clap, params, MIDI in, run audio (Phase 1 CLI)"
+description = "Minimal CLAP host — CLI + Slint GUI, load .clap, params, MIDI in, run audio"
 publish = false
 
 [[bin]]
@@ -17,7 +17,29 @@ clap-sys = "0.5"
 libloading = "0.8"
 cpal = "0.15"
 midir = "0.10"
-rtrb = "0.4"
+crossbeam-queue = "0.3"
+# Desktop tool: full Slint (not the plugin-minimal feature set), same set as aura-gui,
+# plus raw-window-handle-06 so Phase 3 can get our own window's native HWND.
+slint = { version = "=1.17.1", default-features = true, features = [
+    "backend-winit",
+    "renderer-femtovg",
+    "compat-1-2",
+    "raw-window-handle-06",
+] }
+
+# Phase 3: embed the plugin's own GUI as a WS_CHILD of ours (SetParent), instead
+# of a floating top-level window.
+[target.'cfg(windows)'.dependencies]
+raw-window-handle = { workspace = true }
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[build-dependencies]
+aura-build = { workspace = true }
 
 [lints]
 workspace = true

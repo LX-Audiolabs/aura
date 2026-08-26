@@ -9,11 +9,26 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ### Added
 
-- `aura-host` Phase 1 complete: MIDI input (midir → `rtrb` SPSC → audio
+- `aura-host` Phase 1 complete: MIDI input (midir → queue → audio
   thread, dialect picked from `note-ports.preferred_dialect`), `--set
   <id>=<val>` via `params.flush` before `activate()`, `--list-midi` /
   `--midi-in <name>`, and the `clap.log` + `clap.thread-check` host
   extensions.
+- `aura-host` Phase 2: `--gui` opens a Slint shell — output-device and
+  MIDI-port pickers, param sliders (polling `params.get_value`, no output-event
+  tracking needed), PC-keyboard note input, and a button for the plugin's own
+  GUI. Device switching tears down and reopens the CLAP activation
+  (`audio::Session`) instead of the CLI's block-forever `run()`. Host now also
+  answers `clap.gui` and `clap.params`, and drains `request_restart` /
+  `request_callback` from a 50 ms main-thread timer.
+- `aura-host` Phase 3 (Windows): the plugin-GUI button now embeds the plugin's
+  own window as a `WS_CHILD` of ours (`gui.create(is_floating=false)` +
+  `gui.set_parent`), falling back to a floating top-level window
+  (`plugin_gui.rs`, from Phase 2) only when the plugin doesn't support
+  embedding. AURA's own plugins support embedding but not floating — verified
+  live against `smoke-gain`/`smoke-synth`: the plugin's `aura-baseview` window
+  ends up correctly nested inside our socket `HWND`, and closing tears both
+  down cleanly.
 
 ### Fixed
 
