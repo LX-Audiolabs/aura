@@ -32,7 +32,7 @@ pub struct PanGains {
 pub fn pan_gains(pan: f32, law: PanLaw) -> PanGains {
     let p = pan.clamp(-1.0, 1.0);
     // Map -1..+1 to 0..1
-    let t = (p + 1.0) * 0.5;
+    let t = f32::midpoint(p, 1.0);
 
     match law {
         PanLaw::EqualPower => {

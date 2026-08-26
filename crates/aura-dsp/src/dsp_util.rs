@@ -589,7 +589,7 @@ pub fn detect_pitch_autocorr(
     let c = -y0 + y2;
 
     let dp = move |t: f64| 0.5 * (3.0 * a * t * t + 2.0 * b * t + c);
-    let ddp = move |t: f64| 0.5 * (6.0 * a * t + 2.0 * b);
+    let ddp = move |t: f64| f64::midpoint(6.0 * a * t, 2.0 * b);
 
     // Initial guess: parabolic-interpolation closed-form (one NR step on
     // a local quadratic). Newton then refines on the cubic.

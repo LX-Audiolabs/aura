@@ -536,7 +536,7 @@ impl Compressor {
         knee_db: f32,
         gain_reduction_db_out: &mut f32,
     ) -> (f32, f32) {
-        let signal_level = (l.abs() + r.abs()) * 0.5;
+        let signal_level = f32::midpoint(l.abs(), r.abs());
 
         // Envelope tracking
         let att_coef = (-1.0 / (attack_ms.max(0.1) * 0.001 * self.sample_rate)).exp();

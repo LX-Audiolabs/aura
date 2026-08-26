@@ -51,7 +51,10 @@ impl GrainWindow {
                     0.5 * (1.0 - (std::f32::consts::PI * t / half_alpha).cos())
                 } else if t > 1.0 - half_alpha {
                     // Trailing taper: 1 → 0
-                    0.5 * (1.0 + (std::f32::consts::PI * (t - 1.0 + half_alpha) / half_alpha).cos())
+                    f32::midpoint(
+                        1.0,
+                        (std::f32::consts::PI * (t - 1.0 + half_alpha) / half_alpha).cos(),
+                    )
                 } else {
                     1.0
                 }

@@ -275,7 +275,7 @@ impl FmSynthEngine {
         }
         let a = self.operators[0].next_sample(0.0);
         let b = self.operators[1].next_sample(0.0);
-        (a + b) * 0.5
+        f32::midpoint(a, b)
     }
 
     /// Serial4: op[0] -> op[1] -> op[2] -> op[3] -> out.
@@ -298,10 +298,10 @@ impl FmSynthEngine {
         let (first_pair, second_pair) = self.operators.split_at_mut(2);
         let mod_a = first_pair[0].next_sample(0.0);
         let mod_b = first_pair[1].next_sample(0.0);
-        let mod_sum = (mod_a + mod_b) * 0.5;
+        let mod_sum = f32::midpoint(mod_a, mod_b);
         let car_a = second_pair[0].next_sample(mod_sum);
         let car_b = second_pair[1].next_sample(mod_sum);
-        (car_a + car_b) * 0.5
+        f32::midpoint(car_a, car_b)
     }
 
     /// Check if any operator envelope is still active.

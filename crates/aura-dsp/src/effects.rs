@@ -250,7 +250,7 @@ impl Phaser {
     pub fn process_sample(&mut self, input: f32) -> f32 {
         let lfo_val = self.lfo.next_sample();
         // Map LFO to frequency range (logarithmic)
-        let t = (lfo_val + 1.0) * 0.5; // 0..1
+        let t = f32::midpoint(lfo_val, 1.0); // 0..1
         let freq = self.min_freq * (self.max_freq / self.min_freq).powf(t);
 
         // Compute allpass coefficient from frequency (bilinear transform)
@@ -266,7 +266,7 @@ impl Phaser {
 
         self.prev_output = output;
 
-        input * (1.0 - self.mix) + (input + output) * 0.5 * self.mix
+        input * (1.0 - self.mix) + f32::midpoint(input, output) * self.mix
     }
 }
 

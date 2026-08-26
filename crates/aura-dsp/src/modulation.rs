@@ -145,7 +145,7 @@ impl Lfo {
 
         let output = match self.mode {
             LfoMode::Bipolar => raw,
-            LfoMode::Unipolar => (raw + 1.0) * 0.5,
+            LfoMode::Unipolar => f32::midpoint(raw, 1.0),
         };
 
         output * self.depth
