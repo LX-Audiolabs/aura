@@ -9,7 +9,7 @@
 | path | `crates/aura-baseview/examples/render_femtovg` |
 | version | 0.1.0 |
 | frameworks | aura-baseview, baseview, slint |
-| generated | `2026-08-26T11:53:59Z` |
+| generated | `2026-08-26T19:58:10Z` |
 
 ## Graph atoms (auto)
 

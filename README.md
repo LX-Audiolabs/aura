@@ -194,11 +194,13 @@ cargo clippy --workspace --all-targets
 | `aura-clap` / `aura-vst3` / `aura-lv2` | Thin format wrappers |
 | `aura-baseview` + `aura-editor` + `aura-build` | Slint window stack + host adapter + `@aura` widgets |
 | `aura-dsp` + `aura-midi` | Portable DSP / MIDI helpers |
-| `aura-shm` + `aura-hot` | Shared-memory IPC hub + CLAP hot-reload proxy (`cargo aura watch --hot`) |
+| `aura-hot` | CLAP hot-reload proxy (`cargo aura watch --hot`) |
 | `aura-host` | Standalone dev host — load `.clap`, MIDI in, params, plugin GUI (CLI + Slint shell) |
 | `aura-test` | State round-trip + process smokes (dev-dep) |
 | `cargo-aura` | Scaffold, build, install, watch, doctor, preview, mesh, gui |
 | `aura-preview` / `aura-gui` | Slint preview + project console (`cargo aura gui`) |
+
+> Cross-plugin shared-memory IPC (spectrum/relay + CV) moved **out of AURA** — it now lives in the product catalog as **`lx-shm`** (`lx-audiolabs-dev`).
 
 ---
 

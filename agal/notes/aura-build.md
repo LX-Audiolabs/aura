@@ -9,7 +9,7 @@
 | path | `crates/aura-build` |
 | description | AURA build helper: @aura Slint widgets + bundled fonts for slint-build 1.17.1 |
 | frameworks | slint |
-| generated | `2026-08-26T11:53:59Z` |
+| generated | `2026-08-26T19:58:10Z` |
 
 ## Graph atoms (auto)
 

@@ -9,7 +9,7 @@
 | path | `crates/aura-baseview` |
 | description | AURA Slint + baseview window stack (FemtoVG / Skia / software) — no plugin host API |
 | frameworks | aura-baseview, baseview, raw-window-handle, slint |
-| generated | `2026-08-26T11:53:59Z` |
+| generated | `2026-08-26T19:58:10Z` |
 
 ## Graph atoms (auto)
 

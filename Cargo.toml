@@ -12,7 +12,6 @@ members = [
     "crates/aura-editor",
     "crates/aura-dsp",
     "crates/aura-midi",
-    "crates/aura-shm",
     "crates/aura-build",
     "crates/aura-test",
     "crates/aura-hot",
@@ -52,7 +51,6 @@ aura-baseview = { path = "crates/aura-baseview", default-features = false }
 aura-editor = { path = "crates/aura-editor", default-features = false }
 aura-dsp = { path = "crates/aura-dsp" }
 aura-midi = { path = "crates/aura-midi" }
-aura-shm = { path = "crates/aura-shm" }
 aura-build = { path = "crates/aura-build" }
 aura-test = { path = "crates/aura-test" }
 

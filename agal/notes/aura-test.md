@@ -9,7 +9,7 @@
 | path | `crates/aura-test` |
 | description | Test helpers for AURA plugins (state round-trip, process smoke) |
 | frameworks | aura |
-| generated | `2026-08-26T11:53:59Z` |
+| generated | `2026-08-26T19:58:10Z` |
 
 ## Graph atoms (auto)
 

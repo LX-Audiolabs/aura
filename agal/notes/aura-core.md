@@ -9,7 +9,7 @@
 | path | `crates/aura-core` |
 | description | AURA core: process, editor, plugin info (minimal surface) |
 | frameworks | aura |
-| generated | `2026-08-26T11:53:59Z` |
+| generated | `2026-08-26T19:58:10Z` |
 
 ## Graph atoms (auto)
 

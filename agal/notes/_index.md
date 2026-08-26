@@ -24,7 +24,6 @@ Auto-generated. Per-node notes for focus work.
 - [aura-lv2](aura-lv2.md) — `crates/aura-lv2`
 - [aura-midi](aura-midi.md) — `crates/aura-midi`
 - [aura-params](aura-params.md) — `crates/aura-params`
-- [aura-shm](aura-shm.md) — `crates/aura-shm`
 - [aura-test](aura-test.md) — `crates/aura-test`
 - [aura-vst3](aura-vst3.md) — `crates/aura-vst3`
 

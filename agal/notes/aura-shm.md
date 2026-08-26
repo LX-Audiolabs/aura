@@ -8,7 +8,7 @@
 | kind | `crate` |
 | path | `crates/aura-shm` |
 | description | AURA shared memory — cross-plugin IPC hub with seqlock-protected slots and heartbeat liveness |
-| generated | `2026-08-26T11:53:59Z` |
+| generated | `2026-08-26T19:18:22Z` |
 
 ## Graph atoms (auto)
 
