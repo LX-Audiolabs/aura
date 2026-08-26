@@ -39,7 +39,8 @@ jobs:
             libxcb-shape0-dev \
             libxcb-xfixes0-dev \
             libxkbcommon-dev \
-            libgl1-mesa-dev
+            libgl1-mesa-dev \
+            libasound2-dev
       # NOTE: workspace lints already surface warnings; -D warnings is intentionally
       # omitted until the codebase is clippy-clean with the current pedantic set.
       - run: cargo clippy --workspace --all-targets
@@ -66,7 +67,8 @@ jobs:
             libxcb-shape0-dev \
             libxcb-xfixes0-dev \
             libxkbcommon-dev \
-            libgl1-mesa-dev
+            libgl1-mesa-dev \
+            libasound2-dev
       # Ship matrix: LV2 is Linux-only (rust-lv2 has no macOS; Windows not a ship target).
       - name: cargo test --workspace
         if: runner.os == 'Linux'
@@ -92,6 +94,7 @@ jobs:
             libxcb-shape0-dev \
             libxcb-xfixes0-dev \
             libxkbcommon-dev \
-            libgl1-mesa-dev
+            libgl1-mesa-dev \
+            libasound2-dev
       # NOTE: RUSTDOCFLAGS=-D warnings is omitted until docs are warning-free.
       - run: cargo doc --workspace --no-deps
