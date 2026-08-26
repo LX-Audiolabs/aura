@@ -89,6 +89,7 @@ cargo install --path tools/cargo-aura --locked
 export AURA_PATH="$(pwd)"          # PowerShell: $env:AURA_PATH = (Get-Location).Path
 
 # 3) Scaffold a plugin (CLAP always; add --vst3 / --lv2 if needed)
+#    kind: effect (default) | effect-mono | analyzer | instrument
 cargo aura new my-plugin
 cd my-plugin
 
@@ -98,10 +99,13 @@ cargo aura install --clap --release
 # 4b) Or stay in the loop: rebuild + reinstall on save
 cargo aura watch --clap --hot
 
-# 5) Optional: clap-validator on the installed .clap
+# 5) Check toolchain / AURA_PATH / clap-validator
+cargo aura doctor
+
+# 6) Optional: clap-validator on the installed .clap
 clap-validator validate path/to/my-plugin.clap
 
-# 6) Optional: regenerate the agal orientation mesh
+# 7) Optional: regenerate the agal orientation mesh
 cargo aura mesh
 ```
 
@@ -129,7 +133,29 @@ cargo aura install --clap --release -plug smoke-gain
 ```bash
 cargo aura preview
 # or: cargo run -p aura-preview -- path/to/ui/main.slint
+cargo aura preview --component 1      # pick component N (multi-UI files)
+cargo aura preview --no-watch         # one-shot render, no hot reload
 ```
+
+### CLI reference
+
+```bash
+cargo aura new <name> [--vst3] [--lv2] [--kind <k>]   # scaffold a plugin workspace
+cargo aura init [path] [--vst3] [--lv2] [--kind <k>]  # scaffold into an existing empty dir
+cargo aura add <name> [--vst3] [--lv2] [--kind <k>]   # add another plugin under plugins/<name>/
+cargo aura add-ui <name>                              # shared Slint UI crate under crates/<name>/
+cargo aura build  [--clap|--vst3|--lv2] [--release] [-plug <crate>…]
+cargo aura install [--clap|--vst3|--lv2] [--release] [--hot] [-plug <crate>…]
+cargo aura watch  [--clap|--vst3|--lv2] [--release] [-plug <crate>…] [--no-install] [--hot]
+cargo aura preview [path] [--component N] [--no-watch]
+cargo aura gui                                       # visual project console (aura-gui)
+cargo aura mesh [agal-args…]                         # run agal orientation mesh
+cargo aura doctor                                    # toolchain / AURA_PATH / clap-validator
+```
+
+`kinds`: `effect` (default) · `effect-mono` · `analyzer` · `instrument`. CLAP is always on;
+`--vst3` / `--lv2` add the extra format. `install --hot` writes the `aura-hot` proxy
+(`Name.clap` + `Name.impl.*`) so `watch` can replace DSP under a loaded host.
 
 ### Build / test the framework
 
@@ -146,7 +172,7 @@ cargo clippy --workspace --all-targets
 1. **Slint + baseview only** — renderer is a backend choice (FemtoVG / Skia / software); toolkit is not.
 2. **CLAP first, thin formats** — one plugin logic API; VST3/LV2 only on the ship matrix; no format-shaped core.
 3. **Framework layout** — `crates/` · `examples/` · `tools/` (product catalogs keep their own plugins outside AURA).
-4. **One CLI:** **`cargo aura`** — `new`, `build`, `install`, `doctor`, `preview`, …
+4. **One CLI:** **`cargo aura`** — `new`, `init`, `add`, `add-ui`, `build`, `install`, `watch`, `preview`, `mesh`, `gui`, `doctor`
 5. **KISS for humans and agents** — `aura.toml`, boring paths; orientation in **agal**.
 
 ---
@@ -169,9 +195,10 @@ cargo clippy --workspace --all-targets
 | `aura-baseview` + `aura-editor` + `aura-build` | Slint window stack + host adapter + `@aura` widgets |
 | `aura-dsp` + `aura-midi` | Portable DSP / MIDI helpers |
 | `aura-shm` + `aura-hot` | Shared-memory IPC hub + CLAP hot-reload proxy (`cargo aura watch --hot`) |
+| `aura-host` | Standalone dev host — load `.clap`, MIDI in, params, plugin GUI (CLI + Slint shell) |
 | `aura-test` | State round-trip + process smokes (dev-dep) |
-| `cargo-aura` | Scaffold, build, install, doctor, preview |
-| `aura-preview` / `aura-gui` | Slint preview + optional project console |
+| `cargo-aura` | Scaffold, build, install, watch, doctor, preview, mesh, gui |
+| `aura-preview` / `aura-gui` | Slint preview + project console (`cargo aura gui`) |
 
 ---
 
@@ -233,6 +260,7 @@ More detail: crate docs (`cargo doc -p aura --open`), [docs/versioning.md](./doc
 | Poly mod / note expression | done (CLAP → `ProcessContext.notes`; `NoteVoiceTable` + `NOTE_END`) |
 | Native MIDI 2 process | done (`ProcessContext.ump` / `ump_out`; 7-bit `midi` remains) |
 | notes_out / arp-seq path | done (CLAP native; VST3/LV2 map On/Off/Choke) |
+| `aura-host` standalone dev host | done (CLI + Slint shell; MIDI in, params, plugin-GUI embed) |
 
 Changelog: [CHANGELOG.md](./CHANGELOG.md). Releases are tagged `vX.Y.Z`.
 
