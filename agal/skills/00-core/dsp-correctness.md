@@ -2,7 +2,7 @@
 id: dsp-correctness
 group: core
 summary: Filter/IIR/FIR/FFT correctness — SR, state, reset, analysis docs.
-triggers: filter state, samplerate, reset, denormal, FFT, metering
+triggers: filter state, samplerate, reset, denormal, FFT, metering, dsp
 verify: SR change recomputes coeffs; reset clears state; analysis latency documented
 source: global
 copied_by: template

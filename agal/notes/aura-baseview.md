@@ -9,7 +9,7 @@
 | path | `crates/aura-baseview` |
 | description | AURA Slint + baseview window stack (FemtoVG / Skia / software) — no plugin host API |
 | frameworks | aura-baseview, baseview, raw-window-handle, slint |
-| generated | `2026-08-24T16:17:07Z` |
+| generated | `2026-08-26T06:01:31Z` |
 
 ## Graph atoms (auto)
 
@@ -30,7 +30,7 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 - `aura-editor` --depends_on--> `aura-baseview`
 
 ## structure
-- public_api symbols: 48 (see json)
+- public_api symbols: 49 (see json)
 - roles: entry, manifest, slint, source
 
 ## api surface
@@ -38,8 +38,7 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 - `struct GlInitError { message: String }` · `src/baseview_slint_window_adapter.rs`
 - `struct BlitPipeline { … }` · `src/blit.rs`
 - `struct SlintGlContext { gl_context: GlContext }` · `src/open_gl_interface.rs`
-- `struct EditorScale { inner: Arc<AtomicU64> }` · `src/scale.rs`
-- … +43 more public symbols
+- … +45 more public symbols
 
 ## agent focus
 **L1:** scan **Graph atoms** above first, then human body below HUMAN.  

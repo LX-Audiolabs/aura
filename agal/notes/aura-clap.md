@@ -9,7 +9,7 @@
 | path | `crates/aura-clap` |
 | description | CLAP format wrapper for AURA — free-audio/clap via clap-sys (minimal v1) |
 | frameworks | aura, clap |
-| generated | `2026-08-24T16:17:07Z` |
+| generated | `2026-08-26T06:01:31Z` |
 
 ## Graph atoms (auto)
 
@@ -40,8 +40,7 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 - `fn entry_init(_plugin_path: *const c_char) -> bool` · `src/lib.rs`
 - `fn get_factory<L>(factory_id: *const c_char) -> *const c_void` · `src/lib.rs`
 - `impl EditorBridge for ClapBridge` · `src/lib.rs`
-- `impl Send for ClapBridge` · `src/lib.rs`
-- … +4 more public symbols
+- … +5 more public symbols
 
 ## agent focus
 **L1:** scan **Graph atoms** above first, then human body below HUMAN.  

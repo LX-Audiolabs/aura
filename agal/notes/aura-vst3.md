@@ -9,7 +9,7 @@
 | path | `crates/aura-vst3` |
 | description | AURA VST3 format wrapper (thin, over PluginLogic) |
 | frameworks | aura, vst3 |
-| generated | `2026-08-24T16:17:07Z` |
+| generated | `2026-08-26T06:01:31Z` |
 
 ## Graph atoms (auto)
 
@@ -42,8 +42,7 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 - `fn tuid_bytes(id: &str) -> [u8]` · `src/lib.rs`
 - `impl Class for PlugView` · `src/gui.rs`
 - `impl EditorBridge for Vst3Bridge` · `src/gui.rs`
-- `impl IPlugViewContentScaleSupportTrait for PlugView` · `src/gui.rs`
-- … +13 more public symbols
+- … +14 more public symbols
 
 ## agent focus
 **L1:** scan **Graph atoms** above first, then human body below HUMAN.  

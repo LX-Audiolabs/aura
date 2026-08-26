@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "Minimal CLAP host — load .clap, list params, run audio (Phase 1 CLI)"
+description = "Minimal CLAP host — load .clap, params, MIDI in, run audio (Phase 1 CLI)"
 publish = false
 
 [[bin]]
@@ -16,6 +16,8 @@ path = "src/main.rs"
 clap-sys = "0.5"
 libloading = "0.8"
 cpal = "0.15"
+midir = "0.10"
+rtrb = "0.4"
 
 [lints]
 workspace = true

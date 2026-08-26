@@ -9,7 +9,7 @@
 | path | `crates/aura-dsp` |
 | description | AURA DSP — synthesis, effects, analysis, maths (JUCE juce_dsp analogue; LX FX) |
 | frameworks | aura |
-| generated | `2026-08-24T16:17:07Z` |
+| generated | `2026-08-26T06:01:31Z` |
 
 ## Graph atoms (auto)
 
@@ -40,8 +40,7 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 - `trait ModulationSource` · `src/modulation.rs`
 - `struct AmbisonicsEncoder { … }` · `src/acoustics/ambisonics.rs`
 - `struct BFormatSample { w: f32, x: f32, y: f32, z: f32 }` · `src/acoustics/ambisonics.rs`
-- `struct RoomMetrics { c50: f32, c80: f32, d50: f32, sti: f32, rt60: f32 }` · `src/acoustics/analysis.rs`
-- … +258 more public symbols
+- … +261 more public symbols
 
 ## findings
 - [info] **dsp_process_methods**: aura-dsp has 15 methods named process (DSP units, not plugin hooks) · `crates/aura-dsp`
@@ -73,3 +72,4 @@ _Graph atoms live **above** in AUTO. Add durable decisions/lessons here:_
 ```text
 [ATOM] type=decision|lesson|constraint | detail=…
 ```
+[ATOM] type=lesson | detail=SVF bei q=0 gibt NaN — Guard in prepare() noetig

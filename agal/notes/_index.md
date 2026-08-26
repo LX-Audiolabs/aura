@@ -19,6 +19,7 @@ Auto-generated. Per-node notes for focus work.
 - [aura-editor](aura-editor.md) — `crates/aura-editor`
 - [aura-example-open-parented](aura-example-open-parented.md) — `crates/aura-baseview/examples/open_parented`
 - [aura-example-render-femtovg](aura-example-render-femtovg.md) — `crates/aura-baseview/examples/render_femtovg`
+- [aura-host](aura-host.md) — `crates/aura-host`
 - [aura-hot](aura-hot.md) — `crates/aura-hot`
 - [aura-lv2](aura-lv2.md) — `crates/aura-lv2`
 - [aura-midi](aura-midi.md) — `crates/aura-midi`

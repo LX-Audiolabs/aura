@@ -8,7 +8,7 @@
 | kind | `crate` |
 | path | `crates/aura-shm` |
 | description | AURA shared memory — cross-plugin IPC hub with seqlock-protected slots and heartbeat liveness |
-| generated | `2026-08-24T16:17:07Z` |
+| generated | `2026-08-26T06:01:31Z` |
 
 ## Graph atoms (auto)
 
@@ -29,8 +29,7 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 - `struct CvSlot { … }` · `src/lib.rs`
 - `struct Hub<S> { _shmem: Shmem, shared: *const HubShared<S> }` · `src/lib.rs`
 - `struct SpectrumSlot { … }` · `src/lib.rs`
-- `type CvHub = Hub<CvSlot>` · `src/lib.rs`
-- … +30 more public symbols
+- … +31 more public symbols
 
 ## findings
 - [info] **crate_no_dependents**: aura-shm has no inbound workspace edges — unused or only path-included? · `crates/aura-shm` · fix: wire `aura-shm` as a path dep from a plugin/crate, or remove from workspace

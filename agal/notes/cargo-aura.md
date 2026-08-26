@@ -8,7 +8,7 @@
 | kind | `member` |
 | path | `tools/cargo-aura` |
 | description | Build tool for AURA audio plugins — cargo aura new|build|install|watch|mesh|doctor |
-| generated | `2026-08-24T16:17:07Z` |
+| generated | `2026-08-26T06:01:31Z` |
 
 ## Graph atoms (auto)
 
@@ -27,8 +27,7 @@ _Regenerated each `agal .`. Scan these first. Human atoms: below HUMAN marker._
 - `enum Kind` · `src/scaffold.rs`
 - `fn append_plugin_table(text: &str, block: &str) -> String` · `src/scaffold.rs`
 - `fn aura_toml_has_bundle(text: &str, bundle_id: &str) -> bool` · `src/scaffold.rs`
-- `fn files(spec: &ScaffoldSpec) -> Vec<(String, String)>` · `src/scaffold.rs`
-- … +6 more public symbols
+- … +7 more public symbols
 
 ## agent focus
 **L1:** scan **Graph atoms** above first, then human body below HUMAN.  

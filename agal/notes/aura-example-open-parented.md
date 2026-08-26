@@ -9,7 +9,7 @@
 | path | `crates/aura-baseview/examples/open_parented` |
 | version | 0.1.0 |
 | frameworks | aura-baseview, baseview, slint |
-| generated | `2026-08-24T16:17:07Z` |
+| generated | `2026-08-26T06:01:31Z` |
 
 ## Graph atoms (auto)
 

@@ -1,51 +1,102 @@
-//! aura-host — minimal CLAP host (Phase 1: CLI, params, audio)
+//! aura-host — minimal CLAP host (Phase 1: CLI, params, MIDI, audio)
 //!
 //! Usage:
-//!   aura-host <path.clap> [--plugin <id>] [--list-params] [--play]
+//!   aura-host <path.clap> [--plugin <id>] [--list-params] [--set <id>=<val>]
+//!                         [--play] [--list-midi] [--midi-in <name>]
 
 #![allow(clippy::missing_safety_doc)]
 
+mod audio;
+mod events;
 mod loader;
+mod midi;
 
 use std::ffi::CStr;
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
-fn main() {
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    if args.is_empty() {
-        eprintln!(
-            "usage: aura-host <path.clap> [--plugin <id>] [--list-params] [--play]"
-        );
+const USAGE: &str = "usage: aura-host <path.clap> [--plugin <id>] [--list-params] \
+                     [--set <id>=<val>] [--play] [--list-midi] [--midi-in <name>]";
+
+struct Args {
+    path: String,
+    plugin_id: Option<String>,
+    list_params: bool,
+    play: bool,
+    list_midi: bool,
+    midi_in: Option<String>,
+    sets: Vec<(u32, f64)>,
+}
+
+fn parse_args() -> Args {
+    let argv: Vec<String> = std::env::args().skip(1).collect();
+    if argv.is_empty() {
+        eprintln!("{USAGE}");
         std::process::exit(1);
     }
 
-    let path = &args[0];
-    let mut plugin_id: Option<String> = None;
-    let mut list_params = false;
-    let mut play = false;
+    let mut a = Args {
+        path: argv[0].clone(),
+        plugin_id: None,
+        list_params: false,
+        play: false,
+        list_midi: false,
+        midi_in: None,
+        sets: Vec::new(),
+    };
 
     let mut i = 1;
-    while i < args.len() {
-        match args[i].as_str() {
+    while i < argv.len() {
+        match argv[i].as_str() {
             "--plugin" => {
                 i += 1;
-                plugin_id = args.get(i).cloned();
+                a.plugin_id = argv.get(i).cloned();
             }
-            "--list-params" => list_params = true,
-            "--play" => play = true,
+            "--midi-in" => {
+                i += 1;
+                a.midi_in = argv.get(i).cloned();
+            }
+            "--set" => {
+                i += 1;
+                if let Some(kv) = argv.get(i).and_then(|s| parse_set(s)) {
+                    a.sets.push(kv);
+                } else {
+                    eprintln!(
+                        "error: --set wants <param_id>=<value>, got {:?}",
+                        argv.get(i)
+                    );
+                    std::process::exit(1);
+                }
+            }
+            "--list-params" => a.list_params = true,
+            "--play" => a.play = true,
+            "--list-midi" => a.list_midi = true,
             arg => eprintln!("warn: unknown arg {arg}"),
         }
         i += 1;
     }
+    a
+}
 
-    let loader = unsafe { loader::Loader::open(path) }.unwrap_or_else(|e| {
+/// `"3=0.5"` → `(3, 0.5)`.
+fn parse_set(s: &str) -> Option<(u32, f64)> {
+    let (id, val) = s.split_once('=')?;
+    Some((id.trim().parse().ok()?, val.trim().parse().ok()?))
+}
+
+fn main() {
+    let args = parse_args();
+
+    if args.list_midi {
+        midi::list_ports();
+    }
+
+    let loader = unsafe { loader::Loader::open(&args.path) }.unwrap_or_else(|e| {
         eprintln!("error: {e}");
         std::process::exit(1);
     });
 
     // Always list plugins in the file.
     let n = loader.plugin_count();
-    println!("found {n} plugin(s) in {path}");
+    println!("found {n} plugin(s) in {}", args.path);
     for idx in 0..n {
         if let Some(d) = loader.descriptor(idx) {
             let name = unsafe { CStr::from_ptr(d.name) }.to_string_lossy();
@@ -54,102 +105,51 @@ fn main() {
         }
     }
 
-    if !list_params && !play {
+    if !args.list_params && !args.play && args.sets.is_empty() {
         return;
     }
 
     let host = loader::make_host();
-    let plugin = loader.create(host, plugin_id.as_deref()).unwrap_or_else(|e| {
-        eprintln!("error: {e}");
-        std::process::exit(1);
-    });
-
-    if let Some(init) = unsafe { (*plugin).init } {
-        if !unsafe { init(plugin) } {
-            eprintln!("error: plugin.init returned false");
+    let plugin = loader
+        .create(host, args.plugin_id.as_deref())
+        .unwrap_or_else(|e| {
+            eprintln!("error: {e}");
             std::process::exit(1);
+        });
+
+    if let Some(init) = unsafe { (*plugin).init }
+        && !unsafe { init(plugin) }
+    {
+        eprintln!("error: plugin.init returned false");
+        std::process::exit(1);
+    }
+
+    // Applied while deactivated, so the values are in effect before activate().
+    for (id, value) in &args.sets {
+        match loader::set_param(plugin, *id, *value) {
+            Ok(()) => println!("set param {id} = {value}"),
+            Err(e) => eprintln!("error: set param {id}: {e}"),
         }
     }
 
-    if list_params {
+    if args.list_params {
         loader::list_params(plugin);
     }
 
-    if play {
-        run_audio(plugin);
-        // run_audio loops forever; if it returns, fall through to destroy.
+    if args.play {
+        // Connection must outlive the stream: dropping it closes the MIDI port.
+        let (midi_rx, _conn) = match midi::open(args.midi_in.as_deref()) {
+            Ok(pair) => (pair.0, Some(pair.1)),
+            Err(e) => {
+                eprintln!("warn: {e} — running without MIDI");
+                (rtrb::RingBuffer::new(1).1, None)
+            }
+        };
+        audio::run(plugin, midi_rx);
+        // run() loops forever; if it returns, fall through to destroy.
     }
 
     if let Some(destroy) = unsafe { (*plugin).destroy } {
         unsafe { destroy(plugin) };
-    }
-}
-
-fn run_audio(plugin: *const clap_sys::plugin::clap_plugin) {
-    let audio_host = cpal::default_host();
-    let device = audio_host.default_output_device().unwrap_or_else(|| {
-        eprintln!("error: no default output device");
-        std::process::exit(1);
-    });
-    let config = device.default_output_config().unwrap_or_else(|e| {
-        eprintln!("error: output config: {e}");
-        std::process::exit(1);
-    });
-
-    let sample_rate = config.sample_rate().0 as f64;
-    let channels = config.channels() as usize;
-
-    // Activate with a generous max_frames; actual frame count comes per-callback.
-    if let Some(activate) = unsafe { (*plugin).activate } {
-        if !unsafe { activate(plugin, sample_rate, 1, 4096) } {
-            eprintln!("error: plugin.activate returned false");
-            std::process::exit(1);
-        }
-    }
-    if let Some(start) = unsafe { (*plugin).start_processing } {
-        if !unsafe { start(plugin) } {
-            eprintln!("error: plugin.start_processing returned false");
-            std::process::exit(1);
-        }
-    }
-
-    // PluginPtr is Send (see loader.rs); captures pp whole so Rust 2021 precision
-    // captures don't reduce to the inner *const clap_plugin which is !Send.
-    let pp = loader::PluginPtr(plugin);
-
-    let stream_config = cpal::StreamConfig {
-        channels: config.channels(),
-        sample_rate: config.sample_rate(),
-        buffer_size: cpal::BufferSize::Default,
-    };
-
-    let stream = match config.sample_format() {
-        cpal::SampleFormat::F32 => device
-            .build_output_stream::<f32, _, _>(
-                &stream_config,
-                move |data: &mut [f32], _| {
-                    loader::audio_callback(pp, data, channels);
-                },
-                |e| eprintln!("audio error: {e}"),
-                None,
-            )
-            .unwrap_or_else(|e| {
-                eprintln!("error: build_output_stream: {e}");
-                std::process::exit(1);
-            }),
-        fmt => {
-            eprintln!("error: unsupported sample format {fmt:?} — add conversion if needed");
-            std::process::exit(1);
-        }
-    };
-
-    stream.play().unwrap_or_else(|e| {
-        eprintln!("error: stream.play: {e}");
-        std::process::exit(1);
-    });
-
-    println!("playing at {sample_rate} Hz, {channels}ch — ctrl+c to stop");
-    loop {
-        std::thread::sleep(std::time::Duration::from_secs(60));
     }
 }

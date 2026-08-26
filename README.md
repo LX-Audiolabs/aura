@@ -213,7 +213,7 @@ aura::export!(MyGain);
 
 Param IDs are **required and wire-stable** — reordering fields does not renumber automation.
 
-More detail: crate docs (`cargo doc -p aura --open`), [docs/versioning.md](./docs/versioning.md), [docs/dsp-layout.md](./docs/dsp-layout.md), [crates/aura-clap/README.md](./crates/aura-clap/README.md).
+More detail: crate docs (`cargo doc -p aura --open`), [docs/versioning.md](./docs/versioning.md), [docs/dsp-layout.md](./docs/dsp-layout.md), [docs/aura-host-idea.md](./docs/aura-host-idea.md), [crates/aura-clap/README.md](./crates/aura-clap/README.md).
 
 ---
 

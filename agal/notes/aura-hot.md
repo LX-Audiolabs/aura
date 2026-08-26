@@ -9,7 +9,7 @@
 | path | `crates/aura-hot` |
 | description | CLAP hot-reload proxy — host maps this .clap; DSP lives in a sibling .impl that watch can replace |
 | frameworks | clap |
-| generated | `2026-08-24T16:17:07Z` |
+| generated | `2026-08-26T06:01:31Z` |
 
 ## Graph atoms (auto)
 

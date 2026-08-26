@@ -7,6 +7,22 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ## [Unreleased]
 
+### Added
+
+- `aura-host` Phase 1 complete: MIDI input (midir → `rtrb` SPSC → audio
+  thread, dialect picked from `note-ports.preferred_dialect`), `--set
+  <id>=<val>` via `params.flush` before `activate()`, `--list-midi` /
+  `--midi-in <name>`, and the `clap.log` + `clap.thread-check` host
+  extensions.
+
+### Fixed
+
+- `aura-host` passed one `clap_audio_buffer` with `audio_inputs_count` set to
+  the *channel* count — the same port-vs-channel confusion fixed on the plugin
+  side in 0.9.6. A plugin with two input ports (`smoke-sidechain`: `in [2, 1]`)
+  read past the end of the array. Now one buffer per declared port, on both
+  sides. The audio callback also no longer allocates per block.
+
 ## [0.9.6] - 2026-08-25
 
 ### Fixed

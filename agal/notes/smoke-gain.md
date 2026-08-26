@@ -9,7 +9,7 @@
 | path | `examples/smoke-gain` |
 | description | AURA in-tree CLAP smoke — stereo gain |
 | frameworks | aura, aura-editor, slint |
-| generated | `2026-08-24T16:17:07Z` |
+| generated | `2026-08-26T06:01:31Z` |
 
 ## Graph atoms (auto)
 
