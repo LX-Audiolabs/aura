@@ -9,7 +9,7 @@
 | path | `examples/smoke-sidechain` |
 | description | AURA in-tree CLAP smoke — stereo FX with mono sidechain |
 | frameworks | aura |
-| generated | `2026-08-27T16:56:27Z` |
+| generated | `2026-08-27T17:47:49Z` |
 
 ## Graph atoms (auto)
 

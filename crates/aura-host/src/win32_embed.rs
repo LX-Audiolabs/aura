@@ -143,21 +143,15 @@ impl EmbeddedGui {
         Ok(Self { plugin, socket })
     }
 
-    /// The socket's current size, in `parent`-client physical pixels.
+    /// The socket's current size in physical pixels.
     #[must_use]
     pub fn size(&self) -> (u32, u32) {
         let mut r = windows_sys::Win32::Foundation::RECT::default();
+        // GetClientRect always sets left=top=0 — immune to RDP off-screen positions.
         let ok = unsafe {
-            windows_sys::Win32::UI::WindowsAndMessaging::GetWindowRect(self.socket, &raw mut r)
+            windows_sys::Win32::UI::WindowsAndMessaging::GetClientRect(self.socket, &raw mut r)
         };
-        if ok != 0 {
-            (
-                (r.right - r.left).max(0) as u32,
-                (r.bottom - r.top).max(0) as u32,
-            )
-        } else {
-            (0, 0)
-        }
+        if ok != 0 { (r.right as u32, r.bottom as u32) } else { (0, 0) }
     }
 }
 

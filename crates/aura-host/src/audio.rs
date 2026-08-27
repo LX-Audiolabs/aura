@@ -5,9 +5,11 @@
 #![allow(clippy::cast_sign_loss)]
 
 use std::ptr;
+use std::sync::Arc;
 
 use clap_sys::{audio_buffer::clap_audio_buffer, plugin::clap_plugin, process::clap_process};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use crossbeam_queue::ArrayQueue;
 
 use crate::events::{Dialect, EvList, Queue, RawMidi, UiEvent, sink_output_events};
 use crate::loader::{self, PluginPtr};
@@ -37,6 +39,8 @@ pub struct Engine {
     ui_rx: Queue<UiEvent>,
     dialect: Dialect,
     steady_time: i64,
+    /// Interleaved f32 samples from the capture thread, or `None` for silence.
+    capture_buf: Option<Arc<ArrayQueue<f32>>>,
 }
 
 // Safety: the Engine is built on the main thread and then moved into the cpal
@@ -49,6 +53,7 @@ impl Engine {
     pub fn new(
         plugin: *const clap_plugin,
         device_channels: usize,
+        capture_buf: Option<Arc<ArrayQueue<f32>>>,
         midi_rx: Queue<RawMidi>,
         ui_rx: Queue<UiEvent>,
     ) -> Self {
@@ -102,6 +107,7 @@ impl Engine {
             ui_rx,
             dialect: loader::note_dialect(plugin),
             steady_time: 0,
+            capture_buf,
         }
     }
 
@@ -150,9 +156,20 @@ impl Engine {
     }
 
     fn process_block(&mut self, frames: usize) {
-        // ponytail: inputs are silence — this host has no capture path yet.
-        for b in &mut self.bufs[..self.main_out_offset] {
-            b[..frames].fill(0.0);
+        // Deinterleave captured input into plugin input port buffers.
+        // Each frame contributes one sample per input channel in the ring buffer.
+        if self.main_out_offset > 0 {
+            if let Some(buf) = &self.capture_buf {
+                for i in 0..frames {
+                    for ch in 0..self.main_out_offset {
+                        self.bufs[ch][i] = buf.pop().unwrap_or(0.0);
+                    }
+                }
+            } else {
+                for b in &mut self.bufs[..self.main_out_offset] {
+                    b[..frames].fill(0.0);
+                }
+            }
         }
         for p in &mut self.in_ports {
             p.constant_mask = 0;
@@ -209,8 +226,10 @@ pub fn output_devices() -> Vec<String> {
 /// A running stream plus the plugin activation that belongs to it. Dropping it
 /// stops processing and deactivates, so switching devices is drop + `open`.
 pub struct Session {
-    // Declared first: the stream must stop before the plugin is deactivated.
+    // Output stream first: stops before the plugin is deactivated (see Drop).
     _stream: cpal::Stream,
+    // Input stream second: can stop any time after output.
+    _in_stream: Option<cpal::Stream>,
     plugin: PluginPtr,
     pub sample_rate: f64,
     pub device_channels: usize,
@@ -265,6 +284,22 @@ pub fn open(
     let sample_rate = f64::from(config.sample_rate().0);
     let device_channels = config.channels() as usize;
 
+    // Open a capture stream when the plugin declares audio input ports.
+    let in_ch_count = loader::audio_port_channels(plugin, true)
+        .iter()
+        .sum::<u32>() as usize;
+    let (capture_buf, _in_stream) = if in_ch_count > 0 {
+        match open_input(config.sample_rate(), in_ch_count) {
+            Ok((buf, stream)) => (Some(buf), Some(stream)),
+            Err(e) => {
+                eprintln!("warn: audio input: {e} — plugin inputs will be silence");
+                (None, None)
+            }
+        }
+    } else {
+        (None, None)
+    };
+
     if let Some(activate) = unsafe { (*plugin).activate }
         && !unsafe { activate(plugin, sample_rate, 1, MAX_FRAMES as u32) }
     {
@@ -279,7 +314,7 @@ pub fn open(
         return Err("plugin.start_processing returned false".into());
     }
 
-    let mut engine = Engine::new(plugin, device_channels, midi_rx, ui_rx);
+    let mut engine = Engine::new(plugin, device_channels, capture_buf, midi_rx, ui_rx);
     let (in_ports, out_ports) = engine.port_layout();
     let dialect = engine.dialect();
 
@@ -300,6 +335,7 @@ pub fn open(
 
     Ok(Session {
         _stream: stream,
+        _in_stream,
         plugin: PluginPtr(plugin),
         sample_rate,
         device_channels,
@@ -307,6 +343,51 @@ pub fn open(
         out_ports,
         dialect,
     })
+}
+
+/// Try to open the default input device at `rate`, remixed to `plugin_in_ch` channels.
+/// Non-fatal: caller warns and falls back to silence on any error.
+fn open_input(
+    rate: cpal::SampleRate,
+    plugin_in_ch: usize,
+) -> Result<(Arc<ArrayQueue<f32>>, cpal::Stream), String> {
+    let host = cpal::default_host();
+    let device = host
+        .default_input_device()
+        .ok_or("no default input device")?;
+    let cfg = device
+        .default_input_config()
+        .map_err(|e| format!("input config: {e}"))?;
+    if cfg.sample_format() != cpal::SampleFormat::F32 {
+        return Err(format!("input format {:?} is not f32", cfg.sample_format()));
+    }
+    let dev_ch = cfg.channels() as usize;
+    let buf = Arc::new(ArrayQueue::<f32>::new(MAX_FRAMES * 16));
+    let tx = Arc::clone(&buf);
+    let stream_cfg = cpal::StreamConfig {
+        channels: cfg.channels(),
+        sample_rate: rate,
+        buffer_size: cpal::BufferSize::Default,
+    };
+    let stream = device
+        .build_input_stream::<f32, _, _>(
+            &stream_cfg,
+            move |data: &[f32], _| {
+                for frame in data.chunks(dev_ch) {
+                    for ch in 0..plugin_in_ch {
+                        // Repeat last device channel if plugin wants more than device has.
+                        let s = frame.get(ch.min(dev_ch - 1)).copied().unwrap_or(0.0);
+                        let _ = tx.push(s);
+                    }
+                }
+            },
+            |e| eprintln!("audio input error: {e}"),
+            None,
+        )
+        .map_err(|e| format!("build_input_stream: {e}"))?;
+    stream.play().map_err(|e| format!("stream.play: {e}"))?;
+    eprintln!("audio in: {}", device.name().unwrap_or_else(|_| "?".into()));
+    Ok((buf, stream))
 }
 
 /// CLI `--play`: open the default device and block until ctrl+c.

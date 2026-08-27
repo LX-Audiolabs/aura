@@ -10,6 +10,7 @@
 //!   cargo aura install [--clap|--vst3|--lv2]
 //!   cargo aura preview [path] [--no-watch]
 //!   cargo aura watch [--clap|--vst3|--lv2] [--release] [-plug …] [--no-install]
+//!   cargo aura run [aura-host-args…]
 //!   cargo aura mesh [agal-args…]
 //!   cargo aura doctor
 
@@ -41,7 +42,7 @@ fn main() -> ExitCode {
         "preview" => cmd_preview(&args[1..]),
         "watch" => cmd_watch(&args[1..]),
         "mesh" => cmd_mesh(&args[1..]),
-        "gui" => cmd_gui(),
+        "run" => cmd_run(&args[1..]),
         "doctor" => cmd_doctor(),
         "help" | "--help" | "-h" => {
             print_help();
@@ -68,7 +69,7 @@ Commands:
                           Scaffold a plugin project in ./<name>
                           (Slint + derive + aura.toml + agal)
                           CLAP is always on; flags add VST3 / LV2 feature + export
-                          kinds: effect (default) | effect-mono | analyzer | instrument
+                          kinds: effect (default) | effect-mono | analyzer | instrument | note-effect
   init [path] [--vst3] [--lv2] [--kind <k>]
                           Same scaffold, into an existing empty directory
                           (default: current dir; name comes from the dir name)
@@ -93,7 +94,8 @@ Commands:
                           the host keeps mapped and a sibling .impl the watch
                           can replace (re-add instance to pick up new DSP)
   mesh [agal-args…]       run `agal` (default: `agal .`) — orientation mesh
-  gui                     Open the visual project console (aura-gui)
+  run [aura-host-args…]   launch aura-host dev host (load .clap, audio, MIDI, GUI)
+                          passes all args through to aura-host — see `cargo aura run --help`
   doctor                  Check toolchain / AURA path / clap-validator
   help                    This message
 
@@ -593,8 +595,14 @@ fn cmd_add_ui(args: &[String]) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// `cargo aura gui` — launch the Slint project console (`aura-gui`).
-fn cmd_gui() -> ExitCode {
+/// `cargo aura run [args…]` — launch `aura-host` dev host.
+///
+/// All args are passed through to the aura-host binary. Examples:
+///   cargo aura run path/to/plugin.clap
+///   cargo aura run path/to/plugin.clap --gui
+///   cargo aura run path/to/plugin.clap --play --midi-in "USB MIDI"
+///   cargo aura run --help
+fn cmd_run(args: &[String]) -> ExitCode {
     let root = match aura_root() {
         Ok(r) => r,
         Err(e) => {
@@ -605,9 +613,11 @@ fn cmd_gui() -> ExitCode {
     let mut cmd = Command::new("cargo");
     cmd.arg("run")
         .arg("-p")
-        .arg("aura-gui")
+        .arg("aura-host")
         .arg("--manifest-path")
-        .arg(root.join("Cargo.toml"));
+        .arg(root.join("Cargo.toml"))
+        .arg("--");
+    cmd.args(args);
     match cmd.status() {
         Ok(s) if s.success() => ExitCode::SUCCESS,
         Ok(s) => ExitCode::from(u8::try_from(s.code().unwrap_or(1)).unwrap_or(1)),

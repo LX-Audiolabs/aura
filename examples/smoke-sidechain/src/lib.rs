@@ -37,7 +37,10 @@ pub struct SidechainParams {
 
 pub struct SmokeSidechain;
 
-pub struct DspState;
+pub struct DspState {
+    sc: Vec<f32>,
+    main: Vec<f32>,
+}
 
 impl PluginLogic for SmokeSidechain {
     type Params = SidechainParams;
@@ -63,13 +66,16 @@ impl PluginLogic for SmokeSidechain {
     }
 
     fn init(_params: &Self::Params, _sample_rate: f64) -> Self::DspState {
-        DspState
+        DspState {
+            sc: Vec::with_capacity(4096),
+            main: Vec::with_capacity(4096),
+        }
     }
 
     fn reset(_state: &mut Self::DspState, _params: &Self::Params, _config: &AudioConfig) {}
 
     fn process(
-        _state: &mut Self::DspState,
+        state: &mut Self::DspState,
         params: &Self::Params,
         buffer: &mut AudioBuffer<'_, f32>,
         _context: &mut ProcessContext,
@@ -79,22 +85,24 @@ impl PluginLogic for SmokeSidechain {
         #[allow(clippy::cast_possible_truncation)]
         let amount = params.amount.raw_target() as f32;
 
-        // Sidechain is declared mono; read it once and copy to all outputs.
-        let sc = if buffer.num_sidechain_inputs() > 0 {
-            buffer.sidechain_input(0).to_vec()
+        // Sidechain is declared mono; copy once to pre-allocated scratch.
+        state.sc.resize(n, 0.0);
+        if buffer.num_sidechain_inputs() > 0 {
+            state.sc[..n].copy_from_slice(&buffer.sidechain_input(0)[..n]);
         } else {
-            vec![0.0; n]
-        };
+            state.sc[..n].fill(0.0);
+        }
 
         for c in 0..outs {
-            let main = if c < buffer.num_main_inputs() {
-                buffer.main_input(c).to_vec()
+            state.main.resize(n, 0.0);
+            if c < buffer.num_main_inputs() {
+                state.main[..n].copy_from_slice(&buffer.main_input(c)[..n]);
             } else {
-                vec![0.0; n]
-            };
+                state.main[..n].fill(0.0);
+            }
             let out = buffer.output(c);
             for i in 0..n {
-                out[i] = main[i] * (1.0 - amount) + sc[i] * amount;
+                out[i] = state.main[i] * (1.0 - amount) + state.sc[i] * amount;
             }
         }
 

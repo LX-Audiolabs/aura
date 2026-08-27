@@ -19,7 +19,12 @@ use aura::prelude::*;
 
 static DEBUG_LEFT: AtomicU32 = AtomicU32::new(24);
 
-fn debug_process(line: &str) {
+fn log_note_events(
+    notes: &NoteBuffer,
+    midi: &MidiBuffer,
+    gain_mod_amount: f64,
+    table_occ: usize,
+) {
     if DEBUG_LEFT.fetch_sub(1, Ordering::Relaxed) == 0 {
         return;
     }
@@ -33,7 +38,31 @@ fn debug_process(line: &str) {
         .append(true)
         .open(dir.join("smoke-synth.log"))
     {
-        let _ = writeln!(f, "{line}");
+        let mods: Vec<_> = notes
+            .iter()
+            .filter_map(|e| match e.kind {
+                NoteEventKind::ParamMod { param_id, amount } => {
+                    Some(format!("id{param_id} n{} k{} {amount:.4}", e.note_id, e.key))
+                }
+                NoteEventKind::ParamValue { param_id, plain } => {
+                    Some(format!("val{param_id} n{} k{} {plain:.4}", e.note_id, e.key))
+                }
+                _ => None,
+            })
+            .collect();
+        let ons: Vec<_> = notes
+            .iter()
+            .filter(|e| matches!(e.kind, NoteEventKind::On { .. }))
+            .map(|e| format!("n{}k{}", e.note_id, e.key))
+            .collect();
+        let _ = writeln!(
+            f,
+            "notes={} midi={} ons=[{}] mods=[{}] knob_mod={gain_mod_amount:.4} occ={table_occ}",
+            notes.len(),
+            midi.len(),
+            ons.join(","),
+            mods.join(","),
+        );
     }
 }
 
@@ -185,36 +214,12 @@ impl PluginLogic for SmokeSynth {
         }
 
         if !context.notes.is_empty() || !context.midi.is_empty() {
-            let mods: Vec<_> = context
-                .notes
-                .iter()
-                .filter_map(|e| match e.kind {
-                    NoteEventKind::ParamMod { param_id, amount } => Some(format!(
-                        "id{param_id} n{} k{} {amount:.4}",
-                        e.note_id, e.key
-                    )),
-                    NoteEventKind::ParamValue { param_id, plain } => Some(format!(
-                        "val{param_id} n{} k{} {plain:.4}",
-                        e.note_id, e.key
-                    )),
-                    _ => None,
-                })
-                .collect();
-            let ons: Vec<_> = context
-                .notes
-                .iter()
-                .filter(|e| matches!(e.kind, NoteEventKind::On { .. }))
-                .map(|e| format!("n{}k{}", e.note_id, e.key))
-                .collect();
-            debug_process(&format!(
-                "notes={} midi={} ons=[{}] mods=[{}] knob_mod={:.4} occ={}",
-                context.notes.len(),
-                context.midi.len(),
-                ons.join(","),
-                mods.join(","),
+            log_note_events(
+                &context.notes,
+                &context.midi,
                 params.gain.mod_amount(),
-                state.table.occupied_count()
-            ));
+                state.table.occupied_count(),
+            );
         }
 
         let n = buffer.num_samples();

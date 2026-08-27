@@ -9,7 +9,7 @@
 | path | `crates/aura-host` |
 | description | Minimal CLAP host — CLI + Slint GUI, load .clap, params, MIDI in, run audio |
 | frameworks | aura, clap, raw-window-handle, slint |
-| generated | `2026-08-27T16:56:27Z` |
+| generated | `2026-08-27T17:47:49Z` |
 
 ## Graph atoms (auto)
 

@@ -20,10 +20,12 @@ pub enum Kind {
     Analyzer,
     /// Polyphonic synthesizer / instrument (stereo main bus default).
     Instrument,
+    /// Note-in / note-out effect (sequencer, arpeggiator, transposer, …).
+    NoteEffect,
 }
 
 impl Kind {
-    pub const SUPPORTED: &'static str = "effect, effect-mono, analyzer, instrument";
+    pub const SUPPORTED: &'static str = "effect, effect-mono, analyzer, instrument, note-effect";
 
     pub fn parse(s: &str) -> Result<Self, String> {
         match s {
@@ -31,6 +33,7 @@ impl Kind {
             "effect-mono" => Ok(Self::EffectMono),
             "analyzer" => Ok(Self::Analyzer),
             "instrument" => Ok(Self::Instrument),
+            "note-effect" => Ok(Self::NoteEffect),
             other => Err(format!(
                 "unknown kind '{other}' (supported: {})",
                 Self::SUPPORTED
@@ -44,6 +47,7 @@ impl Kind {
             Self::Effect | Self::EffectMono => "effect",
             Self::Analyzer => "analyzer",
             Self::Instrument => "instrument",
+            Self::NoteEffect => "note-effect",
         }
     }
 
@@ -53,6 +57,7 @@ impl Kind {
             Self::Effect | Self::EffectMono => "PluginCategory::Effect",
             Self::Analyzer => "PluginCategory::Analyzer",
             Self::Instrument => "PluginCategory::Instrument",
+            Self::NoteEffect => "PluginCategory::NoteEffect",
         }
     }
 
@@ -66,7 +71,7 @@ impl Kind {
     }
 "
             }
-            Self::Effect | Self::Analyzer | Self::Instrument => "",
+            Self::Effect | Self::Analyzer | Self::Instrument | Self::NoteEffect => "",
         }
     }
 
@@ -76,6 +81,7 @@ impl Kind {
             Self::EffectMono => "mono effect",
             Self::Analyzer => "analyzer (meter stub)",
             Self::Instrument => "instrument",
+            Self::NoteEffect => "note effect (note-in / note-out stub)",
         }
     }
 }
@@ -214,6 +220,7 @@ name = "{name}"
         Kind::Effect | Kind::EffectMono => effect_main_slint(&display),
         Kind::Analyzer => analyzer_main_slint(&display),
         Kind::Instrument => instrument_main_slint(&display),
+        Kind::NoteEffect => note_effect_main_slint(&display),
     };
 
     let mut exports = format!("#[cfg(feature = \"clap\")]\naura::export!({struct_name});");
@@ -254,6 +261,15 @@ name = "{name}"
             &flags,
             &exports,
             spec.kind,
+        ),
+        Kind::NoteEffect => note_effect_lib_rs(
+            &display,
+            name,
+            &struct_name,
+            &params_name,
+            &formats_doc,
+            &flags,
+            &exports,
         ),
     };
 
@@ -1073,6 +1089,228 @@ impl PluginLogic for {struct_name} {{
     )
 }
 
+fn note_effect_main_slint(display: &str) -> String {
+    format!(
+        r#"// {display} — AURA + Slint (Material 3–aligned @aura tokens)
+import {{ Knob, AuraTheme }} from "@aura";
+
+import "NotoSans-Regular.ttf";
+import "NotoSans-Bold.ttf";
+
+export component AppWindow inherits Window {{
+    preferred-width: 320px;
+    preferred-height: 200px;
+    background: AuraTheme.surface;
+    default-font-family: "Noto Sans";
+
+    in-out property <float> transpose: 0.0;
+    callback transpose-changed(float);
+
+    VerticalLayout {{
+        padding: 16px;
+        spacing: 12px;
+
+        Rectangle {{
+            background: AuraTheme.surface-container;
+            border-radius: AuraTheme.radius-md;
+            border-width: 1px;
+            border-color: AuraTheme.outline-variant;
+            vertical-stretch: 1;
+
+            VerticalLayout {{
+                padding: 16px;
+                spacing: 12px;
+                alignment: center;
+
+                Text {{
+                    text: "{display}";
+                    color: AuraTheme.on-surface;
+                    font-size: AuraTheme.font-title;
+                    font-weight: 600;
+                    horizontal-alignment: center;
+                }}
+
+                HorizontalLayout {{
+                    alignment: center;
+                    spacing: 24px;
+
+                    VerticalLayout {{
+                        alignment: center;
+                        spacing: 6px;
+                        Knob {{
+                            value: root.transpose;
+                            minimum: -24.0;
+                            maximum: 24.0;
+                            changed(v) {{ root.transpose-changed(v); }}
+                        }}
+                        Text {{
+                            text: "Transpose";
+                            color: AuraTheme.on-surface-variant;
+                            font-size: AuraTheme.font-label;
+                            horizontal-alignment: center;
+                        }}
+                    }}
+                }}
+            }}
+        }}
+    }}
+}}
+"#
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn note_effect_lib_rs(
+    display: &str,
+    name: &str,
+    struct_name: &str,
+    params_name: &str,
+    formats_doc: &str,
+    flags: &str,
+    exports: &str,
+) -> String {
+    format!(
+        r#"//! {display} — AURA note effect ({formats_doc} via `aura-*` wrappers).
+//!
+//! Note-in / note-out stub: passes notes through both CLAP-native and MIDI-1
+//! dialects. Extend process() with sequencer / arpeggiator / transpose logic.
+//!
+//! ```bash
+//! cargo aura build {flags} --release
+//! cargo aura install {flags} --release
+//! ```
+
+use std::sync::Arc;
+
+use aura::prelude::*;
+
+slint::include_modules!();
+
+use {params_name}ParamId as P;
+
+// ---------------------------------------------------------------------------
+// Params
+// ---------------------------------------------------------------------------
+
+#[derive(Params)]
+pub struct {params_name} {{
+    #[param(id = 1, name = "Transpose", range = "linear(-24, 24)", default = 0.0, unit = "st")]
+    pub transpose: FloatParam,
+}}
+
+// ---------------------------------------------------------------------------
+// Plugin
+// ---------------------------------------------------------------------------
+
+pub struct {struct_name};
+
+pub struct DspState;
+
+impl PluginLogic for {struct_name} {{
+    type Params = {params_name};
+    type DspState = DspState;
+
+    fn info() -> PluginInfo {{
+        let mut info = PluginInfo::new(
+            "{display}",
+            "LX Audiolabs",
+            env!("CARGO_PKG_VERSION"),
+            "{name}",
+        );
+        info.clap_id = "com.lx-audiolabs.{name}";
+        info.category = PluginCategory::NoteEffect;
+        info.accepts_midi_in = true;
+        info.emits_midi = true;
+        // Bitwig Note FX forwards MIDI dialect more reliably than CLAP notes.
+        info.midi_input_dialect = MidiDialect::Midi1;
+        info.midi_output_dialect = MidiDialect::Midi1;
+        info
+    }}
+
+    fn init(_params: &Self::Params, _sample_rate: f64) -> Self::DspState {{
+        DspState
+    }}
+
+    fn reset(_state: &mut Self::DspState, _params: &Self::Params, _config: &AudioConfig) {{}}
+
+    fn process(
+        _state: &mut Self::DspState,
+        params: &Self::Params,
+        buffer: &mut AudioBuffer<'_, f32>,
+        context: &mut ProcessContext,
+    ) -> ProcessStatus {{
+        // Audio pass-through (note effects typically have no audio processing).
+        let n = buffer.num_samples();
+        let ch = buffer.num_outputs().min(buffer.num_inputs());
+        for c in 0..ch {{
+            for i in 0..n {{
+                buffer.output(c)[i] = buffer.input(c)[i];
+            }}
+        }}
+        for c in ch..buffer.num_outputs() {{
+            buffer.output(c).fill(0.0);
+        }}
+
+        #[allow(clippy::cast_possible_truncation)]
+        let transpose = params.transpose.raw_target() as i32;
+
+        // Dual-dialect: prefer CLAP notes when present; fall back to MIDI-1.
+        // Emitting both dialects can cause duplicate events in some hosts.
+        if context.notes.is_empty() {{
+            for ev in context.midi.iter() {{
+                let msg = ev.message;
+                let out_msg = if msg.is_note_on() || msg.is_note_off() {{
+                    let note = msg.note_number().map_or(msg.data1, |note| {{
+                        u8::try_from((i32::from(note) + transpose).clamp(0, 127)).unwrap_or(0)
+                    }});
+                    MidiMessage::raw(msg.status_byte(), note, msg.data2)
+                }} else {{
+                    msg
+                }};
+                context.midi_out.push(ev.sample_offset, out_msg);
+            }}
+        }} else {{
+            for ev in context.notes.iter() {{
+                let mut out = ev;
+                if out.key >= 0 {{
+                    out.key =
+                        i16::try_from((i32::from(out.key) + transpose).clamp(0, 127)).unwrap_or(0);
+                }}
+                context.notes_out.push(out);
+            }}
+        }}
+
+        ProcessStatus::Continue
+    }}
+
+    fn editor(_params: Arc<Self::Params>) -> Option<Box<dyn Editor>> {{
+        Some(
+            aura_editor::AuraSlintEditor::new(
+                (320, 200),
+                |ctx| {{
+                    let ui = AppWindow::new().expect("slint component");
+                    let params = ctx.params.clone();
+                    ui.on_transpose_changed(move |v| params.set_plain(P::Transpose.id(), f64::from(v)));
+                    ui
+                }},
+                |ui, ctx| {{
+                    #[allow(clippy::cast_possible_truncation)]
+                    let t = ctx.params.get_plain(P::Transpose.id()).unwrap_or(0.0) as f32;
+                    if (t - ui.get_transpose()).abs() > 1.0e-4 {{
+                        ui.set_transpose(t);
+                    }}
+                }},
+            )
+            .into_editor(),
+        )
+    }}
+}}
+
+{exports}
+"#
+    )
+}
+
 /// Scaffold paths for `cargo aura add` (crate only — no root `aura.toml` / `agal.toml`).
 ///
 /// Drops the empty `[workspace]` table from `files()`: `add` registers the crate
@@ -1538,6 +1776,23 @@ mod tests {
         assert_eq!(Kind::parse("effect-mono"), Ok(Kind::EffectMono));
         assert_eq!(Kind::parse("analyzer"), Ok(Kind::Analyzer));
         assert_eq!(Kind::parse("instrument"), Ok(Kind::Instrument));
+        assert_eq!(Kind::parse("note-effect"), Ok(Kind::NoteEffect));
+    }
+
+    #[test]
+    fn note_effect_template_category_and_note_io() {
+        let mut s = spec("my-arp", &[]);
+        s.kind = Kind::NoteEffect;
+        let out = files(&s);
+        let lib = file(&out, "src/lib.rs");
+        let aura = file(&out, "aura.toml");
+        assert!(lib.contains("PluginCategory::NoteEffect"), "{lib}");
+        assert!(lib.contains("accepts_midi_in = true"), "{lib}");
+        assert!(lib.contains("emits_midi = true"), "{lib}");
+        assert!(lib.contains("notes_out.push"), "{lib}");
+        assert!(lib.contains("midi_out.push"), "{lib}");
+        assert!(aura.contains("category = \"note-effect\""), "{aura}");
+        assert!(!lib.contains("BusLayout::mono()"), "{lib}");
     }
 
     #[test]

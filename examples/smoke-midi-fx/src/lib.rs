@@ -27,7 +27,10 @@ use aura::prelude::*;
 
 static DEBUG_LEFT: AtomicU32 = AtomicU32::new(24);
 
-fn debug_process(line: &str) {
+fn debug_process(
+    frames: usize, in_n: usize, in_m: usize, out_n: usize, out_m: usize,
+    audio_in: usize, audio_out: usize, xpose: i32,
+) {
     if DEBUG_LEFT.load(Ordering::Relaxed) == 0 {
         return;
     }
@@ -44,7 +47,10 @@ fn debug_process(line: &str) {
         .append(true)
         .open(dir.join("smoke-midi-fx.log"))
     {
-        let _ = writeln!(f, "{line}");
+        let _ = writeln!(
+            f,
+            "frames={frames} in_n={in_n} in_m={in_m} out_n={out_n} out_m={out_m} audio_in={audio_in} audio_out={audio_out} xpose={xpose}",
+        );
     }
 }
 
@@ -148,8 +154,7 @@ impl PluginLogic for SmokeMidiFx {
             }
         }
 
-        debug_process(&format!(
-            "frames={} in_n={} in_m={} out_n={} out_m={} audio_in={} audio_out={} xpose={}",
+        debug_process(
             n,
             context.notes.len(),
             context.midi.len(),
@@ -157,8 +162,8 @@ impl PluginLogic for SmokeMidiFx {
             context.midi_out.len(),
             buffer.num_inputs(),
             buffer.num_outputs(),
-            transpose
-        ));
+            transpose,
+        );
 
         ProcessStatus::Continue
     }

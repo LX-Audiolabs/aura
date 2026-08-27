@@ -259,8 +259,31 @@ pub fn run(
                 start_audio(&ui, &host, name.as_deref());
             }
 
+            // When embed is open, prevent the window from shrinking below the
+            // socket's bottom-right edge (socket is WS_CHILD at EMBED_X/EMBED_Y).
+            #[cfg(windows)]
+            {
+                let h = host.borrow();
+                if let Some(PluginWindow::Embedded(embedded)) = &h.gui {
+                    let (ew, eh) = embedded.size();
+                    if ew > 0 && eh > 0 {
+                        let cur = ui.window().size();
+                        let need_w = EMBED_X as u32 + ew + 16;
+                        let need_h = EMBED_Y as u32 + eh + 16;
+                        if cur.width < need_w || cur.height < need_h {
+                            ui.window().set_size(slint::WindowSize::Physical(
+                                slint::PhysicalSize::new(
+                                    cur.width.max(need_w),
+                                    cur.height.max(need_h),
+                                ),
+                            ));
+                        }
+                    }
+                }
+            }
+
             // ponytail: polling get_value instead of reading the plugin's output
-            // events — 20 Hz is enough for sliders, and it needs no return queue.
+            // events; 20 Hz is enough for sliders and needs no return queue.
             let rows = param_rows(&host.borrow());
             for (i, row) in rows.into_iter().enumerate() {
                 if params_model.row_data(i).as_ref() != Some(&row) {

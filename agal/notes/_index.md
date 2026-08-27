@@ -29,7 +29,6 @@ Auto-generated. Per-node notes for focus work.
 
 ## members (examples / tools)
 
-- [aura-gui](aura-gui.md) — `tools/aura-gui`
 - [aura-preview](aura-preview.md) — `tools/aura-preview`
 - [cargo-aura](cargo-aura.md) — `tools/cargo-aura`
 - [smoke-gain](smoke-gain.md) — `examples/smoke-gain`

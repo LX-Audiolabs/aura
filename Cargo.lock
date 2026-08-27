@@ -616,14 +616,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aura-gui"
-version = "0.9.6"
-dependencies = [
- "aura-build",
- "slint",
-]
-
-[[package]]
 name = "aura-host"
 version = "0.9.6"
 dependencies = [

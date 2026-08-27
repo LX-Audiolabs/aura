@@ -47,9 +47,7 @@ impl FloatingGui {
     pub fn open(plugin: *const clap_plugin, title: &str) -> Result<Self, String> {
         let gui = gui_ext(plugin).ok_or("plugin has no clap.gui extension")?;
         if !supports_floating(plugin) {
-            return Err(
-                "plugin supports embedded GUIs only — host-side embedding is Phase 3".into(),
-            );
+            return Err("plugin supports embedded (non-floating) GUIs only".into());
         }
         let create = gui.create.ok_or("clap.gui has no create")?;
         if !unsafe { create(plugin, window_api().as_ptr(), true) } {
