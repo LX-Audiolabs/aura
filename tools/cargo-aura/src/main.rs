@@ -8,9 +8,9 @@
 //!   cargo aura add other-plugin
 //!   cargo aura build [--clap|--vst3|--lv2]
 //!   cargo aura install [--clap|--vst3|--lv2]
-//!   cargo aura preview [path] [--no-watch]
+//!   cargo aura preview [-plug <name> | path] [--no-watch]
 //!   cargo aura watch [--clap|--vst3|--lv2] [--release] [-plug …] [--no-install]
-//!   cargo aura run [aura-host-args…]
+//!   cargo aura run [-plug <name> | path.clap] [aura-host-args…]
 //!   cargo aura mesh [agal-args…]
 //!   cargo aura doctor
 
@@ -86,16 +86,19 @@ Commands:
                           build + copy artifact into host search path
                           (-plug installs each selected plugin in turn)
                           --hot: CLAP proxy + sibling .impl (see watch)
-  preview [path] [--component N] [--no-watch]
-                          hot-reload the plugin .slint UI (default ui/main.slint)
+  preview [-plug <name> | path] [--component N] [--no-watch]
+                          hot-reload the plugin .slint UI
+                          -plug <name>: auto-resolves ui/main.slint for the named plugin
   watch [--clap|--vst3|--lv2] [--release] [-plug <crate>…] [--no-install] [--hot]
                           rebuild (+ install) when src/ui/Cargo.toml change
                           default format: --clap. --hot writes a proxy .clap
                           the host keeps mapped and a sibling .impl the watch
                           can replace (re-add instance to pick up new DSP)
   mesh [agal-args…]       run `agal` (default: `agal .`) — orientation mesh
-  run [aura-host-args…]   launch aura-host dev host (load .clap, audio, MIDI, GUI)
-                          passes all args through to aura-host — see `cargo aura run --help`
+  run [-plug <name> | path.clap] [aura-host-args…]
+                          launch aura-host dev host (load .clap, audio, MIDI, GUI)
+                          -plug resolves installed CLAP artifact (same path as install)
+                          all args pass through to aura-host — see `cargo aura run --help`
   doctor                  Check toolchain / AURA path / clap-validator
   help                    This message
 
@@ -595,12 +598,13 @@ fn cmd_add_ui(args: &[String]) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// `cargo aura run [args…]` — launch `aura-host` dev host.
+/// `cargo aura run [-plug <name> | path.clap] [aura-host-args…]`
 ///
-/// All args are passed through to the aura-host binary. Examples:
-///   cargo aura run path/to/plugin.clap
+/// `-plug <name>` resolves to the installed CLAP artifact (same path as `install`).
+/// All remaining args pass through to aura-host. Examples:
+///   cargo aura run -plug smoke-gain --gui
+///   cargo aura run -plug smoke-synth --play --midi-in "USB MIDI"
 ///   cargo aura run path/to/plugin.clap --gui
-///   cargo aura run path/to/plugin.clap --play --midi-in "USB MIDI"
 ///   cargo aura run --help
 fn cmd_run(args: &[String]) -> ExitCode {
     let root = match aura_root() {
@@ -610,6 +614,37 @@ fn cmd_run(args: &[String]) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+
+    // Resolve `-plug <name>` → installed .clap path before handing off to aura-host.
+    let (resolved, rest): (Option<String>, &[String]) =
+        if args.first().map(String::as_str) == Some("-plug") {
+            let name = match args.get(1) {
+                Some(n) => n,
+                None => {
+                    eprintln!("error: -plug needs a plugin name");
+                    return ExitCode::FAILURE;
+                }
+            };
+            let dir = match resolve_install_dir(InstallFormat::Clap) {
+                Ok(d) => d,
+                Err(e) => {
+                    eprintln!("error: {e}");
+                    return ExitCode::FAILURE;
+                }
+            };
+            let path = dir.join(format!("{name}.clap"));
+            if !path.exists() {
+                eprintln!(
+                    "error: {} not found — run `cargo aura install --clap -plug {name}` first",
+                    path.display()
+                );
+                return ExitCode::FAILURE;
+            }
+            (Some(path.to_string_lossy().into_owned()), &args[2..])
+        } else {
+            (None, args)
+        };
+
     let mut cmd = Command::new("cargo");
     cmd.arg("run")
         .arg("-p")
@@ -617,7 +652,10 @@ fn cmd_run(args: &[String]) -> ExitCode {
         .arg("--manifest-path")
         .arg(root.join("Cargo.toml"))
         .arg("--");
-    cmd.args(args);
+    if let Some(p) = &resolved {
+        cmd.arg(p);
+    }
+    cmd.args(rest);
     match cmd.status() {
         Ok(s) if s.success() => ExitCode::SUCCESS,
         Ok(s) => ExitCode::from(u8::try_from(s.code().unwrap_or(1)).unwrap_or(1)),
@@ -628,9 +666,10 @@ fn cmd_run(args: &[String]) -> ExitCode {
     }
 }
 
-/// `cargo aura preview [path] [--component N] [--no-watch]` — hot-reload the
-/// plugin's `.slint` UI without compiling the plugin. Delegates to the
-/// `aura-preview` binary in the AURA workspace.
+/// `cargo aura preview [-plug <name> | path] [--component N] [--no-watch]`
+///
+/// `-plug <name>` resolves to `ui/main.slint` inside the named plugin crate.
+/// Without `-plug`, delegates all args directly to `aura-preview`.
 fn cmd_preview(args: &[String]) -> ExitCode {
     let root = match aura_root() {
         Ok(r) => r,
@@ -640,14 +679,37 @@ fn cmd_preview(args: &[String]) -> ExitCode {
         }
     };
 
+    let (slint_path, rest): (Option<String>, &[String]) =
+        if args.first().map(String::as_str) == Some("-plug") {
+            let name = match args.get(1) {
+                Some(n) => n,
+                None => {
+                    eprintln!("error: -plug needs a plugin name");
+                    return ExitCode::FAILURE;
+                }
+            };
+            match find_plugin_slint(name) {
+                Ok(p) => (Some(p.to_string_lossy().into_owned()), &args[2..]),
+                Err(e) => {
+                    eprintln!("error: {e}");
+                    return ExitCode::FAILURE;
+                }
+            }
+        } else {
+            (None, args)
+        };
+
     let mut cmd = Command::new("cargo");
     cmd.arg("run")
         .arg("-p")
         .arg("aura-preview")
         .arg("--manifest-path")
         .arg(root.join("Cargo.toml"))
-        .arg("--")
-        .args(args);
+        .arg("--");
+    if let Some(p) = &slint_path {
+        cmd.arg(p);
+    }
+    cmd.args(rest);
 
     match cmd.status() {
         Ok(s) if s.success() => ExitCode::SUCCESS,
@@ -657,6 +719,129 @@ fn cmd_preview(args: &[String]) -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// Locate `ui/main.slint` for a plugin crate by name.
+///
+/// Search order:
+/// 1. Current dir is the plugin (`./Cargo.toml` name matches).
+/// 2. `plugins/<name>/ui/main.slint` — multi-plugin workspace convention.
+/// 3. Workspace member scan: read `./Cargo.toml` members, match by package name.
+fn find_plugin_slint(name: &str) -> Result<PathBuf, String> {
+    // 1. Running from inside the plugin directory.
+    if let Ok(t) = fs::read_to_string("Cargo.toml") {
+        if cargo_pkg_name(&t).as_deref() == Some(name) {
+            let p = PathBuf::from("ui/main.slint");
+            if p.exists() {
+                return Ok(p);
+            }
+        }
+    }
+    // 2. Explicit multi-plugin convention.
+    let by_conv = PathBuf::from(format!("plugins/{name}/ui/main.slint"));
+    if by_conv.exists() {
+        return Ok(by_conv);
+    }
+    // 3. Scan workspace members in the current directory's Cargo.toml.
+    if let Ok(ws) = fs::read_to_string("Cargo.toml") {
+        for member in workspace_members(&ws) {
+            let slint = PathBuf::from(&member).join("ui/main.slint");
+            if !slint.exists() {
+                continue;
+            }
+            let cargo = PathBuf::from(&member).join("Cargo.toml");
+            if let Ok(t) = fs::read_to_string(&cargo)
+                && cargo_pkg_name(&t).as_deref() == Some(name)
+            {
+                return Ok(slint);
+            }
+        }
+    }
+    Err(format!(
+        "no ui/main.slint found for {name:?} — pass the path explicitly or run from inside the plugin directory"
+    ))
+}
+
+/// Extract `[package] name = "..."` from a Cargo.toml string.
+fn cargo_pkg_name(toml: &str) -> Option<String> {
+    let mut in_package = false;
+    for line in toml.lines() {
+        let line = line.split('#').next().unwrap_or("").trim();
+        if line.starts_with("[package]") {
+            in_package = true;
+            continue;
+        }
+        if line.starts_with('[') {
+            in_package = false;
+            continue;
+        }
+        if in_package {
+            if let Some(rest) = line.strip_prefix("name") {
+                if let Some(val) = rest.trim().strip_prefix('=') {
+                    return Some(
+                        val.trim().trim_matches('"').trim_matches('\'').to_string(),
+                    );
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Extract `[workspace] members = [...]` paths from a Cargo.toml string.
+fn workspace_members(toml: &str) -> Vec<String> {
+    let mut in_ws = false;
+    let mut in_members = false;
+    let mut acc = String::new();
+    for line in toml.lines() {
+        let line = line.split('#').next().unwrap_or("").trim();
+        if line.starts_with("[workspace]") {
+            in_ws = true;
+            continue;
+        }
+        if in_ws && line.starts_with('[') {
+            in_ws = false;
+            in_members = false;
+            continue;
+        }
+        if in_ws && !in_members && line.starts_with("members") {
+            if let Some(rest) = line.splitn(2, '[').nth(1) {
+                in_members = true;
+                acc.push_str(rest);
+                if rest.contains(']') {
+                    in_members = false;
+                }
+            }
+            continue;
+        }
+        if in_members {
+            acc.push_str(line);
+            if line.contains(']') {
+                in_members = false;
+            }
+        }
+    }
+    // Pull out double-quoted strings.
+    let mut members = Vec::new();
+    let mut in_str = false;
+    let mut cur = String::new();
+    for ch in acc.chars() {
+        match ch {
+            '"' if !in_str => {
+                in_str = true;
+                cur.clear();
+            }
+            '"' => {
+                in_str = false;
+                if !cur.is_empty() {
+                    members.push(cur.clone());
+                }
+            }
+            _ if in_str => cur.push(ch),
+            _ => {}
+        }
+    }
+    members
 }
 
 /// `cargo aura watch` — rebuild (+ install) when plugin sources change.
