@@ -9,7 +9,7 @@
 | path | `crates/aura-lv2` |
 | description | AURA LV2 format wrapper (thin, over PluginLogic) |
 | frameworks | aura, lv2 |
-| generated | `2026-08-27T06:03:56Z` |
+| generated | `2026-08-27T16:56:27Z` |
 
 ## Graph atoms (auto)
 

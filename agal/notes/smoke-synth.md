@@ -9,7 +9,7 @@
 | path | `examples/smoke-synth` |
 | description | AURA in-tree CLAP smoke — 8-voice synth (NoteVoiceTable + NOTE_END) |
 | frameworks | aura |
-| generated | `2026-08-27T06:03:56Z` |
+| generated | `2026-08-27T16:56:27Z` |
 
 ## Graph atoms (auto)
 

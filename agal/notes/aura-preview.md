@@ -9,7 +9,7 @@
 | path | `tools/aura-preview` |
 | description | Hot-reload preview for AURA plugin .slint UIs (@aura widgets + bundled fonts) |
 | frameworks | aura |
-| generated | `2026-08-27T06:03:56Z` |
+| generated | `2026-08-27T16:56:27Z` |
 
 ## Graph atoms (auto)
 

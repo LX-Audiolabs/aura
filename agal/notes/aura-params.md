@@ -8,7 +8,7 @@
 | kind | `crate` |
 | path | `crates/aura-params` |
 | description | AURA parameter system (ranges, smoothers, atomic params) |
-| generated | `2026-08-27T06:03:56Z` |
+| generated | `2026-08-27T16:56:27Z` |
 
 ## Graph atoms (auto)
 
