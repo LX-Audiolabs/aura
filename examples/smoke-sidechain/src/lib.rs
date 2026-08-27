@@ -101,8 +101,8 @@ impl PluginLogic for SmokeSidechain {
                 state.main[..n].fill(0.0);
             }
             let out = buffer.output(c);
-            for i in 0..n {
-                out[i] = state.main[i] * (1.0 - amount) + state.sc[i] * amount;
+            for (i, o) in out.iter_mut().enumerate().take(n) {
+                *o = state.main[i] * (1.0 - amount) + state.sc[i] * amount;
             }
         }
 

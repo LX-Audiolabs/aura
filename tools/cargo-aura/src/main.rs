@@ -618,12 +618,9 @@ fn cmd_run(args: &[String]) -> ExitCode {
     // Resolve `-plug <name>` → installed .clap path before handing off to aura-host.
     let (resolved, rest): (Option<String>, &[String]) =
         if args.first().map(String::as_str) == Some("-plug") {
-            let name = match args.get(1) {
-                Some(n) => n,
-                None => {
-                    eprintln!("error: -plug needs a plugin name");
-                    return ExitCode::FAILURE;
-                }
+            let Some(name) = args.get(1) else {
+                eprintln!("error: -plug needs a plugin name");
+                return ExitCode::FAILURE;
             };
             let dir = match resolve_install_dir(InstallFormat::Clap) {
                 Ok(d) => d,
@@ -681,12 +678,9 @@ fn cmd_preview(args: &[String]) -> ExitCode {
 
     let (slint_path, rest): (Option<String>, &[String]) =
         if args.first().map(String::as_str) == Some("-plug") {
-            let name = match args.get(1) {
-                Some(n) => n,
-                None => {
-                    eprintln!("error: -plug needs a plugin name");
-                    return ExitCode::FAILURE;
-                }
+            let Some(name) = args.get(1) else {
+                eprintln!("error: -plug needs a plugin name");
+                return ExitCode::FAILURE;
             };
             match find_plugin_slint(name) {
                 Ok(p) => (Some(p.to_string_lossy().into_owned()), &args[2..]),
@@ -729,12 +723,12 @@ fn cmd_preview(args: &[String]) -> ExitCode {
 /// 3. Workspace member scan: read `./Cargo.toml` members, match by package name.
 fn find_plugin_slint(name: &str) -> Result<PathBuf, String> {
     // 1. Running from inside the plugin directory.
-    if let Ok(t) = fs::read_to_string("Cargo.toml") {
-        if cargo_pkg_name(&t).as_deref() == Some(name) {
-            let p = PathBuf::from("ui/main.slint");
-            if p.exists() {
-                return Ok(p);
-            }
+    if let Ok(t) = fs::read_to_string("Cargo.toml")
+        && cargo_pkg_name(&t).as_deref() == Some(name)
+    {
+        let p = PathBuf::from("ui/main.slint");
+        if p.exists() {
+            return Ok(p);
         }
     }
     // 2. Explicit multi-plugin convention.
@@ -775,14 +769,11 @@ fn cargo_pkg_name(toml: &str) -> Option<String> {
             in_package = false;
             continue;
         }
-        if in_package {
-            if let Some(rest) = line.strip_prefix("name") {
-                if let Some(val) = rest.trim().strip_prefix('=') {
-                    return Some(
-                        val.trim().trim_matches('"').trim_matches('\'').to_string(),
-                    );
-                }
-            }
+        if in_package
+            && let Some(rest) = line.strip_prefix("name")
+            && let Some(val) = rest.trim().strip_prefix('=')
+        {
+            return Some(val.trim().trim_matches('"').trim_matches('\'').to_string());
         }
     }
     None
@@ -805,7 +796,7 @@ fn workspace_members(toml: &str) -> Vec<String> {
             continue;
         }
         if in_ws && !in_members && line.starts_with("members") {
-            if let Some(rest) = line.splitn(2, '[').nth(1) {
+            if let Some(rest) = line.split_once('[').map(|x| x.1) {
                 in_members = true;
                 acc.push_str(rest);
                 if rest.contains(']') {

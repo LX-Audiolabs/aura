@@ -27,9 +27,16 @@ use aura::prelude::*;
 
 static DEBUG_LEFT: AtomicU32 = AtomicU32::new(24);
 
+#[allow(clippy::too_many_arguments)]
 fn debug_process(
-    frames: usize, in_n: usize, in_m: usize, out_n: usize, out_m: usize,
-    audio_in: usize, audio_out: usize, xpose: i32,
+    frames: usize,
+    in_n: usize,
+    in_m: usize,
+    out_n: usize,
+    out_m: usize,
+    audio_in: usize,
+    audio_out: usize,
+    xpose: i32,
 ) {
     if DEBUG_LEFT.load(Ordering::Relaxed) == 0 {
         return;

@@ -1159,7 +1159,7 @@ export component AppWindow inherits Window {{
     )
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 fn note_effect_lib_rs(
     display: &str,
     name: &str,

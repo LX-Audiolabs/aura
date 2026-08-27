@@ -151,7 +151,11 @@ impl EmbeddedGui {
         let ok = unsafe {
             windows_sys::Win32::UI::WindowsAndMessaging::GetClientRect(self.socket, &raw mut r)
         };
-        if ok != 0 { (r.right as u32, r.bottom as u32) } else { (0, 0) }
+        if ok != 0 {
+            (r.right as u32, r.bottom as u32)
+        } else {
+            (0, 0)
+        }
     }
 }
 

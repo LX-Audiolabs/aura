@@ -288,7 +288,7 @@ pub fn open(
     let in_ch_count = loader::audio_port_channels(plugin, true)
         .iter()
         .sum::<u32>() as usize;
-    let (capture_buf, _in_stream) = if in_ch_count > 0 {
+    let (capture_buf, in_stream) = if in_ch_count > 0 {
         match open_input(config.sample_rate(), in_ch_count) {
             Ok((buf, stream)) => (Some(buf), Some(stream)),
             Err(e) => {
@@ -335,7 +335,7 @@ pub fn open(
 
     Ok(Session {
         _stream: stream,
-        _in_stream,
+        _in_stream: in_stream,
         plugin: PluginPtr(plugin),
         sample_rate,
         device_channels,
