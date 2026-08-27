@@ -9,7 +9,7 @@
 | path | `crates/aura-core` |
 | description | AURA core: process, editor, plugin info (minimal surface) |
 | frameworks | aura |
-| generated | `2026-08-26T19:58:10Z` |
+| generated | `2026-08-27T06:03:56Z` |
 
 ## Graph atoms (auto)
 
@@ -60,20 +60,35 @@ After `agal.agent.md` (L2). Escalate L0: `crates/aura-core` in json / `agal --pl
 
 ## Intent
 
-_Why this crate/plugin exists. Edit freely._
+One `PluginLogic` + one `ProcessContext` for every format. DSP state is
+shell-owned (`type DspState`), not `self`. Format wrappers stay thin.
 
 ## Open
 
-- [ ] 
+- None in this crate. CLAP leftovers / host proofs live in `aura-clap`.
 
 ## Decisions
 
-_Architecture choices worth remembering._
+- `ProcessContext.ump` is native MIDI 2; `midi` is the 7-bit fallback. VST3/LV2
+  lift MIDI 1 into type-0x2 UMP and down-convert `ump_out` — they must not drop
+  fields to “what that format needs”.
+- `notes` / `notes_out` are CLAP-shaped (on/off/choke/expression/`NOTE_END`).
+  `NOTE_END` is the plugin→host silent-voice signal (poly-mod teardown). Arp/seq
+  also needs `PluginInfo.emits_midi` so a note output port exists.
+- `NoteVoiceTable` is framework bookkeeping (`note_id` + `NOTE_END`). Plugin DSP
+  still owns oscillators / envelopes / smoothing.
+- Host panic fence (`host_callback*`, `catch_unwind`) wraps process + state at
+  the ABI boundary. Requires `panic = "unwind"`. Does **not** catch Win32
+  `wnd_proc` abort on UI teardown — that is `ensure_current` in `aura-baseview`.
+- State is a flat param blob (truce-like). No vault/MD/SNAP migration tools here.
 
 ## Atoms (human)
 
-_Graph atoms live **above** in AUTO. Add durable decisions/lessons here:_
-
 ```text
-[ATOM] type=decision|lesson|constraint | detail=…
+[ATOM] type=decision | detail=CLAP first: ProcessContext.ump is native MIDI 2; midi is the 7-bit fallback. VST3/LV2 must not shrink the process API
+[ATOM] type=decision | detail=NoteVoiceTable (note_id + NOTE_END) is the framework voice bookkeeping; plugin still owns oscillators / envelopes
+[ATOM] type=decision | detail=notes_out + NOTE_END are the plugin→host note path (arp/seq + poly-mod teardown); DSP still owns smoothing/routing
+[ATOM] type=decision | detail=ProcessContext.midi / midi_out wired across CLAP/VST3/LV2
+[ATOM] type=decision | detail=Host panic fence in aura-core + CLAP/VST3/LV2 process+state
+[ATOM] type=decision | detail=AURA state = flat param blob (truce-like); no vault/MD/SNAP migration tools in framework core
 ```

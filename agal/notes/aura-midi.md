@@ -8,7 +8,7 @@
 | kind | `crate` |
 | path | `crates/aura-midi` |
 | description | AURA MIDI — messages, buffers, note helpers (JUCE juce_audio_basics/midi analogue) |
-| generated | `2026-08-26T19:58:10Z` |
+| generated | `2026-08-27T06:03:56Z` |
 
 ## Graph atoms (auto)
 

@@ -9,7 +9,7 @@
 | path | `crates/aura-editor` |
 | description | AURA host Editor adapter (Slint on aura-baseview) for CLAP/VST3/LV2 GUI |
 | frameworks | aura, aura-baseview, aura-editor, baseview, raw-window-handle, slint |
-| generated | `2026-08-26T19:58:10Z` |
+| generated | `2026-08-27T06:03:56Z` |
 
 ## Graph atoms (auto)
 
@@ -54,20 +54,31 @@ After `agal.agent.md` (L2). Escalate L0: `crates/aura-editor` in json / `agal --
 
 ## Intent
 
-_Why this crate/plugin exists. Edit freely._
+Host-facing `Editor` adapter: Slint component on `aura-baseview`, exposed as
+`aura_core::Editor` so CLAP/VST3/LV2 can parent it. Window/GL stack stays in
+`aura-baseview`; this crate is the host glue (`AuraSlintEditor`).
 
 ## Open
 
-- [ ] 
+- None in this crate. Embed socket position / resize is `aura-host`.
 
 ## Decisions
 
-_Architecture choices worth remembering._
+- Always `AuraSlintEditor` — never raw `slint::Window` in a plugin.
+- `on_init` builds the component and wires param **writes**. `on_idle` is
+  one-way params → UI (epsilon guard). Gestures stay off the audio thread.
+- `@aura` basics (Knob, Slider, Toggle, Dropdown, Meter, XYPad) live in
+  `aura-build/ui/`. PeakMeter / FFT / Spectrum stay the **product** design
+  system (`lx-ui-slint`).
+- AURA wrappers reject floating GUI (`is_floating = true`). Embed only.
+- Bitwig can destroy the parent HWND *before* `gui_destroy`. Child `WM_DESTROY`
+  drops Slint → `free_graphics_resources.expect`. `SlintGlContext::ensure_current`
+  must **not** return `Err`; `catch_unwind` around `Editor::close` cannot catch
+  a `wnd_proc` abort (`0xC000041D`).
 
 ## Atoms (human)
 
-_Graph atoms live **above** in AUTO. Add durable decisions/lessons here:_
-
 ```text
-[ATOM] type=decision|lesson|constraint | detail=…
+[ATOM] type=constraint | detail=PeakMeter/FFT/Spectrum widgets stay product design system; @aura basics incl XYPad only
+[ATOM] type=lesson | detail=Bitwig UI-close sandbox abort (0xC000041D): parent HWND dies before clap gui_destroy → child WM_DESTROY → Slint Drop → free_graphics_resources.expect. ensure_current must not return Err; catch_unwind around Editor::close cannot catch wnd_proc abort
 ```

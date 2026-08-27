@@ -9,7 +9,7 @@
 | path | `crates/aura-build` |
 | description | AURA build helper: @aura Slint widgets + bundled fonts for slint-build 1.17.1 |
 | frameworks | slint |
-| generated | `2026-08-26T19:58:10Z` |
+| generated | `2026-08-27T06:03:56Z` |
 
 ## Graph atoms (auto)
 
@@ -51,20 +51,21 @@ After `agal.agent.md` (L2). Escalate L0: `crates/aura-build` in json / `agal --p
 
 ## Intent
 
-_Why this crate/plugin exists. Edit freely._
+Plugin build helpers: `materialize_assets!` copies `.slint` → `OUT_DIR` and
+sets `SLINT_LIBRARY_PATHS` so `@aura` resolves. Portable widgets live in
+`aura-build/ui/` (Knob, Slider, Toggle, Dropdown, Meter, XYPad, theme).
 
 ## Open
 
-- [ ] 
+- None. Product PeakMeter/FFT/Spectrum stay in `lx-ui-slint`.
 
 ## Decisions
 
-_Architecture choices worth remembering._
+- Plugin `cdylib` uses `aura_build::materialize_assets!` + `slint::include_modules!()`.
+  UI library crates may call `slint_build::compile` directly.
 
 ## Atoms (human)
 
-_Graph atoms live **above** in AUTO. Add durable decisions/lessons here:_
-
 ```text
-[ATOM] type=decision|lesson|constraint | detail=…
+[ATOM] type=decision | detail=@aura widgets ship in aura-build/ui/; PeakMeter/FFT/Spectrum stay product (lx-ui-slint)
 ```

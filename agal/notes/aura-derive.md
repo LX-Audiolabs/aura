@@ -8,7 +8,7 @@
 | kind | `crate` |
 | path | `crates/aura-derive` |
 | description | Proc macros for AURA plugins: #[derive(Params)] and #[derive(ParamEnum)] |
-| generated | `2026-08-26T19:58:10Z` |
+| generated | `2026-08-27T06:03:56Z` |
 
 ## Graph atoms (auto)
 
@@ -43,20 +43,19 @@ After `agal.agent.md` (L2). Escalate L0: `crates/aura-derive` in json / `agal --
 
 ## Intent
 
-_Why this crate/plugin exists. Edit freely._
+`#[derive(Params)]` / `#[derive(ParamEnum)]`. Every param field needs `id = N`.
+Parse/codegen live in dedicated modules; `lib.rs` stays thin wrappers.
 
 ## Open
 
-- [ ] 
+- None. F1 split is done.
 
 ## Decisions
 
-_Architecture choices worth remembering._
+- Split 2026-08-10: `parse.rs` / `codegen.rs` / `params.rs` / `param_enum.rs`.
 
 ## Atoms (human)
 
-_Graph atoms live **above** in AUTO. Add durable decisions/lessons here:_
-
 ```text
-[ATOM] type=decision|lesson|constraint | detail=…
+[ATOM] type=decision | detail=F1 done 2026-08-10 — aura-derive split: parse.rs / codegen.rs / params.rs / param_enum.rs; thin wrappers stay in lib.rs
 ```

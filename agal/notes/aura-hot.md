@@ -9,7 +9,7 @@
 | path | `crates/aura-hot` |
 | description | CLAP hot-reload proxy — host maps this .clap; DSP lives in a sibling .impl that watch can replace |
 | frameworks | clap |
-| generated | `2026-08-26T19:58:10Z` |
+| generated | `2026-08-27T06:03:56Z` |
 
 ## Graph atoms (auto)
 
@@ -44,20 +44,22 @@ After `agal.agent.md` (L2). Escalate L0: `crates/aura-hot` in json / `agal --plu
 
 ## Intent
 
-_Why this crate/plugin exists. Edit freely._
+CLAP hot-reload **proxy**. Host maps `Name.clap` (this crate). Real plugin is
+sibling `Name.impl.*` that `cargo aura watch --hot` overwrites. Re-add the
+instance to run new DSP — existing instances keep their generation.
 
 ## Open
 
-- [ ] 
+- `crate_no_dependents` is expected — cargo-aura installs the binary, nothing
+  in-tree depends on the library.
 
 ## Decisions
 
-_Architecture choices worth remembering._
+- Each load copies the impl to a unique temp file so Windows does not lock it.
+  Inner vtables stay mapped (dev leak is fine).
 
 ## Atoms (human)
 
-_Graph atoms live **above** in AUTO. Add durable decisions/lessons here:_
-
 ```text
-[ATOM] type=decision|lesson|constraint | detail=…
+[ATOM] type=decision | detail=aura-hot is the mapped Name.clap proxy; watch overwrites Name.impl.*; re-add instance to swap DSP
 ```

@@ -9,7 +9,7 @@
 | path | `crates/aura-vst3` |
 | description | AURA VST3 format wrapper (thin, over PluginLogic) |
 | frameworks | aura, vst3 |
-| generated | `2026-08-26T19:58:10Z` |
+| generated | `2026-08-27T06:03:56Z` |
 
 ## Graph atoms (auto)
 
@@ -54,20 +54,24 @@ After `agal.agent.md` (L2). Escalate L0: `crates/aura-vst3` in json / `agal --pl
 
 ## Intent
 
-_Why this crate/plugin exists. Edit freely._
+Thin VST3 wrapper around the same `PluginLogic`. Authors `aura::export!` — no
+hand-written `IComponent`. `vst3_id` is stable once shipped (string → TUID).
 
 ## Open
 
-- [ ] 
+- None as a format hole. CLAP-native notes/expressions stay CLAP-only; VST3
+  maps On/Off/Choke + `ump_out` down to 7-bit MIDI.
 
 ## Decisions
 
-_Architecture choices worth remembering._
+- Single-component internally. Process API stays CLAP-shaped: `ump` is lifted
+  from MIDI 1 (type-0x2) on the way in; never drop the field.
+- Same no-alloc / scratch-in-activate rule as CLAP.
+- Same `Editor` embed path as CLAP (`AuraSlintEditor`).
 
 ## Atoms (human)
 
-_Graph atoms live **above** in AUTO. Add durable decisions/lessons here:_
-
 ```text
-[ATOM] type=decision|lesson|constraint | detail=…
+[ATOM] type=constraint | detail=VST3 must not shrink ProcessContext — ump is lifted MIDI 1 (type-0x2); notes/expressions stay CLAP-native
+[ATOM] type=decision | detail=vst3_id is a stable string→TUID; do not churn after ship
 ```

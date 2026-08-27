@@ -9,7 +9,7 @@
 | path | `crates/aura-clap` |
 | description | CLAP format wrapper for AURA — free-audio/clap via clap-sys (minimal v1) |
 | frameworks | aura, clap |
-| generated | `2026-08-26T19:58:10Z` |
+| generated | `2026-08-27T06:03:56Z` |
 
 ## Graph atoms (auto)
 
@@ -52,20 +52,35 @@ After `agal.agent.md` (L2). Escalate L0: `crates/aura-clap` in json / `agal --pl
 
 ## Intent
 
-_Why this crate/plugin exists. Edit freely._
+Thin CLAP wrapper around `PluginLogic`. Authors call `aura::export!` — no
+hand-rolled `clap_plugin_factory`. Spec source of truth: free-audio/clap headers;
+Rust bindings via `clap-sys`. Full extension list + host-proof checklist:
+[README.md](../../crates/aura-clap/README.md).
 
 ## Open
 
-- [ ] 
+- [ ] **Product-driven** — multi-out / >1 sidechain; G5 rich state — only if a
+      plugin needs it (README)
+- [ ] **Bitwig host proofs** — chord, expressions, poly-mod, MIDI FX → synth,
+      bounce (README session copy)
+- [ ] Typed SysEx/Flex decode — raw packets already on `ump`
 
 ## Decisions
 
-_Architecture choices worth remembering._
+- Ship-capable CLAP core is done (ports, params, GUI, notes, UMP, tuning/2,
+  preset-load, tail/render). Leftovers are product-driven, not basis holes.
+- `is_floating = true` is rejected; AURA GUIs embed only.
+- Scratch reserved in `activate`; note/MIDI/UMP events capped at 4096. Plugin
+  DSP must still preallocate — the cap is the wrapper flood guard.
+- v0.8.0 = `clap.tuning/2` (MTS-ESP). v0.7.2 = `notes_out` + native `ump`.
+- `clap-sys` may lag free-audio 1.2.x revision — bump only for a **new**
+  extension, not for revision parity.
 
 ## Atoms (human)
 
-_Graph atoms live **above** in AUTO. Add durable decisions/lessons here:_
-
 ```text
-[ATOM] type=decision|lesson|constraint | detail=…
+[ATOM] type=decision | detail=CLAP leftover = multi-out / G5 / host proofs — see aura-clap README; NoteVoiceTable is the note_id + NOTE_END bookkeeping
+[ATOM] type=decision | detail=v0.8.0 = clap.tuning/2 (MTS-ESP); tagged 2026-08-20. v0.7.2 = notes_out + native ump (2026-08-18)
+[ATOM] type=lesson | detail=CLAP/VST3/LV2 process must not heap-alloc; Bitwig note-expression flood crashed the host (2026-08-18) — scratch reserved in activate, events capped at 4096
+[ATOM] type=constraint | detail=aura-clap rejects is_floating=true; AURA plugins are embed-only
 ```

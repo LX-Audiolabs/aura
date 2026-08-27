@@ -9,7 +9,7 @@
 | path | `crates/aura-test` |
 | description | Test helpers for AURA plugins (state round-trip, process smoke) |
 | frameworks | aura |
-| generated | `2026-08-26T19:58:10Z` |
+| generated | `2026-08-27T06:03:56Z` |
 
 ## Graph atoms (auto)
 
@@ -58,20 +58,20 @@ After `agal.agent.md` (L2). Escalate L0: `crates/aura-test` in json / `agal --pl
 
 ## Intent
 
-_Why this crate/plugin exists. Edit freely._
+Framework test helpers: state round-trip, process smoke, NaN/duplicate-id
+asserts. `crate_no_dependents` is expected — smokes and crates pull it as a
+dev-dep, not a runtime edge.
 
 ## Open
 
-- [ ] 
+- Framework test pass (CI smokes + host proofs) still gates crates.io.
 
 ## Decisions
 
-_Architecture choices worth remembering._
+- Keep helpers format-agnostic; they drive `PluginLogic`, not clap-sys.
 
 ## Atoms (human)
 
-_Graph atoms live **above** in AUTO. Add durable decisions/lessons here:_
-
 ```text
-[ATOM] type=decision|lesson|constraint | detail=…
+[ATOM] type=decision | detail=aura-test crate: state round-trip + process smoke
 ```

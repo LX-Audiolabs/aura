@@ -9,7 +9,7 @@
 | path | `crates/aura` |
 | description | AURA — Audio Unified Rust Architecture (umbrella crate) |
 | frameworks | aura, clap, lv2, vst3 |
-| generated | `2026-08-26T19:58:10Z` |
+| generated | `2026-08-27T06:03:56Z` |
 
 ## Graph atoms (auto)
 
@@ -66,20 +66,20 @@ After `agal.agent.md` (L2). Escalate L0: `crates/aura` in json / `agal --plugin 
 
 ## Intent
 
-_Why this crate/plugin exists. Edit freely._
+Umbrella crate for plugin authors. `use aura::prelude::*` + format features
+(`clap` / `vst3` / `lv2`). Do not depend on every `aura-*` piece by hand.
 
 ## Open
 
-- [ ] 
+- None. Format leftovers live in `aura-clap`.
 
 ## Decisions
 
-_Architecture choices worth remembering._
+- Re-exports `aura-core` / `dsp` / `midi` / `params` and, behind features,
+  the thin format wrappers. `aura-test` is a **dev-dep**, not a feature.
 
 ## Atoms (human)
 
-_Graph atoms live **above** in AUTO. Add durable decisions/lessons here:_
-
 ```text
-[ATOM] type=decision|lesson|constraint | detail=…
+[ATOM] type=decision | detail=aura is the author umbrella — prelude + format features; aura-test is a dev-dep not a feature
 ```

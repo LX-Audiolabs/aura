@@ -9,7 +9,7 @@
 | path | `crates/aura-dsp` |
 | description | AURA DSP — synthesis, effects, analysis, maths (JUCE juce_dsp analogue; LX FX) |
 | frameworks | aura |
-| generated | `2026-08-26T19:58:10Z` |
+| generated | `2026-08-27T06:03:56Z` |
 
 ## Graph atoms (auto)
 
@@ -55,21 +55,23 @@ After `agal.agent.md` (L2). Escalate L0: `crates/aura-dsp` in json / `agal --plu
 
 ## Intent
 
-_Why this crate/plugin exists. Edit freely._
+Portable DSP (JUCE `juce_dsp` analogue): filters, delay lines, smoothing helpers,
+math. Product FX/algos that are not host-infra land here (`docs/dsp-layout.md`).
+Messages / UMP stay in `aura-midi`.
 
 ## Open
 
-- [ ] 
+- Real-synth smoothing / expression→knob matrix is plugin DSP, not a wrapper hole.
 
 ## Decisions
 
-_Architecture choices worth remembering._
+- Allocate delay lines / voices in `prepare`/`init`/`reset`, never in `process`.
+- After sample-rate change, recompute coeffs **and** clear filter state.
 
 ## Atoms (human)
 
-_Graph atoms live **above** in AUTO. Add durable decisions/lessons here:_
-
 ```text
-[ATOM] type=decision|lesson|constraint | detail=…
-```
+[ATOM] type=decision | detail=Portable DSP algos land under aura-dsp modules (docs/dsp-layout.md)
 [ATOM] type=lesson | detail=SVF bei q=0 gibt NaN — Guard in prepare() noetig
+[ATOM] type=lesson | detail=BiquadFilter state variables z1/z2 müssen in prepare() auf 0.0 resettet werden nach SR-Change
+```

@@ -9,7 +9,7 @@
 | path | `tools/aura-gui` |
 | description | Visual AURA project console — thin Slint shell over `cargo aura` CLI |
 | frameworks | aura, slint |
-| generated | `2026-08-26T19:58:10Z` |
+| generated | `2026-08-27T06:03:56Z` |
 
 ## Graph atoms (auto)
 
@@ -38,20 +38,19 @@ After `agal.agent.md` (L2). Escalate L0: `tools/aura-gui` in json / `agal --plug
 
 ## Intent
 
-_Why this crate/plugin exists. Edit freely._
+Optional GUI sugar over `cargo aura` paths. Not the authoring surface —
+Cheatsheet + CLI are. Long-term host loop is `aura-host`, not this crate.
 
 ## Open
 
-- [ ] 
+- Deferred while `aura-host` is the host-side loop.
 
 ## Decisions
 
-_Architecture choices worth remembering._
+- No extra GUI overhead for the framework author path.
 
 ## Atoms (human)
 
-_Graph atoms live **above** in AUTO. Add durable decisions/lessons here:_
-
 ```text
-[ATOM] type=decision|lesson|constraint | detail=…
+[ATOM] type=decision | detail=aura-gui zurückgestellt — Cheatsheet reicht als primäre Developer-UX; kein GUI-Overhead bis aura-host konkreter ist
 ```

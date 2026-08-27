@@ -8,7 +8,7 @@
 | kind | `crate` |
 | path | `crates/aura-params` |
 | description | AURA parameter system (ranges, smoothers, atomic params) |
-| generated | `2026-08-26T19:58:10Z` |
+| generated | `2026-08-27T06:03:56Z` |
 
 ## Graph atoms (auto)
 
@@ -53,20 +53,29 @@ After `agal.agent.md` (L2). Escalate L0: `crates/aura-params` in json / `agal --
 
 ## Intent
 
-_Why this crate/plugin exists. Edit freely._
+Automatable parameter surface + lock-free DSP↔UI taps. Hosts see `Params` via
+`#[derive(Params)]` (`id = N` required). FFT/spectrum math stays product-side;
+this crate only moves values and raw samples across the thread boundary.
 
 ## Open
 
-- [ ] 
+- None. G5 rich (non-param) host state is a format leftover, not a params hole.
 
 ## Decisions
 
-_Architecture choices worth remembering._
+- Every `#[param]` field needs a unique `id = N` — wire-stable automation / state.
+  Derive is required; no manual `impl Params` (`Sealed`).
+- `AudioTap` (G15): lock-free SPSC sample ring. Audio thread `push`, UI `drain`.
+  Declare `#[skip]`. Overflow overwrites oldest samples — never blocks, never grows.
+  Default capacity 4096. Not part of `dyn Params`.
+- Smoothing: `Smoother` / `SmoothingStyle` here; DSP reads smoothed values.
+  Do not write the raw param into the sample loop.
+- State blob is the flat param list. `AudioTap` / `#[skip]` fields are not
+  serialized as automatable params.
 
 ## Atoms (human)
 
-_Graph atoms live **above** in AUTO. Add durable decisions/lessons here:_
-
 ```text
-[ATOM] type=decision|lesson|constraint | detail=…
+[ATOM] type=decision | detail=G15 AudioTap landed 2026-08-10 — lock-free SPSC sample ring in aura-params
+[ATOM] type=constraint | detail=AudioTap is #[skip] + SPSC (audio push / UI drain); not part of dyn Params or the host state blob
 ```
