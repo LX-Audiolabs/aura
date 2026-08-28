@@ -146,6 +146,12 @@ impl Preview {
                     });
                     CloseRequestResponse::HideWindow
                 });
+                // The real editor injects CARGO_PKG_VERSION from Rust; the
+                // preview can't run that code, so mirror it from the nearest
+                // Cargo.toml when the component exposes a `version` property.
+                if let Some(v) = crate_version(&self.entry) {
+                    let _ = instance.set_property("version", Value::from(SharedString::from(v)));
+                }
                 if let Err(e) = instance.show() {
                     self.set_status(&format!("show failed: {e}"), false);
                     return;
@@ -206,6 +212,42 @@ fn save_png(
     let img = image::RgbaImage::from_raw(width, height, rgba).ok_or("invalid image dimensions")?;
     img.save(path)?;
     Ok(())
+}
+
+/// Walk up from the entry file and read `[package] version` from the nearest
+/// Cargo.toml. Mirrors what the real editor does via `CARGO_PKG_VERSION`.
+fn crate_version(entry: &std::path::Path) -> Option<String> {
+    let mut dir = entry.parent()?;
+    loop {
+        if let Ok(text) = std::fs::read_to_string(dir.join("Cargo.toml"))
+            && let Some(v) = package_version(&text)
+        {
+            return Some(v);
+        }
+        dir = dir.parent()?;
+    }
+}
+
+/// First `version = "..."` after a `[package]` header (skips dependency versions).
+fn package_version(toml: &str) -> Option<String> {
+    let mut in_package = false;
+    for line in toml.lines() {
+        let t = line.trim();
+        if t.starts_with('[') {
+            in_package = t == "[package]";
+            continue;
+        }
+        if in_package
+            && let Some(rest) = t.strip_prefix("version")
+            && let Some(rest) = rest.trim_start().strip_prefix('=')
+        {
+            let v = rest.trim().trim_matches('"');
+            if !v.is_empty() {
+                return Some(v.to_string());
+            }
+        }
+    }
+    None
 }
 
 struct Args {
