@@ -84,7 +84,9 @@ see `aura-editor` / `aura-baseview` `ensure_current`.
 | Typed SysEx/Flex | hardware bridge; raw packets already on `ump` |
 
 Host proofs (chord, expressions, poly-mod, MIDI FX → synth, bounce):
-`crates/aura-clap/README.md`.
+`crates/aura-clap/README.md` — core Bitwig items re-checked OK 2026-08-28.
+`smoke-synth` has no `editor` (aura-host GUI button disabled); use
+`smoke-gain` for embed UI.
 
 ## See also
 

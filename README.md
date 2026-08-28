@@ -148,7 +148,7 @@ cargo aura build  [--clap|--vst3|--lv2] [--release] [-plug <crate>…]
 cargo aura install [--clap|--vst3|--lv2] [--release] [--hot] [-plug <crate>…]
 cargo aura watch  [--clap|--vst3|--lv2] [--release] [-plug <crate>…] [--no-install] [--hot]
 cargo aura preview [path] [--component N] [--no-watch]
-cargo aura gui                                       # visual project console (aura-gui)
+cargo aura run [-plug <name> | path.clap] […]        # aura-host: load .clap, audio, MIDI, GUI
 cargo aura mesh [agal-args…]                         # run agal orientation mesh
 cargo aura doctor                                    # toolchain / AURA_PATH / clap-validator
 ```
@@ -172,7 +172,7 @@ cargo clippy --workspace --all-targets
 1. **Slint + baseview only** — renderer is a backend choice (FemtoVG / Skia / software); toolkit is not.
 2. **CLAP first, thin formats** — one plugin logic API; VST3/LV2 only on the ship matrix; no format-shaped core.
 3. **Framework layout** — `crates/` · `examples/` · `tools/` (product catalogs keep their own plugins outside AURA).
-4. **One CLI:** **`cargo aura`** — `new`, `init`, `add`, `add-ui`, `build`, `install`, `watch`, `preview`, `mesh`, `gui`, `doctor`
+4. **One CLI:** **`cargo aura`** — `new`, `init`, `add`, `add-ui`, `build`, `install`, `watch`, `preview`, `run`, `mesh`, `doctor`
 5. **KISS for humans and agents** — `aura.toml`, boring paths; orientation in **agal**.
 
 ---
@@ -197,8 +197,8 @@ cargo clippy --workspace --all-targets
 | `aura-hot` | CLAP hot-reload proxy (`cargo aura watch --hot`) |
 | `aura-host` | Standalone dev host — load `.clap`, MIDI in, params, plugin GUI (CLI + Slint shell) |
 | `aura-test` | State round-trip + process smokes (dev-dep) |
-| `cargo-aura` | Scaffold, build, install, watch, doctor, preview, mesh, gui |
-| `aura-preview` / `aura-gui` | Slint preview + project console (`cargo aura gui`) |
+| `cargo-aura` | Scaffold, build, install, watch, doctor, preview, run, mesh |
+| `aura-preview` | Slint UI preview (`cargo aura preview`) |
 
 > Cross-plugin shared-memory IPC (spectrum/relay + CV) moved **out of AURA** — it now lives in the product catalog as **`lx-shm`** (`lx-audiolabs-dev`).
 

@@ -9,9 +9,9 @@ Crate-local decisions live in `notes/<crate>.md` (scan `[ATOM]` there first).
 ## Open
 
 - [ ] **CLAP product-driven** — multi-out / >1 SC; G5 rich state — only if a plugin needs it (`notes/aura-clap.md`)
-- [ ] **Bitwig host proofs** — chord, expressions, poly-mod, MIDI FX → synth, bounce (`crates/aura-clap/README.md`)
-- [ ] Real-synth DSP — smoothing / expression→knob matrix (not a wrapper hole)
-- [ ] **Framework test pass** — CI smokes + host proofs, then crates.io (`publish = false`)
+- [x] **Bitwig host proofs** — poly, expressions, poly-mod, MIDI FX → synth, bounce OK (2026-08-28); layout UI soft-skip; sidechain optional (`crates/aura-clap/README.md`)
+- [ ] Real-synth DSP — smoothing / expression→knob matrix (not a wrapper hole; product/catalog)
+- [ ] **crates.io** — after comfort with CI smokes + host proofs (`publish = false` until then)
 
 ## Atoms
 
@@ -24,4 +24,5 @@ Crate-local decisions live in `notes/<crate>.md` (scan `[ATOM]` there first).
 [ATOM] type=decision | detail=JUCE-shaped: aura-dsp (signal) + aura-midi (messages)
 [ATOM] type=decision | detail=Basis fertig 2026-08-08 — DoD green; first-class CLAP path 2026-08-11
 [ATOM] type=decision | detail=crates.io last — only after framework test pass (CI smokes + host proofs); keep publish = false
+[ATOM] type=decision | detail=Bitwig host proofs core OK 2026-08-28; aura-host stays in AURA (no public rust-clap-host split)
 ```

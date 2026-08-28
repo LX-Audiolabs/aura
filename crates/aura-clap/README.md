@@ -91,18 +91,21 @@ Ship-capable CLAP core is **done**. Remaining work is **product-driven** or opti
 | **Rich state hooks** (host blob > flat params) | G5 | Presets that need non-param bytes in host state |
 | **SysEx typed decode** | raw `SysEx8` / Flex already on `ump` | hardware bridge that needs a typed API |
 
-### Host proof (framework landed; DAW re-check recommended)
+### Host proof (framework landed; Bitwig re-check 2026-08-28)
 
-Install: `cargo aura install --clap --release -plug smoke-synth smoke-midi-fx smoke-gain`
+Install: `cargo aura install --clap --release -plug smoke-synth smoke-midi-fx smoke-gain smoke-sidechain`
 
-- [ ] **Poly** — `AURA Smoke Synth` on an instrument track. Play a chord (4–8 keys). All notes sound. Steal after 8.
-- [ ] **Expressions** — Bitwig note inspector: Gain (volume), Timbre (sine→saw), Pressure. Per-note, not global.
-- [ ] **Poly-mod / Voice Stack** — Bitwig Voice Stack on Gain (per-note). Stacked copies of the same key must differ in level. After release, mods drop (`NOTE_END`).
-- [ ] **Mono-mod** — same modulator without per-note: whole instance Gain moves, UI value stays.
-- [ ] **`notes_out`** — Note FX chain: `AURA Smoke MIDI FX` (Transpose +12) → `AURA Smoke Synth`. Played C sounds as C one octave up.
-- [ ] **Layouts** — switch stereo/mono on the instrument (smoke-synth declares both).
-- [ ] **Offline** — bounce the clip; no hang. (`clap.render` → `ProcessMode::Offline`)
+- [x] **Poly** — `AURA Smoke Synth` on an instrument track. Play a chord (4–8 keys). All notes sound. Steal after 8.
+- [x] **Expressions** — Bitwig note inspector: Gain (volume), Timbre (sine→saw), Pressure. Per-note, not global.
+- [x] **Poly-mod / Voice Stack** — Bitwig Voice Stack on Gain (per-note). Stacked copies of the same key must differ in level. After release, mods drop (`NOTE_END`).
+- [x] **Mono-mod** — same modulator without per-note: whole instance Gain moves, UI value stays.
+- [x] **`notes_out`** — Note FX chain: `AURA Smoke MIDI FX` (Transpose +12) → `AURA Smoke Synth`. Played C sounds as C one octave up.
+- [ ] **Layouts** — switch stereo/mono on the instrument (smoke-synth declares both). *Bitwig often has no obvious CLAP layout picker — soft skip if UI missing; `audio-ports-config` still advertised.*
+- [x] **Offline** — bounce the clip; no hang. (`clap.render` → `ProcessMode::Offline`)
+- [ ] **Sidechain** — `AURA Smoke Sidechain` (Audio FX + mono SC). Install separately; route a second input in Bitwig.
 - [ ] Multi-page `remote-controls` / non-zero `latency` / mid-block automation — use `smoke-gain` + a later product plug; not blocking the note path.
+
+**aura-host GUI note:** only plugins with `PluginLogic::editor` enable “Open plugin GUI” (`smoke-gain`). `smoke-synth` is headless — button stays disabled. AURA rejects CLAP floating; host embeds on Windows.
 
 ### Bitwig session (copy)
 

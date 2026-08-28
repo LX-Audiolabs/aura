@@ -61,8 +61,9 @@ Rust bindings via `clap-sys`. Full extension list + host-proof checklist:
 
 - [ ] **Product-driven** — multi-out / >1 sidechain; G5 rich state — only if a
       plugin needs it (README)
-- [ ] **Bitwig host proofs** — chord, expressions, poly-mod, MIDI FX → synth,
-      bounce (README session copy)
+- [x] **Bitwig host proofs** — poly / expressions / poly-mod / `notes_out` /
+      offline OK (2026-08-28); layout picker often missing in Bitwig; sidechain
+      smoke optional (README)
 - [ ] Typed SysEx/Flex decode — raw packets already on `ump`
 
 ## Decisions
@@ -79,7 +80,7 @@ Rust bindings via `clap-sys`. Full extension list + host-proof checklist:
 ## Atoms (human)
 
 ```text
-[ATOM] type=decision | detail=CLAP leftover = multi-out / G5 / host proofs — see aura-clap README; NoteVoiceTable is the note_id + NOTE_END bookkeeping
+[ATOM] type=decision | detail=CLAP leftover = multi-out / G5 / typed SysEx — see aura-clap README; Bitwig host proofs core OK 2026-08-28; NoteVoiceTable = note_id + NOTE_END
 [ATOM] type=decision | detail=v0.8.0 = clap.tuning/2 (MTS-ESP); tagged 2026-08-20. v0.7.2 = notes_out + native ump (2026-08-18)
 [ATOM] type=lesson | detail=CLAP/VST3/LV2 process must not heap-alloc; Bitwig note-expression flood crashed the host (2026-08-18) — scratch reserved in activate, events capped at 4096
 [ATOM] type=constraint | detail=aura-clap rejects is_floating=true; AURA plugins are embed-only

@@ -49,23 +49,24 @@ After `agal.agent.md` (L2). Escalate L0: `examples/smoke-synth` in json / `agal 
 ## Intent
 
 CLAP-first instrument smoke: `ProcessContext.notes` (expressions, poly-mod)
-plus MIDI fallback. Headless. Proves the wrapper, not a product synth.
+plus MIDI fallback. **Headless** — no `PluginLogic::editor`. Proves the
+wrapper, not a product synth. For aura-host plugin-GUI embed use `smoke-gain`.
 
 ## Open
 
 - [x] Mono Osc + Adsr through CLAP — Bitwig stable after v0.7.1 scratch fix
 - [x] `NoteVoiceTable` + `NOTE_END` when envelope idle (v0.7.2)
 - [x] 8-voice poly — same table + per-voice osc/env (2026-08-18)
-- [ ] Sample-accurate smoothing / expression→knob — later, on a real synth 
+- [x] Bitwig host proofs (poly / expr / poly-mod / MIDI FX chain) — 2026-08-28
+- [ ] Sample-accurate smoothing / expression→knob — later, on a real synth
 
 ## Decisions
 
-_Architecture choices worth remembering._
+- No Slint editor on purpose — keeps the smoke focused on notes/DSP; host
+  param sliders cover gain/pan when using `cargo aura run --gui`.
 
 ## Atoms (human)
 
-_Graph atoms live **above** in AUTO. Add durable decisions/lessons here:_
-
 ```text
-[ATOM] type=decision|lesson|constraint | detail=…
+[ATOM] type=constraint | detail=smoke-synth has no editor — aura-host Open plugin GUI stays disabled; use smoke-gain for embed UI
 ```

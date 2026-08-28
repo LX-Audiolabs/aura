@@ -39,13 +39,14 @@ After `agal.agent.md` (L2). Escalate L0: `tools/cargo-aura` in json / `agal --pl
 
 ## Intent
 
-Author CLI: scaffold, build, install, doctor. GUI (`aura-gui`) is sugar over
-the same paths. Orientation mesh is `cargo aura mesh` → `agal` (optional).
+Author CLI: scaffold, build, install, watch, preview, doctor. Dev-host loop is
+`cargo aura run` → `aura-host` (not `aura-gui`). Orientation mesh is
+`cargo aura mesh` → `agal` (optional).
 
 ## Open
 
 - [x] In-host swap without unload — `cargo aura watch --hot` (`aura-hot` proxy + `.impl`); re-add instance
-- [x] `aura-gui` identity pass — aurora teal (Stage 6, 2026-08-17)
+- [x] `cargo aura run` — launches `aura-host` (replaces the old `cargo aura gui` / `aura-gui` console path)
 
 ## Decisions
 
@@ -59,6 +60,7 @@ the same paths. Orientation mesh is `cargo aura mesh` → `agal` (optional).
 
 ```text
 [ATOM] type=decision | detail=watch = rebuild+install loop; preview = Slint interpreter
+[ATOM] type=decision | detail=run = launch aura-host; replaces cargo aura gui / aura-gui console
 [ATOM] type=constraint | detail=cargo-aura stays dep-free
 [ATOM] type=decision | detail=mesh wraps agal; agal_optional
 ```

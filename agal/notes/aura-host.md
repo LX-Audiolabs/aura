@@ -62,23 +62,20 @@ embed) are all done.
 
 ## Open
 
-- [ ] No audio *input* path — plugin inputs are fed silence.
+- [x] Audio *input* capture — default input device remixed into plugin input
+      ports (silence fallback if open fails).
 - [ ] Only `f32` cpal streams; other sample formats exit with an error.
 - [ ] Param sliders poll `params.get_value` at 50 Hz instead of reading the
       plugin's output events — fine for UI, not for automation/recording.
-- [ ] `--midi-in` on `--gui` is untested on real hardware (dev machine has no
-      MIDI input ports).
-- [ ] Embedded plugin GUI (`win32_embed.rs`) is structurally verified (correct
-      `HWND` parent/child nesting, clean teardown, no crash — tested live
-      against `smoke-gain`/`smoke-synth`) but not visually confirmed:
-      `GetWindowRect` on the socket reports a physically impossible position
-      (~-32000 on both axes). Likely an artifact of the remote-desktop dev
-      session (screenshots/`SetForegroundWindow` were already unreliable there
-      in Phase 2), not necessarily a real bug — re-check on a normal desktop
-      session before trusting the on-screen position.
+- [ ] Keyboard→MIDI is notes-only (no CC/pitchbend); queued MIDI lands at
+      frame 0 of the next block (`ponytail` in `audio.rs` / `events.rs`).
+- [x] Plugin GUI embed — live OK with `smoke-gain` (2026-08-28). `smoke-synth`
+      has **no** `editor` → “Open plugin GUI” stays disabled (not a host bug).
 - [ ] Embed socket is placed at a fixed offset (`EMBED_X`/`EMBED_Y` in
       `gui.rs`) and never repositioned — resizing the host window doesn't move
       it, and a small window can clip it.
+- [ ] macOS/Linux embed — Windows `win32_embed` only; floating fallback for
+      third-party plugins that support it.
 
 ## Decisions
 

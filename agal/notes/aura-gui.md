@@ -38,19 +38,21 @@ After `agal.agent.md` (L2). Escalate L0: `tools/aura-gui` in json / `agal --plug
 
 ## Intent
 
-Optional GUI sugar over `cargo aura` paths. Not the authoring surface —
-Cheatsheet + CLI are. Long-term host loop is `aura-host`, not this crate.
+Legacy project-console tool under `tools/aura-gui`. **Not** a workspace
+member anymore; `cargo aura gui` was removed. Dev loop is
+`cargo aura run` → `aura-host`. Tree may still exist on disk — do not wire
+it back without an explicit product ask.
 
 ## Open
 
-- Deferred while `aura-host` is the host-side loop.
+- [x] Superseded by `aura-host` / `cargo aura run` (2026-08).
 
 ## Decisions
 
-- No extra GUI overhead for the framework author path.
+- CLI + Cheatsheet remain the authoring surface; no second GUI console in-tree.
 
 ## Atoms (human)
 
 ```text
-[ATOM] type=decision | detail=aura-gui zurückgestellt — Cheatsheet reicht als primäre Developer-UX; kein GUI-Overhead bis aura-host konkreter ist
+[ATOM] type=decision | detail=aura-gui superseded — cargo aura run / aura-host is the host-side loop; tools/aura-gui not a workspace member
 ```
