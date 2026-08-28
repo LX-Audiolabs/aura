@@ -14,9 +14,9 @@ path = "src/main.rs"
 
 [dependencies]
 clap-sys = "0.5"
-libloading = "0.8"
-cpal = "0.15"
-midir = "0.10"
+libloading = "0.9"
+cpal = "0.18.2"
+midir = "0.11"
 crossbeam-queue = "0.3"
 # Desktop tool: full Slint (not the plugin-minimal feature set), same set as aura-gui,
 # plus raw-window-handle-06 so Phase 3 can get our own window's native HWND.
@@ -30,7 +30,7 @@ slint = { version = "=1.17.1", default-features = true, features = [
 # Phase 3: embed the plugin's own GUI as a WS_CHILD of ours (SetParent), instead
 # of a floating top-level window.
 [target.'cfg(windows)'.dependencies]
-raw-window-handle = { workspace = true }
+raw-window-handle = "0.6"
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
@@ -39,7 +39,7 @@ windows-sys = { version = "0.61", features = [
 ] }
 
 [build-dependencies]
-aura-build = { workspace = true }
+aura-build = { path = "../aura-build" }
 
 [lints]
 workspace = true
