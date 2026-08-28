@@ -212,15 +212,20 @@ impl Engine {
     }
 }
 
+/// User-facing label for a cpal device (`description().name()`, cpal 0.18).
+fn device_label(device: &cpal::Device) -> String {
+    device
+        .description()
+        .map_or_else(|_| "<unnamed>".into(), |d| d.name().to_string())
+}
+
 /// Names of the available output devices, in `open()` order.
 #[must_use]
 pub fn output_devices() -> Vec<String> {
     let Ok(devices) = cpal::default_host().output_devices() else {
         return Vec::new();
     };
-    devices
-        .map(|d| d.name().unwrap_or_else(|_| "<unnamed>".into()))
-        .collect()
+    devices.map(|d| device_label(&d)).collect()
 }
 
 /// A running stream plus the plugin activation that belongs to it. Dropping it
@@ -263,7 +268,7 @@ pub fn open(
         Some(want) => audio_host
             .output_devices()
             .map_err(|e| format!("output devices: {e}"))?
-            .find(|d| d.name().is_ok_and(|n| n == want))
+            .find(|d| device_label(d) == want)
             .ok_or_else(|| format!("no output device named {want:?}"))?,
         None => audio_host
             .default_output_device()
@@ -281,7 +286,8 @@ pub fn open(
         ));
     }
 
-    let sample_rate = f64::from(config.sample_rate().0);
+    // cpal 0.17+: SampleRate is a u32 alias (no .0 newtype).
+    let sample_rate = f64::from(config.sample_rate());
     let device_channels = config.channels() as usize;
 
     // Open a capture stream when the plugin declares audio input ports.
@@ -325,7 +331,7 @@ pub fn open(
     };
     let stream = device
         .build_output_stream::<f32, _, _>(
-            &stream_config,
+            stream_config,
             move |data: &mut [f32], _| engine.process(data),
             |e| eprintln!("audio error: {e}"),
             None,
@@ -371,7 +377,7 @@ fn open_input(
     };
     let stream = device
         .build_input_stream::<f32, _, _>(
-            &stream_cfg,
+            stream_cfg,
             move |data: &[f32], _| {
                 for frame in data.chunks(dev_ch) {
                     for ch in 0..plugin_in_ch {
@@ -386,7 +392,7 @@ fn open_input(
         )
         .map_err(|e| format!("build_input_stream: {e}"))?;
     stream.play().map_err(|e| format!("stream.play: {e}"))?;
-    eprintln!("audio in: {}", device.name().unwrap_or_else(|_| "?".into()));
+    eprintln!("audio in: {}", device_label(&device));
     Ok((buf, stream))
 }
 
