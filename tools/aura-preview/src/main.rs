@@ -146,9 +146,9 @@ impl Preview {
                     });
                     CloseRequestResponse::HideWindow
                 });
-                // The real editor injects CARGO_PKG_VERSION from Rust; the
-                // preview can't run that code, so mirror it from the nearest
-                // Cargo.toml when the component exposes a `version` property.
+                // Plugin editors set `version` from CARGO_PKG_VERSION. Preview
+                // never runs that code, so mirror it from Cargo.toml when the
+                // component exposes the property.
                 if let Some(v) = crate_version(&self.entry) {
                     let _ = instance.set_property("version", Value::from(SharedString::from(v)));
                 }
@@ -214,40 +214,68 @@ fn save_png(
     Ok(())
 }
 
-/// Walk up from the entry file and read `[package] version` from the nearest
-/// Cargo.toml. Mirrors what the real editor does via `CARGO_PKG_VERSION`.
+/// Walk up from the entry file and read the crate version.
+/// Prefers `[package] version = "…"`. If the crate inherits
+/// (`version.workspace = true`), uses `[workspace.package] version`.
 fn crate_version(entry: &std::path::Path) -> Option<String> {
     let mut dir = entry.parent()?;
+    let mut workspace_fallback = None;
     loop {
-        if let Ok(text) = std::fs::read_to_string(dir.join("Cargo.toml"))
-            && let Some(v) = package_version(&text)
-        {
-            return Some(v);
+        if let Ok(text) = std::fs::read_to_string(dir.join("Cargo.toml")) {
+            if let Some(v) = section_quoted_version(&text, "[package]") {
+                return Some(v);
+            }
+            if workspace_fallback.is_none() {
+                workspace_fallback = section_quoted_version(&text, "[workspace.package]");
+            }
         }
-        dir = dir.parent()?;
+        match dir.parent() {
+            Some(parent) => dir = parent,
+            None => return workspace_fallback,
+        }
     }
 }
 
-/// First `version = "..."` after a `[package]` header (skips dependency versions).
-fn package_version(toml: &str) -> Option<String> {
-    let mut in_package = false;
+/// First `version = "…"` / `'…'` in `section`. Skips `version.workspace` and
+/// dependency versions in other tables.
+fn section_quoted_version(toml: &str, section: &str) -> Option<String> {
+    let mut in_section = false;
     for line in toml.lines() {
         let t = line.trim();
-        if t.starts_with('[') {
-            in_package = t == "[package]";
+        if t.is_empty() || t.starts_with('#') {
             continue;
         }
-        if in_package
-            && let Some(rest) = t.strip_prefix("version")
-            && let Some(rest) = rest.trim_start().strip_prefix('=')
-        {
-            let v = rest.trim().trim_matches('"');
-            if !v.is_empty() {
-                return Some(v.to_string());
-            }
+        if t.starts_with('[') {
+            in_section = t == section;
+            continue;
         }
+        if !in_section {
+            continue;
+        }
+        let Some(rest) = t.strip_prefix("version") else {
+            continue;
+        };
+        let rest = rest.trim_start();
+        if rest.starts_with('.') {
+            continue;
+        }
+        let Some(rest) = rest.strip_prefix('=') else {
+            continue;
+        };
+        return quoted_string(rest);
     }
     None
+}
+
+fn quoted_string(s: &str) -> Option<String> {
+    let s = s.trim();
+    let q = s.chars().next().filter(|c| *c == '"' || *c == '\'')?;
+    let v = s.get(1..)?.split(q).next()?;
+    if v.is_empty() {
+        None
+    } else {
+        Some(v.to_string())
+    }
 }
 
 struct Args {
@@ -483,5 +511,46 @@ fn main() -> ExitCode {
             eprintln!("event loop: {e}");
             ExitCode::FAILURE
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cargo_toml_version_parse() {
+        assert_eq!(
+            section_quoted_version(
+                "[package]\nname = \"aether\"\nversion = \"1.4.2\"\n\n[dependencies]\naura = { version = \"0.10.0\" }\n",
+                "[package]"
+            )
+            .as_deref(),
+            Some("1.4.2")
+        );
+        assert_eq!(
+            section_quoted_version("[package]\nversion.workspace = true\n", "[package]"),
+            None
+        );
+        assert_eq!(
+            section_quoted_version(
+                "[workspace.package]\nversion = \"0.10.0\"\n",
+                "[workspace.package]"
+            )
+            .as_deref(),
+            Some("0.10.0")
+        );
+        assert_eq!(
+            section_quoted_version("[package]\nversion = '1.11.2' # comment\n", "[package]")
+                .as_deref(),
+            Some("1.11.2")
+        );
+
+        let smoke = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../examples/smoke-gain/ui/main.slint");
+        assert_eq!(
+            crate_version(&smoke).as_deref(),
+            Some(env!("CARGO_PKG_VERSION"))
+        );
     }
 }
