@@ -5,6 +5,19 @@ All notable changes to **AURA** (framework workspace) are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/versioning.md).
 
+## [0.10.1] - 2026-08-28
+
+### Changed
+
+- `aura-host`: bump `cpal` 0.15 → 0.18.2, `midir` 0.10 → 0.11, `libloading` 0.8 → 0.9.
+
+### Fixed
+
+- `aura-host`: adapt to cpal 0.18 (`device.description()`, `SampleRate` as `u32`,
+  `StreamConfig` by value) so `cargo aura run --gui` builds again after the dep bump.
+- `aura-preview`: inject package version from the nearest `Cargo.toml`, including
+  inherited `version.workspace = true`.
+
 ## [0.10.0] - 2026-08-27
 
 ### Added
