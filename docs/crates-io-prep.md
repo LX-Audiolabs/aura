@@ -1,10 +1,10 @@
-# crates.io prep (do not publish until checklist is green)
+# crates.io prep
 
-Stand: 2026-08-29 · Workspace **0.12.0** (git tag `v0.12.0`)
+Stand: 2026-08-29 · Workspace **0.12.0** (git tag `v0.12.0`) ·
+**Tier A+B published to crates.io** as `lx-aura-*` 0.12.0.
 
-**Policy:** We will not publish half-baked `0.0.x` noise. First publish = real
-author surface, honest docs, Tier A+B metadata complete, dry-run clean.
-`publish = false` stays until an explicit release decision.
+**Policy:** No half-baked `0.0.x` noise. First registry upload was **0.12.0**
+after rename, freeze, and product soak.
 
 Related: [`refinement-backlog.md`](./refinement-backlog.md),
 [`licensing-compliance.md`](./licensing-compliance.md), root [`NOTICE`](../NOTICE).
@@ -101,7 +101,7 @@ Before a real publish: set `publish = true` only on the set above, then
 - [x] Product soak on this version (same plugins; `lx-aura-*` deps; Reaper OK)
 - [x] Annotated git tag `v0.12.0` (repo release)
 - [x] Flip `publish = true` on Tier A+B
-- [ ] crates.io dry-run / publish in order (**first crates.io version = 0.12.0**)
+- [x] Actual `cargo publish` in order — **0.12.0** on crates.io (2026-08-29)
 
 ---
 
