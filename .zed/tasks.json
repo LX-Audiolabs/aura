@@ -1,0 +1,44 @@
+[
+  {
+    "label": "check",
+    "command": "cargo check --workspace",
+    "use_new_terminal": false,
+    "reveal": "on_failure",
+    "allow_concurrent_runs": false
+  },
+  {
+    "label": "build",
+    "command": "cargo build --workspace",
+    "use_new_terminal": false,
+    "reveal": "on_failure",
+    "allow_concurrent_runs": false
+  },
+  {
+    "label": "test",
+    "command": "cargo test --workspace",
+    "use_new_terminal": false,
+    "reveal": "on_failure",
+    "allow_concurrent_runs": false
+  },
+  {
+    "label": "clippy",
+    "command": "cargo clippy --workspace --all-targets -- -D warnings",
+    "use_new_terminal": false,
+    "reveal": "on_failure",
+    "allow_concurrent_runs": false
+  },
+  {
+    "label": "fmt",
+    "command": "cargo fmt --all --check",
+    "use_new_terminal": false,
+    "reveal": "on_failure",
+    "allow_concurrent_runs": false
+  },
+  {
+    "label": "preview",
+    "command": "cargo aura preview",
+    "use_new_terminal": true,
+    "reveal": "always",
+    "allow_concurrent_runs": false
+  }
+]

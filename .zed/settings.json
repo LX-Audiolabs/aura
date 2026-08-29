@@ -1,0 +1,16 @@
+{
+  "lsp": {
+    "rust-analyzer": {
+      "initialization_options": {
+        "linkedProjects": ["Cargo.toml"],
+        "cargo": {
+          "buildScripts": { "enable": true },
+          "extraEnv": {
+            "SLINT_WIDGETS_LIBRARY": "L:/LX-Audiolabs/AURA/.vscode/slint-widgets-stub.rs"
+          }
+        },
+        "procMacro": { "enable": true }
+      }
+    }
+  }
+}
