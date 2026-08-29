@@ -120,17 +120,16 @@ Checklist:
 - [x] README Scope + ship-matrix copy (this pass).
 - [x] Acknowledgments: keep links/table; cut fluff (this pass).
 - [x] Several crate `//!` “later” headers (this pass).
-- [ ] `aura-params` sample.rs / param_infos_static over-narration.
-- [ ] Re-scan after further edits (fuck-slop verify loop).
+- [x] `aura-params` sample.rs (2026-08-29).
+- [ ] Optional re-scan later if more prose piles up.
 
 ---
 
 ## Suggested order of work
 
-1. ~~P0~~ done (persist / in_place / midi_map hints)  
-2. ~~P1~~ done (umbrella / clear_events / docs honesty); extension-trait
-   de-CLAP still optional later  
-3. leftover de-slop (`aura-params` sample.rs)  
+1. ~~P0~~ done  
+2. ~~P1~~ done (extension-trait de-CLAP still optional later)  
+3. ~~leftover deslop sample.rs~~ done  
 4. P2 metadata / NOTICE only when crates.io is back on the table  
 
 Tick boxes here as you go. When a chunk lands, one line in `CHANGELOG` under
