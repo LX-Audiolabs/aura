@@ -87,7 +87,7 @@ Ship-capable CLAP core is **done**. Remaining work is **product-driven** or opti
 | ~~**Poly param modulation**~~ | landed — `note_id ≥ 0` → `ProcessContext.notes` (`ParamMod`); smoke-synth Gain is `modulatable_per_note` | plugin owns voice table |
 | ~~**Note expression**~~ | landed — `CLAP_EVENT_NOTE_EXPRESSION` → `NoteEventKind::Expression`; prefer `MidiDialect::Clap` | Bitwig expression / MPE host proof |
 | ~~**Native MIDI 2 process**~~ | landed v0.7.2 — `ProcessContext.ump` / `ump_out`; `NoteVoiceTable` + `NOTE_END` | plugin owns envelopes; call `mark_silent` |
-| ~~**Multi-out (one aux)**~~ | landed — `BusLayout::with_aux` + `smoke-aux` | product may still want >1 aux / >1 SC |
+| ~~**Multi-out (one aux)**~~ | landed — `BusLayout::with_aux` + `smoke-aux`; REAPER: 2 in / 4 out (2 main + 2 aux) OK 2026-08-29 | product may still want >1 aux / >1 SC |
 | **>1 sidechain / N aux** | still one SC in + one aux out max | more buses than the single optional pair |
 | **Rich state hooks** (host blob > flat params) | G5 | Presets that need non-param bytes in host state |
 | **SysEx typed decode** | raw `SysEx8` / Flex already on `ump` | hardware bridge that needs a typed API |
