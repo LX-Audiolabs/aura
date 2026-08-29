@@ -1,0 +1,22 @@
+[package]
+name = "smoke-aux"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "AURA in-tree CLAP smoke — stereo main + stereo aux out"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[features]
+default = ["clap"]
+clap = ["aura/clap"]
+vst3 = ["aura/vst3"]
+lv2 = ["aura/lv2"]
+
+[dependencies]
+aura = { workspace = true }
+
+[lints]
+workspace = true

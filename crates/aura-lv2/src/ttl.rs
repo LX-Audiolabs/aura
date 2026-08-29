@@ -120,6 +120,19 @@ pub fn generate_ttl_with_layout_and_ui(
             idx += 1;
         }
     }
+    match layout.aux_out {
+        Some(ChannelConfig::Mono) => {
+            ports.push_str(&audio_port(idx, "aux", "Aux", false));
+            idx += 1;
+        }
+        Some(ChannelConfig::Stereo) => {
+            ports.push_str(&audio_port(idx, "aux_l", "Aux L", false));
+            idx += 1;
+            ports.push_str(&audio_port(idx, "aux_r", "Aux R", false));
+            idx += 1;
+        }
+        None => {}
+    }
     let ctrl0 = idx;
     for (i, p) in params.iter().enumerate() {
         let port_idx = ctrl0 + i;

@@ -8,7 +8,7 @@ Crate-local decisions live in `notes/<crate>.md` (scan `[ATOM]` there first).
 
 ## Open
 
-- [ ] **CLAP product-driven** — multi-out / >1 SC; G5 rich state — only if a plugin needs it (`notes/aura-clap.md`)
+- [ ] **CLAP product-driven** — >1 SC / N aux; G5 rich state — only if a plugin needs it (`notes/aura-clap.md`). One aux out landed 0.11.
 - [x] **Bitwig host proofs** — poly, expressions, poly-mod, MIDI FX → synth, bounce, sidechain OK (2026-08-28); layout UI N/A in Bitwig (`crates/aura-clap/README.md`)
 - [ ] Real-synth DSP — smoothing / expression→knob matrix (not a wrapper hole; product/catalog)
 - [ ] **crates.io** — after comfort with CI smokes + host proofs (`publish = false` until then)

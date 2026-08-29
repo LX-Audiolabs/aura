@@ -562,7 +562,8 @@ unsafe extern "C" fn plugin_activate<L: PluginLogic>(
         let layout = inst.selected_layout();
         let config = AudioConfig::new(sample_rate, max_frames as usize)
             .with_channels(layout.main_input_channels(), layout.main_output_channels())
-            .with_sidechain_channels(layout.sidechain_input_channels());
+            .with_sidechain_channels(layout.sidechain_input_channels())
+            .with_aux_channels(layout.aux_output_channels());
         let mut state = L::init(&inst.params, sample_rate);
         L::reset(&mut state, &inst.params, &config);
         inst.params.set_sample_rate(sample_rate);
@@ -604,7 +605,8 @@ unsafe extern "C" fn plugin_reset<L: PluginLogic>(plugin: *const clap_plugin) {
         let layout = inst.selected_layout();
         let config = AudioConfig::new(inst.sample_rate, inst.max_frames as usize)
             .with_channels(layout.main_input_channels(), layout.main_output_channels())
-            .with_sidechain_channels(layout.sidechain_input_channels());
+            .with_sidechain_channels(layout.sidechain_input_channels())
+            .with_aux_channels(layout.aux_output_channels());
         if let Some(state) = inst.state.as_mut() {
             L::reset(state, &inst.params, &config);
             inst.params.snap_smoothers();
@@ -680,9 +682,10 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
         };
         let main_in_ch = layout.main_input_channels() as usize;
         let sidechain_in_ch = layout.sidechain_input_channels() as usize;
+        let main_out_ch = layout.main_output_channels() as usize;
         let total_in_ch = main_in_ch + sidechain_in_ch;
-        let mut out_ch = layout.main_output_channels() as usize;
-        if !matches!(out_ch, 0..=2) || total_in_ch > MAX_AUDIO_CH {
+        let mut out_ch = layout.total_output_channels() as usize;
+        if out_ch > MAX_AUDIO_CH || total_in_ch > MAX_AUDIO_CH {
             return CLAP_PROCESS_ERROR;
         }
 
@@ -711,24 +714,34 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
 
         let mut out_ptrs = [ptr::null_mut::<f32>(); MAX_AUDIO_CH];
         let mut filled_out = 0usize;
-        if process.audio_outputs_count > 0 && !process.audio_outputs.is_null() {
-            let out_port = unsafe { &*process.audio_outputs };
-            if !out_port.data32.is_null() {
-                let n = out_ch.min(out_port.channel_count as usize);
-                for (slot, ptr) in out_ptrs.iter_mut().take(n).enumerate() {
-                    *ptr = unsafe { *out_port.data32.add(slot) };
+        if !process.audio_outputs.is_null() {
+            for port_i in 0..process.audio_outputs_count as usize {
+                if filled_out >= out_ch {
+                    break;
+                }
+                let port = unsafe { &*process.audio_outputs.add(port_i) };
+                if port.data32.is_null() {
+                    continue;
+                }
+                for c in 0..port.channel_count as usize {
+                    if filled_out >= out_ch {
+                        break;
+                    }
+                    out_ptrs[filled_out] = unsafe { *port.data32.add(c) };
                     filled_out += 1;
                 }
             }
         }
         // Note-FX racks (Bitwig) often pass 0 audio ports. Still process events.
+        // If the host only wired main outs, shrink to what we got (aux silent).
         if filled_out != out_ch {
-            if matches!(filled_out, 0..=2) {
+            if filled_out <= MAX_AUDIO_CH {
                 out_ch = filled_out;
             } else {
                 return CLAP_PROCESS_ERROR;
             }
         }
+        let main_out_for_buf = main_out_ch.min(out_ch);
 
         // Sample-accurate: non-CHUNKED params apply at block start; CHUNKED
         // params split the block at their event times.
@@ -842,6 +855,7 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
                     in_refs,
                     out_ptrs,
                     out_ch,
+                    main_out_for_buf,
                     t0,
                     chunk_len,
                     main_in_ch,
@@ -910,7 +924,7 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
     })
 }
 
-/// Write one chunk into host output pointers (mono or stereo).
+/// Write one chunk into host output pointers (main + optional aux, ≤4 ch).
 #[allow(clippy::too_many_arguments)]
 unsafe fn run_process_chunk<L: PluginLogic>(
     state: &mut L::DspState,
@@ -918,6 +932,7 @@ unsafe fn run_process_chunk<L: PluginLogic>(
     in_refs: &[&[f32]],
     out_ptrs: [*mut f32; MAX_AUDIO_CH],
     out_ch: usize,
+    main_out_ch: usize,
     t0: usize,
     chunk_len: usize,
     main_in_ch: usize,
@@ -927,17 +942,33 @@ unsafe fn run_process_chunk<L: PluginLogic>(
     unsafe fn slice_out<'a>(p: *mut f32, t0: usize, n: usize) -> &'a mut [f32] {
         unsafe { std::slice::from_raw_parts_mut(p.add(t0), n) }
     }
+    let main_out = main_out_ch.min(out_ch);
     match out_ch {
-        1 => {
-            let mut s0 = unsafe { slice_out(out_ptrs[0], t0, chunk_len) };
-            let mut outs = [&mut s0 as &mut [f32]];
+        0 => {
+            let mut outs: [&mut [f32]; 0] = [];
             let mut buffer = unsafe {
-                AudioBuffer::from_slices_with_sidechain_unchecked(
+                AudioBuffer::from_slices_with_buses_unchecked(
                     in_refs,
                     &mut outs,
                     chunk_len,
                     main_in_ch,
                     sidechain_in_ch,
+                    0,
+                )
+            };
+            L::process(state, params, &mut buffer, ctx)
+        }
+        1 => {
+            let mut s0 = unsafe { slice_out(out_ptrs[0], t0, chunk_len) };
+            let mut outs = [&mut s0 as &mut [f32]];
+            let mut buffer = unsafe {
+                AudioBuffer::from_slices_with_buses_unchecked(
+                    in_refs,
+                    &mut outs,
+                    chunk_len,
+                    main_in_ch,
+                    sidechain_in_ch,
+                    main_out,
                 )
             };
             L::process(state, params, &mut buffer, ctx)
@@ -947,25 +978,48 @@ unsafe fn run_process_chunk<L: PluginLogic>(
             let mut s1 = unsafe { slice_out(out_ptrs[1], t0, chunk_len) };
             let mut outs = [&mut s0 as &mut [f32], &mut s1];
             let mut buffer = unsafe {
-                AudioBuffer::from_slices_with_sidechain_unchecked(
+                AudioBuffer::from_slices_with_buses_unchecked(
                     in_refs,
                     &mut outs,
                     chunk_len,
                     main_in_ch,
                     sidechain_in_ch,
+                    main_out,
                 )
             };
             L::process(state, params, &mut buffer, ctx)
         }
-        0 => {
-            let mut outs: [&mut [f32]; 0] = [];
+        3 => {
+            let mut s0 = unsafe { slice_out(out_ptrs[0], t0, chunk_len) };
+            let mut s1 = unsafe { slice_out(out_ptrs[1], t0, chunk_len) };
+            let mut s2 = unsafe { slice_out(out_ptrs[2], t0, chunk_len) };
+            let mut outs = [&mut s0 as &mut [f32], &mut s1, &mut s2];
             let mut buffer = unsafe {
-                AudioBuffer::from_slices_with_sidechain_unchecked(
+                AudioBuffer::from_slices_with_buses_unchecked(
                     in_refs,
                     &mut outs,
                     chunk_len,
                     main_in_ch,
                     sidechain_in_ch,
+                    main_out,
+                )
+            };
+            L::process(state, params, &mut buffer, ctx)
+        }
+        4 => {
+            let mut s0 = unsafe { slice_out(out_ptrs[0], t0, chunk_len) };
+            let mut s1 = unsafe { slice_out(out_ptrs[1], t0, chunk_len) };
+            let mut s2 = unsafe { slice_out(out_ptrs[2], t0, chunk_len) };
+            let mut s3 = unsafe { slice_out(out_ptrs[3], t0, chunk_len) };
+            let mut outs = [&mut s0 as &mut [f32], &mut s1, &mut s2, &mut s3];
+            let mut buffer = unsafe {
+                AudioBuffer::from_slices_with_buses_unchecked(
+                    in_refs,
+                    &mut outs,
+                    chunk_len,
+                    main_in_ch,
+                    sidechain_in_ch,
+                    main_out,
                 )
             };
             L::process(state, params, &mut buffer, ctx)
@@ -1684,7 +1738,7 @@ unsafe extern "C" fn audio_ports_count<L: PluginLogic>(
     if is_input {
         layout.input_port_count()
     } else {
-        1
+        layout.output_port_count()
     }
 }
 
@@ -1718,6 +1772,11 @@ unsafe extern "C" fn audio_ports_get<L: PluginLogic>(
         }
     } else if index == 0 {
         (layout.main_out, "Output", true, 0)
+    } else if index == 1 {
+        let Some(ch) = layout.aux_out else {
+            return false;
+        };
+        (ch, "Aux", false, 1)
     } else {
         return false;
     };
@@ -1764,7 +1823,7 @@ unsafe extern "C" fn audio_ports_config_get<L: PluginLogic>(
     out.id = index;
     write_name(&mut out.name, &layout.config_name());
     out.input_port_count = layout.input_port_count();
-    out.output_port_count = 1;
+    out.output_port_count = layout.output_port_count();
     out.has_main_input = layout.main_in.is_some();
     out.main_input_channel_count = layout.main_input_channels();
     out.main_input_port_type = layout.main_in.map_or(ptr::null(), clap_port_type);

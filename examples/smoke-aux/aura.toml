@@ -1,0 +1,13 @@
+[vendor]
+name = "LX Audiolabs"
+id = "lx"
+url = "https://lx-audiolabs.com"
+
+[[plugin]]
+name = "AURA Smoke Aux"
+bundle_id = "smoke-aux"
+crate = "smoke-aux"
+category = "effect"
+
+[install]
+dir = "%LOCALAPPDATA%\\Programs\\Common"

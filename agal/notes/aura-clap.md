@@ -59,8 +59,8 @@ Rust bindings via `clap-sys`. Full extension list + host-proof checklist:
 
 ## Open
 
-- [ ] **Product-driven** — multi-out / >1 sidechain; G5 rich state — only if a
-      plugin needs it (README)
+- [ ] **Product-driven** — >1 sidechain / N aux; G5 rich state — only if a
+      plugin needs it (README). One aux out: `with_aux` + `smoke-aux` (0.11)
 - [x] **Bitwig host proofs** — poly / expressions / poly-mod / `notes_out` /
       offline / sidechain OK (2026-08-28); layout picker N/A in Bitwig (README)
 - [ ] Typed SysEx/Flex decode — raw packets already on `ump`

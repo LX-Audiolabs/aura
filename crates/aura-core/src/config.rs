@@ -32,6 +32,8 @@ pub struct AudioConfig {
     pub main_output_channels: u32,
     /// Optional sidechain input channel count for the selected bus layout (`0` = none).
     pub sidechain_input_channels: u32,
+    /// Optional aux output channel count for the selected bus layout (`0` = none).
+    pub aux_output_channels: u32,
 }
 
 impl AudioConfig {
@@ -45,6 +47,7 @@ impl AudioConfig {
             main_input_channels: 2,
             main_output_channels: 2,
             sidechain_input_channels: 0,
+            aux_output_channels: 0,
         }
     }
 
@@ -64,6 +67,12 @@ impl AudioConfig {
     #[must_use]
     pub fn with_sidechain_channels(mut self, sidechain_in: u32) -> Self {
         self.sidechain_input_channels = sidechain_in;
+        self
+    }
+
+    #[must_use]
+    pub fn with_aux_channels(mut self, aux_out: u32) -> Self {
+        self.aux_output_channels = aux_out;
         self
     }
 }

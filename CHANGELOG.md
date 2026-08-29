@@ -5,12 +5,21 @@ All notable changes to **AURA** (framework workspace) are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/versioning.md).
 
-## [Unreleased]
+## [0.11.0] - 2026-08-29
 
 ### Added
 
+- `BusLayout::with_aux` — one optional aux output bus (mirror of sidechain-in).
+  `AudioBuffer::{main_output,aux_output,num_main_outputs,num_aux_outputs}`;
+  `AudioConfig::aux_output_channels`. Wired through CLAP / VST3 / LV2.
+- `smoke-aux` — stereo main + stereo aux smoke (main dry, aux = Send × main).
 - `cargo aura preset list|pull` — list factory presets via CLAP discovery; pull a
   key to a v1 state blob (`aura-host --list-presets` / `--pull-preset` / `--out`).
+
+### Fixed
+
+- VST3 `getBusCount` now counts sidechain input and aux output buses (was always
+  main-only), matching `getBusInfo` / arrangements.
 
 ### Removed
 

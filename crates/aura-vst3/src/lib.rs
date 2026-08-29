@@ -490,6 +490,17 @@ impl<L: PluginLogic> Component<L> {
         n as i32
     }
 
+    /// Max aux-out bus channel count across all declared layouts.
+    fn max_aux_channels() -> i32 {
+        let layouts = L::bus_layouts();
+        let n = layouts
+            .iter()
+            .map(|l| l.aux_output_channels())
+            .max()
+            .unwrap_or(0);
+        n as i32
+    }
+
     fn lock(&self) -> MutexGuard<'_, Inner<L>> {
         self.inner.lock().unwrap_or_else(PoisonError::into_inner)
     }
@@ -564,10 +575,11 @@ impl<L: PluginLogic> Component<L> {
             let layout = layout_at(&L::bus_layouts(), inner.layout_index);
             let main_in_ch = layout.main_input_channels() as usize;
             let sidechain_in_ch = layout.sidechain_input_channels() as usize;
+            let main_out_ch = layout.main_output_channels() as usize;
             let total_in_ch = main_in_ch + sidechain_in_ch;
-            let out_ch = layout.main_output_channels() as usize;
+            let mut out_ch = layout.total_output_channels() as usize;
             let max_samples = inner.max_samples;
-            if !matches!(out_ch, 1 | 2) || total_in_ch > MAX_AUDIO_CH {
+            if out_ch > MAX_AUDIO_CH || total_in_ch > MAX_AUDIO_CH {
                 return kResultOk;
             }
             if max_samples == 0 || frames > max_samples {
@@ -579,16 +591,7 @@ impl<L: PluginLogic> Component<L> {
             if inner.state.is_none() {
                 return kResultOk;
             }
-
-            let out_bus = if data.numOutputs > 0 && !data.outputs.is_null() {
-                // SAFETY: non-null; host-owned bus array, valid for this call.
-                unsafe { &*data.outputs }
-            } else {
-                return kResultOk;
-            };
-            // SAFETY: union field valid because symbolicSampleSize == kSample32.
-            let host_out32 = unsafe { out_bus.__field0.channelBuffers32 };
-            if host_out32.is_null() {
+            if data.numOutputs <= 0 || data.outputs.is_null() {
                 return kResultOk;
             }
 
@@ -615,12 +618,29 @@ impl<L: PluginLogic> Component<L> {
             }
 
             let mut out_ptrs = [ptr::null_mut::<f32>(); MAX_AUDIO_CH];
-            for (slot, dest) in out_ptrs.iter_mut().take(out_ch).enumerate() {
-                *dest = unsafe { *host_out32.add(slot) };
+            let mut filled_out = 0usize;
+            for bus_i in 0..data.numOutputs as usize {
+                if filled_out >= out_ch {
+                    break;
+                }
+                let bus = unsafe { &*data.outputs.add(bus_i) };
+                let ptrs = unsafe { bus.__field0.channelBuffers32 };
+                if ptrs.is_null() {
+                    continue;
+                }
+                for c in 0..bus.numChannels.max(0) as usize {
+                    if filled_out >= out_ch {
+                        break;
+                    }
+                    out_ptrs[filled_out] = unsafe { *ptrs.add(c) };
+                    filled_out += 1;
+                }
             }
-            if out_ptrs[..out_ch].iter().any(|p| p.is_null()) {
+            if filled_out == 0 || out_ptrs[..filled_out].iter().any(|p| p.is_null()) {
                 return kResultOk;
             }
+            out_ch = filled_out;
+            let main_out_for_buf = main_out_ch.min(out_ch);
 
             inner.scratch.midi.clear();
             inner.scratch.midi_out.clear();
@@ -669,6 +689,7 @@ impl<L: PluginLogic> Component<L> {
                         in_refs,
                         out_ptrs,
                         out_ch,
+                        main_out_for_buf,
                         0,
                         frames,
                         main_in_ch,
@@ -770,12 +791,14 @@ impl<L: PluginLogic> IComponentTrait for Component<L> {
         if r#type != kAudio as MediaType {
             return 0;
         }
-        // Main bus only. No input bus when all layouts are output-only.
+        // Port counts (not channels): main ± sidechain in / main ± aux out.
         if dir == kInput as BusDirection {
             let has_in = L::bus_layouts().iter().any(|l| l.main_in.is_some());
-            i32::from(has_in)
+            let has_sc = L::bus_layouts().iter().any(|l| l.sidechain_in.is_some());
+            i32::from(has_in) + i32::from(has_sc)
         } else {
-            1
+            let has_aux = L::bus_layouts().iter().any(|l| l.aux_out.is_some());
+            1 + i32::from(has_aux)
         }
     }
 
@@ -839,6 +862,7 @@ impl<L: PluginLogic> IComponentTrait for Component<L> {
         } else {
             match index {
                 0 => (Self::max_main_channels(false), "Output", kMain),
+                1 if Self::max_aux_channels() > 0 => (Self::max_aux_channels(), "Aux", kAux),
                 _ => return kInvalidArgument,
             }
         };
@@ -882,7 +906,8 @@ impl<L: PluginLogic> IComponentTrait for Component<L> {
             let config = AudioConfig::new(inner.sample_rate, inner.max_samples)
                 .with_process_mode(inner.process_mode)
                 .with_channels(layout.main_input_channels(), layout.main_output_channels())
-                .with_sidechain_channels(layout.sidechain_input_channels());
+                .with_sidechain_channels(layout.sidechain_input_channels())
+                .with_aux_channels(layout.aux_output_channels());
             let mut dsp = L::init(&self.params, inner.sample_rate);
             self.params.set_sample_rate(inner.sample_rate);
             L::reset(&mut dsp, &self.params, &config);
@@ -915,12 +940,16 @@ impl<L: PluginLogic> IAudioProcessorTrait for Component<L> {
         outputs: *mut SpeakerArrangement,
         numOuts: int32,
     ) -> tresult {
-        if numOuts != 1 || outputs.is_null() {
+        if numOuts < 1 || outputs.is_null() {
             return kResultFalse;
         }
         // SAFETY: host arrays sized by numIns/numOuts.
-        let out_arr = unsafe { *outputs };
-        let out_ch = speaker_channel_count(out_arr);
+        let out_ch = speaker_channel_count(unsafe { *outputs });
+        let aux_ch = if numOuts >= 2 {
+            speaker_channel_count(unsafe { *outputs.add(1) })
+        } else {
+            0
+        };
         if numIns < 0 || inputs.is_null() && numIns > 0 {
             return kResultFalse;
         }
@@ -940,6 +969,7 @@ impl<L: PluginLogic> IAudioProcessorTrait for Component<L> {
             l.main_input_channels() == in_ch
                 && l.sidechain_input_channels() == sidechain_ch
                 && l.main_output_channels() == out_ch
+                && l.aux_output_channels() == aux_ch
         }) else {
             return kResultFalse;
         };
@@ -965,10 +995,11 @@ impl<L: PluginLogic> IAudioProcessorTrait for Component<L> {
                 _ => return kInvalidArgument,
             }
         } else {
-            if index != 0 {
-                return kInvalidArgument;
+            match index {
+                0 => layout.main_output_channels(),
+                1 => layout.aux_output_channels(),
+                _ => return kInvalidArgument,
             }
-            layout.main_output_channels()
         };
         let Some(sa) = arrangement_for_channels(channels) else {
             return kInvalidArgument;
@@ -1170,7 +1201,7 @@ impl<L: PluginLogic> IEditControllerTrait for Component<L> {
 // MIDI input helpers
 // ---------------------------------------------------------------------------
 
-/// Write one block into host output pointers (mono or stereo).
+/// Write one block into host output pointers (main + optional aux, ≤4 ch).
 #[allow(clippy::too_many_arguments)]
 unsafe fn run_process_chunk<L: PluginLogic>(
     state: &mut L::DspState,
@@ -1178,6 +1209,7 @@ unsafe fn run_process_chunk<L: PluginLogic>(
     in_refs: &[&[f32]],
     out_ptrs: [*mut f32; MAX_AUDIO_CH],
     out_ch: usize,
+    main_out_ch: usize,
     t0: usize,
     chunk_len: usize,
     main_in_ch: usize,
@@ -1187,17 +1219,19 @@ unsafe fn run_process_chunk<L: PluginLogic>(
     unsafe fn slice_out<'a>(p: *mut f32, t0: usize, n: usize) -> &'a mut [f32] {
         unsafe { std::slice::from_raw_parts_mut(p.add(t0), n) }
     }
+    let main_out = main_out_ch.min(out_ch);
     match out_ch {
         1 => {
             let mut s0 = unsafe { slice_out(out_ptrs[0], t0, chunk_len) };
             let mut outs = [&mut s0 as &mut [f32]];
             let mut buffer = unsafe {
-                AudioBuffer::from_slices_with_sidechain_unchecked(
+                AudioBuffer::from_slices_with_buses_unchecked(
                     in_refs,
                     &mut outs,
                     chunk_len,
                     main_in_ch,
                     sidechain_in_ch,
+                    main_out,
                 )
             };
             L::process(state, params, &mut buffer, ctx)
@@ -1207,12 +1241,48 @@ unsafe fn run_process_chunk<L: PluginLogic>(
             let mut s1 = unsafe { slice_out(out_ptrs[1], t0, chunk_len) };
             let mut outs = [&mut s0 as &mut [f32], &mut s1];
             let mut buffer = unsafe {
-                AudioBuffer::from_slices_with_sidechain_unchecked(
+                AudioBuffer::from_slices_with_buses_unchecked(
                     in_refs,
                     &mut outs,
                     chunk_len,
                     main_in_ch,
                     sidechain_in_ch,
+                    main_out,
+                )
+            };
+            L::process(state, params, &mut buffer, ctx)
+        }
+        3 => {
+            let mut s0 = unsafe { slice_out(out_ptrs[0], t0, chunk_len) };
+            let mut s1 = unsafe { slice_out(out_ptrs[1], t0, chunk_len) };
+            let mut s2 = unsafe { slice_out(out_ptrs[2], t0, chunk_len) };
+            let mut outs = [&mut s0 as &mut [f32], &mut s1, &mut s2];
+            let mut buffer = unsafe {
+                AudioBuffer::from_slices_with_buses_unchecked(
+                    in_refs,
+                    &mut outs,
+                    chunk_len,
+                    main_in_ch,
+                    sidechain_in_ch,
+                    main_out,
+                )
+            };
+            L::process(state, params, &mut buffer, ctx)
+        }
+        4 => {
+            let mut s0 = unsafe { slice_out(out_ptrs[0], t0, chunk_len) };
+            let mut s1 = unsafe { slice_out(out_ptrs[1], t0, chunk_len) };
+            let mut s2 = unsafe { slice_out(out_ptrs[2], t0, chunk_len) };
+            let mut s3 = unsafe { slice_out(out_ptrs[3], t0, chunk_len) };
+            let mut outs = [&mut s0 as &mut [f32], &mut s1, &mut s2, &mut s3];
+            let mut buffer = unsafe {
+                AudioBuffer::from_slices_with_buses_unchecked(
+                    in_refs,
+                    &mut outs,
+                    chunk_len,
+                    main_in_ch,
+                    sidechain_in_ch,
+                    main_out,
                 )
             };
             L::process(state, params, &mut buffer, ctx)

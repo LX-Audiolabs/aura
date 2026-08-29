@@ -174,7 +174,7 @@ cargo clippy --workspace --all-targets
 1. **Slint + baseview only** — renderer is a backend choice (FemtoVG / Skia / software); toolkit is not.
 2. **CLAP first, thin formats** — one plugin logic API; VST3/LV2 only on the ship matrix; no format-shaped core.
 3. **Framework layout** — `crates/` · `examples/` · `tools/` (product catalogs keep their own plugins outside AURA).
-4. **One CLI:** **`cargo aura`** — `new`, `init`, `add`, `add-ui`, `build`, `install`, `watch`, `preview`, `run`, `mesh`, `doctor`
+4. **One CLI:** **`cargo aura`** — `new`, `init`, `add`, `add-ui`, `build`, `install`, `watch`, `preview`, `run`, `preset`, `mesh`, `doctor`
 5. **KISS for humans and agents** — `aura.toml`, boring paths; orientation in **agal**.
 
 ---
@@ -256,6 +256,7 @@ More detail: crate docs (`cargo doc -p aura --open`), [docs/versioning.md](./doc
 | CLAP process / params / state / GUI | done (Bitwig host smoke) |
 | Sample-accurate automation + mono mod | done |
 | Sidechain (one optional bus) + MIDI I/O | done |
+| Aux out (one optional bus) | done (`BusLayout::with_aux`, `smoke-aux`) |
 | Latency / remote-controls / tail / render | done |
 | VST3 (Win/mac) | done (host smoke) |
 | LV2 (Linux) process + UI extension | done (UI host smoke depends on host) |
