@@ -12,11 +12,18 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 - Host state **v2** envelope (`AURA` magic): params + `#[persist]` fields via
   `encode_state` / `decode_state`. Legacy v1 blobs still load. CLAP/VST3/LV2
   unchanged call sites — they already use the shared codec.
+- `aura` root exports: `encode_state` / `decode_state` / `layout_at` /
+  `NoteNameEntry` / Tuning helpers; prelude includes them + `MidiDialect` /
+  `ParamFlags` / `Transport`.
+- Feature `dsp` (default) for `aura-dsp` — params-only: `default-features = false`.
 
 ### Changed
 
 - `ParamInfo::midi_map` / derive `midi_*` attrs: documented as **unused hints**
   (format wrappers do not implement host MIDI-learn bindings).
+- `ProcessContext::clear_midi` → `clear_events` (clears midi/notes/ump in+out).
+- Docs: automation timing per format; LV2 reduced subset; CLAP-oriented trait
+  hooks labeled; derive requires `aura` umbrella.
 
 ### Removed
 

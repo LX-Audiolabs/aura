@@ -126,9 +126,13 @@ impl ProcessContext {
         self
     }
 
-    /// Clear both MIDI buffers so the context can be reused across blocks.
-    pub fn clear_midi(&mut self) {
+    /// Clear all event buffers so the context can be reused across blocks.
+    pub fn clear_events(&mut self) {
         self.midi.clear();
         self.midi_out.clear();
+        self.notes.clear();
+        self.notes_out.clear();
+        self.ump.clear();
+        self.ump_out.clear();
     }
 }

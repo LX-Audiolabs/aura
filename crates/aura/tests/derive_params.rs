@@ -257,11 +257,11 @@ fn host_state_blob_includes_persist() {
     p.set_plain(1, -3.0);
     *p.ui_scale.write().expect("lock") = 1.25;
     *p.active_tab.write().expect("lock") = 3;
-    let blob = aura::core::encode_state(&p);
+    let blob = encode_state(&p);
     assert!(blob.starts_with(b"AURA"));
 
     let q = TestParams::new();
-    assert!(aura::core::decode_state(&q, &blob));
+    assert!(decode_state(&q, &blob));
     assert_eq!(q.get_plain(1), Some(-3.0));
     assert_eq!(*q.ui_scale.read().expect("lock"), 1.25);
     assert_eq!(*q.active_tab.read().expect("lock"), 3);

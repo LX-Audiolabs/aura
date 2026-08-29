@@ -59,45 +59,32 @@ Canonical elsewhere (do not duplicate specs here):
 
 ### 5. Automation parity
 
-CLAP: sample-accurate `CHUNKED` splits. VST3: last-point-per-block.
-LV2: control ports per run.
-
-- [ ] Document explicitly on `PluginLogic::process` / params, **or** share more
-      of `chunked_process` into VST3.
+- [x] Documented on `PluginLogic::process` (CLAP chunked / VST3 last-point /
+      LV2 per-run). Sharing `chunked_process` into VST3 left for later if needed.
 
 ### 6. De-CLAP `PluginLogic` (thin_formats)
 
-`note_names`, param-indication, tuning hooks are CLAP-shaped on the core trait.
-
-- [ ] Move to extension traits / format-local hooks; keep core format-neutral
-      where possible (`agal.toml` `thin_formats`).
+- [x] **Honesty pass:** CLAP-oriented hooks labeled on the trait. Full move to
+      extension traits deferred (larger refactor; see P2 if crates.io nears).
 
 ### 7. Umbrella `aura` surface
 
-- [ ] Root-export `encode_state` / `decode_state` / `layout_at` / `NoteNameEntry`
-      (and Tuning helpers authors need).
-- [ ] Rebuild `prelude` as the real author set (trim niche or document why).
-- [ ] Feature-gate `aura-dsp` so params-only plugins need not pull FFT/ebur128.
+- [x] Root-export codec / `layout_at` / `NoteNameEntry` / Tuning helpers.
+- [x] Prelude expanded + documented (niche helpers kept on purpose).
+- [x] Feature-gate `dsp` (default on).
 
 ### 8. Derive packaging invariant
 
-Generated code uses `::aura::params::…` — crates cannot use derive + params
-without the umbrella.
-
-- [ ] Emit `::aura_params::` (or document “must depend on `aura`” as required).
+- [x] Documented: depend on `aura` umbrella (`::aura::params::…` codegen stays).
 
 ### 9. `ProcessContext::clear_midi`
 
-Name clears only part of the event set.
-
-- [ ] Rename to `clear_events` and clear all, or document the narrow behavior.
+- [x] Renamed to `clear_events` (clears midi/notes/ump in+out).
 
 ### 10. LV2 honesty
 
-First `bus_layouts()` entry only; no latency/tail/presets/transport parity.
-
-- [ ] Document “LV2 = reduced subset” on `bus_layouts` + LV2 README, **or**
-      fill gaps that matter for Linux ship.
+- [x] Documented on `bus_layouts` + `aura-lv2` crate docs (first layout only;
+      reduced subset).
 
 ---
 
@@ -140,12 +127,11 @@ Checklist:
 
 ## Suggested order of work
 
-1. ~~P0.1 persist~~ done  
-2. ~~P0.2 supports_in_place~~ removed  
-3. ~~P0.3 midi_map~~ demoted to unused hint  
-4. leftover de-slop (`aura-params` sample.rs if still puffy)  
-5. P1 umbrella / prelude / dsp feature / automation docs / LV2 honesty  
-6. P2 metadata only when crates.io is back on the table  
+1. ~~P0~~ done (persist / in_place / midi_map hints)  
+2. ~~P1~~ done (umbrella / clear_events / docs honesty); extension-trait
+   de-CLAP still optional later  
+3. leftover de-slop (`aura-params` sample.rs)  
+4. P2 metadata / NOTICE only when crates.io is back on the table  
 
 Tick boxes here as you go. When a chunk lands, one line in `CHANGELOG` under
 Unreleased is enough — no second mega-doc.

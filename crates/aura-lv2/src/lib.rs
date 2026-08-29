@@ -14,14 +14,15 @@
 //!   <binary>          # smoke_gain.dll / libsmoke_gain.so / …
 //! ```
 //!
-//! Port map follows the plugin's first `bus_layouts()` entry (LV2 is static):
-//! mono → 0 in · 1 out · 2+ controls; stereo → 0/1 in · 2/3 out · 4+ controls.
-//! When `PluginInfo::accepts_midi_in`, one `atom:Sequence` MIDI input port is
-//! appended after controls; when `PluginInfo::emits_midi`, a matching output
-//! port follows (audio/control indices unchanged).
-//! State: shared [`aura_core::encode_state`] blob when the host maps URIDs.
-//! GUI: LV2 UI extension via the same [`aura_core::editor::Editor`] trait as
-//! CLAP/VST3, loaded through `lv2ui_descriptor` in the same binary.
+//! **Reduced `PluginLogic` subset vs CLAP/VST3:** only the **first**
+//! `bus_layouts()` entry; no latency/tail/presets/transport parity; control
+//! ports update once per `run` (not sample-accurate `CHUNKED`).
+//!
+//! Port map (first layout): mono → 0 in · 1 out · 2+ controls; stereo →
+//! 0/1 in · 2/3 out · 4+ controls (+ sidechain/aux channels when declared).
+//! MIDI atom ports append after controls when `accepts_midi_in` /
+//! `emits_midi`. State: shared [`aura_core::encode_state`] blob. GUI: same
+//! [`Editor`](aura_core::editor::Editor) as CLAP/VST3 via `lv2ui_descriptor`.
 
 #![allow(clippy::missing_safety_doc)]
 #![allow(non_snake_case)]

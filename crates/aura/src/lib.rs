@@ -4,30 +4,30 @@
 //! every `aura-*` piece individually:
 //!
 //! ```toml
-//! aura = { path = ".../AURA/crates/aura" }
-//! aura-baseview = { path = ".../AURA/crates/aura-baseview", features = ["backend-femtovg"] }
-//! aura-editor = { path = ".../AURA/crates/aura-editor", features = ["backend-femtovg"] }
+//! aura = { path = ".../AURA/crates/aura", features = ["clap"] }
+//! # optional UI:
+//! aura-baseview = { path = "...", features = ["backend-femtovg"] }
+//! aura-editor = { path = "...", features = ["backend-femtovg"] }
 //! ```
 //!
 //! ```rust,ignore
 //! use aura::prelude::*;
 //! ```
 //!
-//! Enable formats with features:
+//! Features: `clap` / `vst3` / `lv2` for formats; `dsp` (default) for
+//! `aura-dsp`. Params-only plugins: `default-features = false`.
 //!
-//! ```toml
-//! aura = { path = "...", features = ["clap", "vst3"] }
-//! ```
+//! `#[derive(Params)]` requires this umbrella (or an equivalent
+//! `aura_params` + path setup) — generated code uses `::aura::params::…`.
 
 #![forbid(unsafe_code)]
 
 pub use aura_core as core;
-pub use aura_dsp as dsp;
 pub use aura_midi as midi;
 pub use aura_params as params;
 
-// Test helpers are a separate crate (`aura-test`) so release plugins
-// don't pull them; product crates depend on `aura-test` as a dev-dep.
+#[cfg(feature = "dsp")]
+pub use aura_dsp as dsp;
 
 #[cfg(feature = "clap")]
 pub use aura_clap as clap;
@@ -42,10 +42,12 @@ pub use aura_lv2 as lv2;
 pub use aura_core::{
     AudioBuffer, AudioConfig, BusLayout, ChannelConfig, Editor, EditorBridge, FactoryPreset,
     FactoryPresetState, IntoEditor, MidiBuffer, MidiDialect, MidiEvent, MidiMessage, MidiStatus,
-    NOTE_UNSPECIFIED, NoteBuffer, NoteEvent, NoteEventKind, NoteExpression, NoteTarget, NoteVoice,
-    NoteVoiceTable, ParamEvent, ParamEventQueue, PluginCategory, PluginContext, PluginInfo,
-    PluginLogic, ProcessContext, ProcessMode, ProcessStatus, RawWindowHandle, Transport, Ump,
-    UmpBuffer, UmpEvent, append_midi_as_ump, append_notes_as_midi, append_ump_as_midi,
+    NOTE_UNSPECIFIED, NoteBuffer, NoteEvent, NoteEventKind, NoteExpression, NoteNameEntry,
+    NoteTarget, NoteVoice, NoteVoiceTable, ParamEvent, ParamEventQueue, PluginCategory,
+    PluginContext, PluginInfo, PluginLogic, ProcessContext, ProcessMode, ProcessStatus,
+    RawWindowHandle, Transport, Tuning, TuningEvent, TuningInfo, Ump, UmpBuffer, UmpEvent,
+    append_midi_as_ump, append_notes_as_midi, append_ump_as_midi, apply_factory_preset,
+    decode_state, encode_state, layout_at, load_preset_file,
 };
 
 // --- params surface ---
@@ -56,36 +58,35 @@ pub use aura_params::{
     Params, Smoother, SmoothingStyle, format_param_value, parse_param_value,
 };
 
-// --- derive macros (macro namespace; `Params` / `ParamEnum` coexist
-// with the same-named traits, serde-style) ---
 pub use aura_derive::{ParamEnum, Params};
 
-/// Re-export CLAP export macro when `clap` feature is on.
 #[cfg(feature = "clap")]
 pub use aura_clap::export;
 
-/// Re-export VST3 export macro when `vst3` feature is on.
 #[cfg(feature = "vst3")]
 pub use aura_vst3::export_vst3;
 
-/// Re-export LV2 export macro when `lv2` feature is on.
 #[cfg(feature = "lv2")]
 pub use aura_lv2::export_lv2;
 
-/// Common imports for plugin crates (grows with the framework).
+/// Common imports for plugin authors.
+///
+/// Niche helpers (`AudioTap`, `MeterSlot`, voice table) stay here so smokes
+/// and instruments share one import line. Prefer `aura::encode_state` at the
+/// crate root when you only need the codec.
 pub mod prelude {
     pub use std::sync::Arc;
 
     pub use crate::{
         AudioBuffer, AudioConfig, AudioTap, BoolParam, BusLayout, ChannelConfig, Editor, EnumParam,
         FactoryPreset, FactoryPresetState, FloatParam, FloatParamReadF32, IntParam, IntoEditor,
-        MeterSlot, MidiBuffer, MidiMessage, NoteBuffer, NoteEvent, NoteEventKind, NoteExpression,
-        NoteTarget, NoteVoice, NoteVoiceTable, ParamEnum, ParamInfo, ParamRange, ParamUnit,
-        ParamValueKind, Params, PluginCategory, PluginContext, PluginInfo, PluginLogic,
-        ProcessContext, ProcessMode, ProcessStatus, RawWindowHandle, SmoothingStyle, Ump,
-        UmpBuffer,
+        MeterSlot, MidiBuffer, MidiDialect, MidiMessage, NoteBuffer, NoteEvent, NoteEventKind,
+        NoteExpression, NoteNameEntry, NoteTarget, NoteVoice, NoteVoiceTable, ParamEnum, ParamFlags,
+        ParamInfo, ParamRange, ParamUnit, ParamValueKind, Params, PluginCategory, PluginContext,
+        PluginInfo, PluginLogic, ProcessContext, ProcessMode, ProcessStatus, RawWindowHandle,
+        SmoothingStyle, Transport, Ump, UmpBuffer, decode_state, encode_state, layout_at,
     };
-    // FloatParamReadF64 available as `aura::FloatParamReadF64` — not in prelude
-    // (same method name as F32 → E0034 if both imported).
+    // FloatParamReadF64: same method names as F32 → E0034 if both in prelude.
+    // Use `aura::FloatParamReadF64` explicitly.
     pub use crate::params::sample::Float;
 }

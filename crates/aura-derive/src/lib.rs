@@ -16,6 +16,9 @@
 //! `plugin_info!`, no framework `#[derive(State)]`, and no silent
 //! auto-numbering.
 //!
+//! **Packaging:** generated code references `::aura::params::…`. Depend on
+//! the `aura` umbrella crate (normal author path), not `aura-derive` alone.
+//!
 //! Implementation split across modules ([`parse`] collects fields /
 //! attributes, [`codegen`] turns them into `TokenStream`s, [`params`] and
 //! [`param_enum`] assemble the two derives) - the functions actually

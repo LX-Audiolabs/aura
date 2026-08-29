@@ -13,14 +13,15 @@ publish = false
 aura-core = { workspace = true }
 aura-params = { workspace = true }
 aura-derive = { workspace = true }
-aura-dsp = { workspace = true }
 aura-midi = { workspace = true }
+aura-dsp = { workspace = true, optional = true }
 aura-clap = { workspace = true, optional = true }
 aura-vst3 = { workspace = true, optional = true }
 aura-lv2 = { workspace = true, optional = true }
 
 [features]
-default = []
+default = ["dsp"]
+dsp = ["dep:aura-dsp"]
 clap = ["dep:aura-clap"]
 vst3 = ["dep:aura-vst3"]
 lv2 = ["dep:aura-lv2"]

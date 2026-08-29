@@ -34,11 +34,13 @@ pub trait PluginLogic: 'static {
     /// Static plugin metadata (CLAP id, vendor, …).
     fn info() -> PluginInfo;
 
-    /// Supported main-bus layouts (first entry is the default).
+    /// Supported bus layouts (first entry is the default).
     ///
-    /// Override with [`BusLayout::mono`] or [`BusLayout::stereo_and_mono`]
-    /// when the plugin is not stereo-only. Process must tolerate every
+    /// Override with [`BusLayout::mono`], [`BusLayout::stereo_and_mono`],
+    /// `.with_sidechain` / `.with_aux` as needed. Process must tolerate every
     /// declared width (loop over buffer channels; do not hardcode 2).
+    ///
+    /// **LV2** uses only the first entry (no runtime layout switch).
     #[must_use]
     fn bus_layouts() -> Vec<BusLayout> {
         vec![BusLayout::stereo()]
@@ -51,6 +53,11 @@ pub trait PluginLogic: 'static {
     fn reset(state: &mut Self::DspState, params: &Self::Params, config: &AudioConfig);
 
     /// Audio thread process.
+    ///
+    /// **Automation timing differs by format:** CLAP applies `CHUNKED` params
+    /// sample-accurately (block splits). VST3 applies the last point per block.
+    /// LV2 updates from control ports once per `run`. Write DSP that tolerates
+    /// both, or document format-specific behavior in the product.
     fn process(
         state: &mut Self::DspState,
         params: &Self::Params,
@@ -100,31 +107,22 @@ pub trait PluginLogic: 'static {
         crate::preset::load_preset_file(params, path)
     }
 
-    /// Called when the host reports that the tuning pool changed.
-    ///
-    /// This is invoked from the audio thread the next processing block after
-    /// the host's `clap.tuning` `changed()` callback. Plugins can rebuild any
-    /// cached tuning tables here. Default: no-op.
+    /// Host tuning pool changed (`clap.tuning`). Audio thread, next block.
+    /// **CLAP-oriented**; VST3/LV2 do not call this. Default: no-op.
     fn tuning_changed(_state: &mut Self::DspState, _params: &Self::Params) {}
 
-    /// Custom note names for the host's note display (`CLAP_EXT_NOTE_NAME`).
-    ///
-    /// Return a non-empty slice to activate the extension. Useful for
-    /// scale-aware sequencers (degree labels) or drum machines (pad names).
-    /// Default: empty — host uses standard MIDI note names.
+    /// Custom note names (`CLAP_EXT_NOTE_NAME`). Non-empty activates the
+    /// extension. **CLAP-oriented**; unused on VST3/LV2. Default: empty.
     #[must_use]
     fn note_names() -> &'static [NoteNameEntry] {
         &[]
     }
 
-    /// Host notified the plugin that a hardware control mapping changed for a
-    /// parameter (`CLAP_EXT_PARAM_INDICATION` `set_mapping`). Called on the
-    /// main thread. Default: no-op. Override to reflect mapping state in the UI.
+    /// Hardware control mapping changed (`CLAP_EXT_PARAM_INDICATION`
+    /// `set_mapping`). Main thread. **CLAP-oriented**. Default: no-op.
     fn on_param_mapping(_params: &Self::Params, _param_id: u32, _has_mapping: bool) {}
 
-    /// Host notified the plugin that automation state changed for a parameter
-    /// (`CLAP_EXT_PARAM_INDICATION` `set_automation`). Called on the main
-    /// thread. `automation_state` is `CLAP_PARAM_INDICATION_AUTOMATION_*`.
-    /// Default: no-op. Override to reflect automation state in the UI.
+    /// Automation indication changed (`CLAP_EXT_PARAM_INDICATION`
+    /// `set_automation`). Main thread. **CLAP-oriented**. Default: no-op.
     fn on_param_automation(_params: &Self::Params, _param_id: u32, _automation_state: u32) {}
 }
