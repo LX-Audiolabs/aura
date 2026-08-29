@@ -1,7 +1,7 @@
 //! Host transport snapshot for one process block.
 
-/// Host timeline state, mapped from CLAP `clap_event_transport`
-/// (VST3/LV2 map onto the same shape later).
+/// Host timeline state (CLAP transport; VST3 maps onto the same shape;
+/// LV2 has no transport fill yet).
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Transport {
     pub playing: bool,

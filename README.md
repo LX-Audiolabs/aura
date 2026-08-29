@@ -14,8 +14,8 @@ Runtime + formats + build + CLI live here. Agent orientation: **[agal](https://g
 
 | | |
 |--|--|
-| **Status** | **0.9.x** — basis complete; used in production LX plugins ([lx-audiolabs-plugins](https://github.com/LX-Audiolabs/lx-audiolabs-plugins)) |
-| **Dependency** | path / git deps today (`publish = false`); crates.io later |
+| **Status** | **0.11.x** — basis complete; used in production LX plugins ([lx-audiolabs-plugins](https://github.com/LX-Audiolabs/lx-audiolabs-plugins)) |
+| **Dependency** | path / git deps (`publish = false`); crates.io deferred until API refinement |
 | **License** | [GPL-3.0-or-later](./LICENSE) — see [docs/licensing-compliance.md](./docs/licensing-compliance.md) |
 | **Rust** | 1.92+ MSRV (stable channel in `rust-toolchain.toml`), edition 2024 |
 
@@ -25,7 +25,7 @@ Commercial LX product plugins (aether, lucent, meridian, …) are **not** in thi
 
 ## Scope (hard)
 
-AURA is **intentionally narrow**. If that is not your stack, use something else — no hard feelings.
+AURA is intentionally narrow. Wrong stack → use another framework.
 
 | We commit to | We do **not** ship |
 |--------------|--------------------|
@@ -43,15 +43,15 @@ AURA is **intentionally narrow**. If that is not your stack, use something else 
   - **Software / wgpu blit** — optional
 - There is no “raw egui editor” mode and no second UI framework in AURA.
 
-That stack is **`aura-baseview`** (window/renderer) + **`aura-editor`** (host adapter) + **`aura-build`** (compile-time). Every AURA plugin UI goes through it — not an optional addon.
+Required UI path: **`aura-baseview`** (window/renderer) + **`aura-editor`** (host adapter) + **`aura-build`** (compile-time).
 
 ### CLAP first (formats)
 
-Same hardness as Slint: we pick a primary path and refuse a kitchen-sink matrix.
+Same rule as Slint: one primary format, no kitchen-sink matrix.
 
-- **CLAP is the better plugin format** for what we build — modern, open, one native path on Linux, Windows, and macOS. That is the motto and the default (`cargo aura new`, CI validator, Bitwig-first host smoke).
-- **VST3** is a **pragmatic second path** where the host world actually needs it: **Windows and macOS only**. Linux VST3 often means Wine or other heavy hacks — we do **not** treat that as a supported ship path.
-- **LV2** is a **Linux-native** path (process/params/state/UI where the ecosystem fits). Not a Windows UI story; not a macOS story (`rust-lv2` / host reality).
+- **CLAP** primary — one native path on Linux, Windows, macOS (`cargo aura new`, CI validator, Bitwig-first).
+- **VST3** second path: **Windows and macOS only**. Linux VST3 (Wine etc.) unsupported.
+- **LV2** = Linux only (process/params/state/UI). No Win/mac ship path.
 
 **Ship matrix** (what CI installs / what we call a supported host path):
 
@@ -61,11 +61,11 @@ Same hardness as Slint: we pick a primary path and refuse a kitchen-sink matrix.
 | **VST3** | — | yes | yes | Secondary — Win/mac hosts |
 | **LV2** | yes | — | — | Secondary — Linux |
 
-Wrappers may still compile on other OSes for unit tests; **product support** is the table above — just as “Slint only” does not mean “optional egui if you flip a feature.”
+Wrappers may still compile on other OSes for unit tests. **Product support** = the table above.
 
 ### Looking for egui, iced, AU, or every-format-everywhere?
 
-AURA is **not** the right framework. Please use other open source projects that already optimize for that:
+Use another project:
 
 | Need | Go here |
 |------|---------|
@@ -73,7 +73,7 @@ AURA is **not** the right framework. Please use other open source projects that 
 | CLAP-centric Rust ecosystem / lower-level CLAP work | **[clack](https://github.com/prokopyl/clack)** (and related CLAP crates) |
 | Full multi-format framework including AU/AAX paths, egui/iced/Vizia options | **[truce](https://github.com/truce-audio/truce)** · [truce.audio](https://truce.audio) |
 
-We stand on the shoulders of that work (and permissive crates like CLAP bindings). AURA exists so **LX** can own a **Slint + baseview + CLAP-first** line — with thin VST3/LV2 where the OS and hosts justify them — without carrying every UI toolkit and every legacy format.
+AURA = **Slint + baseview + CLAP-first**, with thin VST3/LV2 only on the ship matrix. Credit: clack, nice-plug, truce, clap bindings.
 
 ---
 
@@ -290,15 +290,13 @@ cargo clippy --workspace --all-targets
 
 ## Acknowledgments
 
-`aura-dsp` benefited from several open-source DSP projects whose code, concepts, and signal-flow models directly shaped our designs:
+`aura-dsp` draws ideas from:
 
-| Project | Link | What we learned |
-|---------|------|-----------------|
-| **naad** (rust-old) | [MacCracken/naad](https://github.com/MacCracken/naad/tree/main/rust-old) | Node-based DSP graph, real-time safe wiring, Faust-like operator composition |
-| **fundsp** | [SamiPerttu/fundsp](https://github.com/SamiPerttu/fundsp) | Composable signal graphs, SIMD-friendly `AudioUnit` traits, declarative DSP in Rust |
-| **infinitedsp** | [infinitedsp](https://github.com/infinitedsp/infinitedsp) | Type-level DSP, compile-time graph verification, zero-cost abstraction patterns |
-
-Thanks to the maintainers of these projects — your work directly influenced our DSP layer.
+| Project | Link | Notes |
+|---------|------|-------|
+| **naad** (rust-old) | [MacCracken/naad](https://github.com/MacCracken/naad/tree/main/rust-old) | DSP graph / Faust-like ops |
+| **fundsp** | [SamiPerttu/fundsp](https://github.com/SamiPerttu/fundsp) | Composable / SIMD-friendly AudioUnit graphs |
+| **infinitedsp** | [infinitedsp](https://github.com/infinitedsp/infinitedsp) | Typed compile-time DSP graphs |
 
 Also: [truce](https://github.com/truce-audio/truce), [CLAP](https://github.com/free-audio/clap), [Slint](https://slint.dev), and the Rust audio community.
 

@@ -26,8 +26,8 @@ pub enum PluginCategory {
 
 /// Static metadata about a plugin.
 ///
-/// Format wrappers (later) read this for registration. IDs that only
-/// apply to formats we do not ship (AU fourcc, AAX) are omitted on purpose.
+/// Format wrappers read this for registration. IDs for formats we do not
+/// ship (AU fourcc, AAX) are omitted on purpose.
 #[derive(Clone, Debug)]
 pub struct PluginInfo {
     pub name: &'static str,

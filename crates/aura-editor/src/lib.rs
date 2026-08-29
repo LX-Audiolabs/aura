@@ -2,7 +2,7 @@
 //!
 //! [`AuraSlintEditor`] adapts a Slint component (living on the
 //! [`aura_baseview`] window stack) to [`aura_core::editor::Editor`], so format
-//! wrappers (CLAP GUI, later VST3/LV2) can parent it into a host window.
+//! wrappers (CLAP / VST3 / LV2) can parent it into a host window.
 //!
 //! Window/platform/renderers stay in **`aura-baseview`** (re-exported here);
 //! only the host adapter couples to `aura-core`.

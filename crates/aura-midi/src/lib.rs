@@ -2,7 +2,7 @@
 //!
 //! JUCE analogue: `juce_audio_basics/midi` (`MidiMessage`, `MidiBuffer`).
 //! Format wrappers (CLAP/VST3/LV2) translate host events into these types
-//! and pass them into process later (wired via `aura-core` when note events land).
+//! on `ProcessContext` (`midi` / `notes` / `ump`).
 //!
 //! DSP (oscillators, voices, filters) lives in **`aura-dsp`**, not here.
 //! Param host-learn hints stay in **`aura-params::MidiSource`**.

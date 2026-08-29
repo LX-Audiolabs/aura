@@ -10,8 +10,8 @@ Crate-local decisions live in `notes/<crate>.md` (scan `[ATOM]` there first).
 
 - [ ] **CLAP product-driven** — >1 SC / N aux; G5 rich state — only if a plugin needs it (`notes/aura-clap.md`). One aux out landed 0.11.
 - [x] **Bitwig host proofs** — poly, expressions, poly-mod, MIDI FX → synth, bounce, sidechain OK (2026-08-28); layout UI N/A in Bitwig (`crates/aura-clap/README.md`)
-- [ ] Real-synth DSP — smoothing / expression→knob matrix (not a wrapper hole; product/catalog)
-- [ ] **crates.io** — after comfort with CI smokes + host proofs (`publish = false` until then)
+- [x] Real-synth / real-FX polish — **out of AURA**: Ember (synth), Nimbus FX (`lx-audiolabs-dev`)
+- [ ] **Pre-crates.io refinement** — `docs/refinement-backlog.md` (P0 persist / dead APIs / docs honesty). crates.io **deferred**.
 
 ## Atoms
 
@@ -23,6 +23,7 @@ Crate-local decisions live in `notes/<crate>.md` (scan `[ATOM]` there first).
 [ATOM] type=constraint | detail=No AU/egui zoo; product shm/vault/*Shared stay product
 [ATOM] type=decision | detail=JUCE-shaped: aura-dsp (signal) + aura-midi (messages)
 [ATOM] type=decision | detail=Basis fertig 2026-08-08 — DoD green; first-class CLAP path 2026-08-11
-[ATOM] type=decision | detail=crates.io last — only after framework test pass (CI smokes + host proofs); keep publish = false
+[ATOM] type=decision | detail=crates.io deferred — publish = false until refinement-backlog P0 done and deliberate API review
 [ATOM] type=decision | detail=Bitwig host proofs core OK 2026-08-28; aura-host stays in AURA (no public rust-clap-host split)
+[ATOM] type=decision | detail=Product DSP: Ember = synth, Nimbus = FX in lx-audiolabs-dev — not AURA framework backlog
 ```

@@ -77,7 +77,7 @@ Entry, factory, audio-ports (mono/stereo + optional sidechain), audio-ports-conf
 
 ## Outstanding (CLAP) — do not forget
 
-Ship-capable CLAP core is **done**. Remaining work is **product-driven** or optional host proof — not basis holes.
+Ship-capable CLAP core is **done**. Remaining work is product-driven or optional host proof.
 
 ### Product-driven (implement only when a plugin needs it)
 

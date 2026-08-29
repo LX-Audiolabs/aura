@@ -9,9 +9,9 @@ Last pass: 2026-08-20.
 | | |
 |--|--|
 | **Scheme** | [Semantic Versioning 2.0](https://semver.org/) |
-| **Workspace version** | `0.9.6` in root `Cargo.toml` → `[workspace.package] version` |
+| **Workspace version** | `0.11.0` in root `Cargo.toml` → `[workspace.package] version` |
 | **Crates** | all `aura-*` + `cargo-aura` / `aura-preview` use `version.workspace = true` |
-| **crates.io** | `publish = false` for now — consume via path or git; crates.io when we cut a published line |
+| **crates.io** | `publish = false` — deferred until `docs/refinement-backlog.md` P0 + deliberate API review |
 | **Git tags** | `vMAJOR.MINOR.PATCH` (annotated), e.g. `v0.1.0` |
 | **Changelog** | root [`CHANGELOG.md`](../CHANGELOG.md) ([Keep a Changelog](https://keepachangelog.com/)) |
 
