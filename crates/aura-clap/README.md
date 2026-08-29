@@ -100,9 +100,9 @@ Install: `cargo aura install --clap --release -plug smoke-synth smoke-midi-fx sm
 - [x] **Poly-mod / Voice Stack** — Bitwig Voice Stack on Gain (per-note). Stacked copies of the same key must differ in level. After release, mods drop (`NOTE_END`).
 - [x] **Mono-mod** — same modulator without per-note: whole instance Gain moves, UI value stays.
 - [x] **`notes_out`** — Note FX chain: `AURA Smoke MIDI FX` (Transpose +12) → `AURA Smoke Synth`. Played C sounds as C one octave up.
-- [ ] **Layouts** — switch stereo/mono on the instrument (smoke-synth declares both). *Bitwig often has no obvious CLAP layout picker — soft skip if UI missing; `audio-ports-config` still advertised.*
+- [~] **Layouts** — switch stereo/mono on the instrument (smoke-synth declares both). *N/A in Bitwig — often no CLAP layout picker; `audio-ports-config` still advertised.*
 - [x] **Offline** — bounce the clip; no hang. (`clap.render` → `ProcessMode::Offline`)
-- [ ] **Sidechain** — `AURA Smoke Sidechain` (Audio FX + mono SC). Install separately; route a second input in Bitwig.
+- [x] **Sidechain** — `AURA Smoke Sidechain` (Audio FX + mono SC). Bitwig: SC route audible via Amount mix (2026-08-28).
 - [ ] Multi-page `remote-controls` / non-zero `latency` / mid-block automation — use `smoke-gain` + a later product plug; not blocking the note path.
 
 **aura-host GUI note:** only plugins with `PluginLogic::editor` enable “Open plugin GUI” (`smoke-gain`). `smoke-synth` is headless — button stays disabled. AURA rejects CLAP floating; host embeds on Windows.

@@ -52,7 +52,7 @@ _Why this crate/plugin exists. Edit freely._
 
 ## Open
 
-- [ ] 
+- [x] Bitwig sidechain route — SC signal reaches plugin; Amount mixes SC into out (2026-08-28) 
 
 ## Decisions
 
