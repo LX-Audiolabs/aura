@@ -13,6 +13,11 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
   `encode_state` / `decode_state`. Legacy v1 blobs still load. CLAP/VST3/LV2
   unchanged call sites — they already use the shared codec.
 
+### Removed
+
+- `PluginLogic::supports_in_place` — unused (CLAP never advertised an in-place
+  pair). Revisit only if a product plugin needs it.
+
 ## [0.11.0] - 2026-08-29
 
 ### Added

@@ -83,15 +83,6 @@ pub trait PluginLogic: 'static {
         0
     }
 
-    /// Whether in-place buffer aliasing is supported. Default false.
-    ///
-    /// **Unused by format wrappers today** (CLAP always advertises no in-place
-    /// pair). Kill or wire — `docs/refinement-backlog.md` P0.2.
-    #[must_use]
-    fn supports_in_place() -> bool {
-        false
-    }
-
     /// Bundled factory presets for CLAP host browsers (`preset-discovery`
     /// + `preset-load` PLUGIN location). Empty = no discovery factory.
     #[must_use]

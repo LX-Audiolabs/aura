@@ -38,9 +38,8 @@ Canonical elsewhere (do not duplicate specs here):
 
 ### 2. `PluginLogic::supports_in_place`
 
-Public method; CLAP always sets `in_place_pair = CLAP_INVALID_ID`. Dead contract.
-
-- [ ] Implement for CLAP (and VST3 if applicable), **or** remove from trait.
+- [x] **Removed** (2026-08-29). Dead API; CLAP keeps `in_place_pair = INVALID`.
+      Re-add + wire only when a product plugin needs in-place.
 
 ### 3. `midi_map` / `midi_cc` / `map_source_to_param`
 
@@ -143,7 +142,8 @@ Checklist:
 ## Suggested order of work
 
 1. ~~P0.1 persist~~ done  
-2. P0.2 / P0.3 kill-or-implement dead APIs  
+2. ~~P0.2 supports_in_place~~ removed  
+3. P0.3 midi_map kill-or-implement  
 3. P0.4 remaining (`aura-params` ghost-format docs) + leftover de-slop  
 4. P1.5–7 umbrella / prelude / dsp feature  
 5. P1.5 automation docs + P1.10 LV2 honesty  
