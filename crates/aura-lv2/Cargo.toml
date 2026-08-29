@@ -22,9 +22,8 @@ lx-aura-core = { workspace = true }
 lx-aura-params = { workspace = true }
 lv2-sys = "2.0"
 
-[dev-dependencies]
-lx-aura-derive = { workspace = true }
-lx-aura = { workspace = true }
+# No [dev-dependencies] on lx-aura: publish cycle with optional lv2 on the
+# umbrella. UI unit tests hand-roll a tiny Params impl instead of derive.
 
 [package.metadata.docs.rs]
 all-features = true

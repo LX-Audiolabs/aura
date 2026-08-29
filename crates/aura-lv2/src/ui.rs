@@ -417,14 +417,86 @@ mod tests {
         editor::{Editor, PluginContext, RawWindowHandle},
         info::PluginInfo,
     };
-    use aura_params::FloatParam;
+    use aura_params::{
+        __private::Sealed, FloatParam, ParamInfo, ParamRange, ParamUnit, ParamValueKind, Params,
+        SmoothingStyle, format_param_value, parse_param_value,
+    };
 
     use super::{ui_descriptor, ui_extension_data};
 
-    #[derive(aura_derive::Params)]
+    // Hand-rolled (not derive): avoids lx-aura dev-dep publish cycle.
     struct TestParams {
-        #[param(id = 0, name = "Gain")]
         gain: FloatParam,
+    }
+
+    impl Default for TestParams {
+        fn default() -> Self {
+            let info = ParamInfo {
+                id: 0,
+                name: "Gain",
+                short_name: "",
+                group: "",
+                range: ParamRange::Linear { min: 0.0, max: 1.0 },
+                default_plain: 0.0,
+                unit: ParamUnit::None,
+                flags: aura_params::ParamFlags::AUTOMATABLE,
+                kind: ParamValueKind::Float,
+                midi_map: None,
+                midi_channel: None,
+            };
+            Self {
+                gain: FloatParam::new(info, SmoothingStyle::None),
+            }
+        }
+    }
+
+    impl Sealed for TestParams {}
+
+    impl Params for TestParams {
+        fn param_infos(&self) -> Vec<ParamInfo> {
+            vec![self.gain.info]
+        }
+        fn count(&self) -> usize {
+            1
+        }
+        fn get_normalized(&self, id: u32) -> Option<f64> {
+            (id == 0).then(|| self.gain.info.range.normalize(self.gain.raw_target()))
+        }
+        fn set_normalized(&self, id: u32, value: f64) {
+            if id == 0 {
+                self.gain.set_value(self.gain.info.range.denormalize(value));
+            }
+        }
+        fn get_plain(&self, id: u32) -> Option<f64> {
+            (id == 0).then(|| self.gain.raw_target())
+        }
+        fn set_plain(&self, id: u32, value: f64) {
+            if id == 0 {
+                self.gain.set_value(value);
+            }
+        }
+        fn format_value(&self, id: u32, value: f64) -> Option<String> {
+            (id == 0).then(|| format_param_value(&self.gain.info, value))
+        }
+        fn parse_value(&self, id: u32, text: &str) -> Option<f64> {
+            (id == 0)
+                .then(|| parse_param_value(&self.gain.info, text))
+                .flatten()
+        }
+        fn snap_smoothers(&self) {
+            self.gain.smoother.snap(self.gain.raw_target());
+        }
+        fn set_sample_rate(&self, sample_rate: f64) {
+            self.gain.smoother.set_sample_rate(sample_rate);
+        }
+        fn collect_values(&self) -> (Vec<u32>, Vec<f64>) {
+            (vec![0], vec![self.gain.raw_target()])
+        }
+        fn restore_values(&self, values: &[(u32, f64)]) {
+            for &(id, v) in values {
+                self.set_plain(id, v);
+            }
+        }
     }
 
     #[derive(Default)]
