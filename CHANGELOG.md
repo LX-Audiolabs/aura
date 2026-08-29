@@ -7,6 +7,8 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-08-29
+
 ### Added
 
 - Host state **v2** envelope (`AURA` magic): params + `#[persist]` fields via

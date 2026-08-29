@@ -29,7 +29,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.11.0"
+version = "0.12.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
 rust-version = "1.92"
@@ -41,19 +41,19 @@ readme = "README.md"
 
 [workspace.dependencies]
 # --- AURA crates (version required for future `cargo package` / publish) ---
-lx-aura = { path = "crates/aura", version = "0.11.0" }
-lx-aura-params = { path = "crates/aura-params", version = "0.11.0" }
-lx-aura-derive = { path = "crates/aura-derive", version = "0.11.0" }
-lx-aura-core = { path = "crates/aura-core", version = "0.11.0" }
-lx-aura-clap = { path = "crates/aura-clap", version = "0.11.0" }
-lx-aura-vst3 = { path = "crates/aura-vst3", version = "0.11.0" }
-lx-aura-lv2 = { path = "crates/aura-lv2", version = "0.11.0" }
-lx-aura-baseview = { path = "crates/aura-baseview", version = "0.11.0", default-features = false }
-lx-aura-editor = { path = "crates/aura-editor", version = "0.11.0", default-features = false }
-lx-aura-dsp = { path = "crates/aura-dsp", version = "0.11.0" }
-lx-aura-midi = { path = "crates/aura-midi", version = "0.11.0" }
-lx-aura-build = { path = "crates/aura-build", version = "0.11.0" }
-aura-test = { path = "crates/aura-test", version = "0.11.0" }
+lx-aura = { path = "crates/aura", version = "0.12.0" }
+lx-aura-params = { path = "crates/aura-params", version = "0.12.0" }
+lx-aura-derive = { path = "crates/aura-derive", version = "0.12.0" }
+lx-aura-core = { path = "crates/aura-core", version = "0.12.0" }
+lx-aura-clap = { path = "crates/aura-clap", version = "0.12.0" }
+lx-aura-vst3 = { path = "crates/aura-vst3", version = "0.12.0" }
+lx-aura-lv2 = { path = "crates/aura-lv2", version = "0.12.0" }
+lx-aura-baseview = { path = "crates/aura-baseview", version = "0.12.0", default-features = false }
+lx-aura-editor = { path = "crates/aura-editor", version = "0.12.0", default-features = false }
+lx-aura-dsp = { path = "crates/aura-dsp", version = "0.12.0" }
+lx-aura-midi = { path = "crates/aura-midi", version = "0.12.0" }
+lx-aura-build = { path = "crates/aura-build", version = "0.12.0" }
+aura-test = { path = "crates/aura-test", version = "0.12.0" }
 
 # --- Slint + windowing (pinned with aura-baseview) ---
 # 0.3.1 had Linux --release dbg! breakage; 0.3.2 removes it + Win32 destroy/X11 fixes.
