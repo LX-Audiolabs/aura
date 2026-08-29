@@ -13,6 +13,11 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
   `encode_state` / `decode_state`. Legacy v1 blobs still load. CLAP/VST3/LV2
   unchanged call sites — they already use the shared codec.
 
+### Changed
+
+- `ParamInfo::midi_map` / derive `midi_*` attrs: documented as **unused hints**
+  (format wrappers do not implement host MIDI-learn bindings).
+
 ### Removed
 
 - `PluginLogic::supports_in_place` — unused (CLAP never advertised an in-place

@@ -21,22 +21,17 @@ pub struct ParamInfo {
     /// `range = "discrete(...)"` should still format as a float, so
     /// inferring kind from range alone is wrong.
     pub kind: ParamValueKind,
-    /// Default host MIDI-learn binding: the MIDI message that should
-    /// drive this parameter. `None` (the common case) means the host
-    /// maps it itself with no plugin hint. Set by `#[param(midi_cc =
-    /// …)]` / `#[param(midi_source = …)]`; read by the VST3
-    /// `IMidiMapping`, AU parameter-MIDI-mapping, and LV2 `midi:binding`
-    /// paths. Ignored by CLAP / VST2 / AAX (the host owns the mapping).
+    /// Optional MIDI-learn **hint** (`#[param(midi_cc = …)]` /
+    /// `midi_source` / `midi_channel`). Stored on the info list for
+    /// tooling / future use. **Not consumed** by CLAP / VST3 / LV2
+    /// wrappers today — hosts own MIDI mapping.
     pub midi_map: Option<MidiSource>,
-    /// Optional channel scope for [`Self::midi_map`], as the wire
-    /// channel `0..=15`. `None` matches any channel.
+    /// Optional channel scope for [`Self::midi_map`], wire channel
+    /// `0..=15`. `None` = any channel.
     pub midi_channel: Option<u8>,
 }
 
-/// The MIDI message a parameter binds to for host MIDI-learn. CCs cover
-/// the common case; the non-CC per-channel messages each map onto a
-/// VST3 `ControllerNumbers` value, an AU status byte, and an LV2
-/// `midi:binding` class.
+/// MIDI message kind for [`ParamInfo::midi_map`] hints.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MidiSource {
     /// Control change, `0..=127`.
@@ -49,11 +44,9 @@ pub enum MidiSource {
     ProgramChange,
 }
 
-/// Resolve which parameter a MIDI `source` on `channel` is bound to,
-/// from a param-info list. The first param whose binding matches the
-/// source and whose channel scope is unset (any) or equal wins;
-/// `#[derive(Params)]` rejects ambiguous overlaps at compile time, so
-/// at most one matches. Used by the format wrappers' mapping paths.
+/// Resolve which parameter a MIDI `source` on `channel` is bound to
+/// from a param-info list (first match; derive rejects overlaps).
+/// Helper for tooling — format wrappers do not call this.
 #[must_use]
 pub fn map_source_to_param(infos: &[ParamInfo], channel: u8, source: MidiSource) -> Option<u32> {
     infos

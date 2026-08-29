@@ -43,16 +43,15 @@ Canonical elsewhere (do not duplicate specs here):
 
 ### 3. `midi_map` / `midi_cc` / `map_source_to_param`
 
-Docs claim VST3 `IMidiMapping` and LV2 `midi:binding`. No format callers.
-
-- [ ] Implement bindings, **or** strip public claims / demote to “hint only,
-      unused by wrappers”.
+- [x] **Demoted to hint** (2026-08-29). Attrs/`ParamInfo` kept; docs no longer
+      claim VST3/LV2/AU wiring. Wrappers still ignore. Wire later only if a
+      product needs host MIDI-learn hints.
 
 ### 4. Stale public docs (quick)
 
 - [x] README status **0.9.x** → **0.11.x** (this pass).
 - [x] `aura-editor` / `aura-midi` / `aura-core` transport+info “later” wording (this pass).
-- [ ] `aura-params`: drop “aura-loader” / AU·VST2·AAX claims unless those formats ship.
+- [x] `aura-params`: drop “aura-loader” / AU·VST2·AAX / fake midi-binding claims.
 
 ---
 
@@ -143,10 +142,9 @@ Checklist:
 
 1. ~~P0.1 persist~~ done  
 2. ~~P0.2 supports_in_place~~ removed  
-3. P0.3 midi_map kill-or-implement  
-3. P0.4 remaining (`aura-params` ghost-format docs) + leftover de-slop  
-4. P1.5–7 umbrella / prelude / dsp feature  
-5. P1.5 automation docs + P1.10 LV2 honesty  
+3. ~~P0.3 midi_map~~ demoted to unused hint  
+4. leftover de-slop (`aura-params` sample.rs if still puffy)  
+5. P1 umbrella / prelude / dsp feature / automation docs / LV2 honesty  
 6. P2 metadata only when crates.io is back on the table  
 
 Tick boxes here as you go. When a chunk lands, one line in `CHANGELOG` under

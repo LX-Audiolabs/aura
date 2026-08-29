@@ -15,8 +15,8 @@ pub use types::{
     FloatParamReadF64, IntParam, MeterSlot, ParamEnum,
 };
 
-/// Implementation detail - not part of the stable public API.
-/// Used by `aura-loader` to index into meter storage.
+/// Implementation detail — not part of the stable public API.
+/// Meter IDs from `#[meter]` start at this base (derive + wrappers).
 #[doc(hidden)]
 pub const METER_ID_BASE: u32 = 1 << 24;
 
@@ -220,23 +220,12 @@ pub trait Params: __private::Sealed + Send + Sync + 'static {
         into.extend(self.param_infos());
     }
 
-    /// Static parameter metadata, available without an instance.
+    /// Static parameter metadata without constructing a plugin instance.
     ///
-    /// Format wrappers' `register_*` paths call this to learn the
-    /// parameter set without constructing a full plugin. The
-    /// instance-based alternative would pay for any allocation the
-    /// constructor does (DSP buffers, FFT plans, image atlases, etc.)
-    /// at static-init time, which is fragile under AAX's `Describe`
-    /// running before main. The derive macro overrides this with a
-    /// `LazyLock`-cached `Vec<ParamInfo>` built from the same
-    /// compile-time metadata it uses for [`Self::param_infos`], so
-    /// registration becomes allocation-free after the first call.
-    ///
-    /// Default impl returns an empty vec - hand-written `Params` impls
-    /// that don't override fall through to the runtime path inside
-    /// `PluginExport::param_infos_static`. Gated by `Self: Sized` so
-    /// adding the method preserves dyn-compatibility for the existing
-    /// `&self`-method shape (`&dyn Params` skips this slot).
+    /// Format wrappers use this at register time so they skip DSP/UI
+    /// allocation. Derive overrides with a `LazyLock`-cached info list.
+    /// Default: empty — hand-written impls fall back to the instance path.
+    /// `Self: Sized` keeps `&dyn Params` dyn-compatible.
     #[must_use]
     fn param_infos_static() -> Vec<ParamInfo>
     where
@@ -275,22 +264,17 @@ pub trait Params: __private::Sealed + Send + Sync + 'static {
     fn set_normalized(&self, id: u32, value: f64);
 
     /// Set normalized value and read back the resulting plain value in
-    /// one call. CLAP / AU forward the plain value to the host's
-    /// automation channel after a GUI write. The default impl is the
-    /// obvious `set_normalized` then `get_plain`; concrete `Params`
-    /// implementations that can compute both in one trait dispatch
-    /// (e.g. the `#[derive(Params)]` output) should override for a
-    /// single match-arm walk.
+    /// one call (GUI → host automation after a write). Default:
+    /// `set_normalized` then `get_plain`. Derive overrides for a single
+    /// match-arm walk.
     fn set_normalized_returning_plain(&self, id: u32, value: f64) -> f64 {
         self.set_normalized(id, value);
         self.get_plain(id).unwrap_or(0.0)
     }
 
-    /// Set normalized value and read back the (post-clamp / post-step)
-    /// normalized value in one call. VST3 / VST2 / AAX forward
-    /// normalized values to the host's automation channel. Same
-    /// override-for-single-dispatch contract as
-    /// [`Self::set_normalized_returning_plain`].
+    /// Set normalized value and read back the clamped/stepped normalized
+    /// value in one call (VST3-style host automation). Same override
+    /// contract as [`Self::set_normalized_returning_plain`].
     fn set_normalized_returning_normalized(&self, id: u32, value: f64) -> f64 {
         self.set_normalized(id, value);
         self.get_normalized(id).unwrap_or(0.0)

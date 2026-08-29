@@ -62,9 +62,9 @@ mod parse;
 /// | `flags` | `"automatable \| hidden \| readonly \| bypass \| modulatable \| modulatable_per_note"` | `"automatable"` |
 /// | `smooth` | `"none"`, `"linear(<ms>)"`, `"exp(<ms>)"`, `"log(<ms>)"` (float params only) | `"none"` |
 /// | `chunk` | bool | `true` (`ParamFlags::CHUNKED` set) |
-/// | `midi_cc` | `0..=127` | unset |
-/// | `midi_source` | `"pitchbend"` \| `"pressure"` \| `"program"` | unset |
-/// | `midi_channel` | `1..=16` | any channel |
+/// | `midi_cc` | `0..=127` | unset (hint only; wrappers ignore) |
+/// | `midi_source` | `"pitchbend"` \| `"pressure"` \| `"program"` | unset (hint only) |
+/// | `midi_channel` | `1..=16` | any channel (hint only) |
 /// | `format` / `parse` | method name string - custom display hooks | unit-aware defaults |
 ///
 /// The derive also emits `__private::Sealed`, a `new()` that
