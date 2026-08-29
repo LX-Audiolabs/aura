@@ -43,6 +43,7 @@ fn main() -> ExitCode {
         "watch" => cmd_watch(&args[1..]),
         "mesh" => cmd_mesh(&args[1..]),
         "run" => cmd_run(&args[1..]),
+        "preset" => cmd_preset(&args[1..]),
         "doctor" => cmd_doctor(),
         "help" | "--help" | "-h" => {
             print_help();
@@ -99,6 +100,10 @@ Commands:
                           launch aura-host dev host (load .clap, audio, MIDI, GUI)
                           -plug resolves installed CLAP artifact (same path as install)
                           all args pass through to aura-host — see `cargo aura run --help`
+  preset list  [-plug <name> | path.clap]
+                          list factory presets (discovery; no DSP instance)
+  preset pull  [-plug <name> | path.clap] --key <K> --out <file>
+                          load factory preset by key, write v1 state blob
   doctor                  Check toolchain / AURA path / clap-validator
   help                    This message
 
@@ -598,6 +603,33 @@ fn cmd_add_ui(args: &[String]) -> ExitCode {
     ExitCode::SUCCESS
 }
 
+/// Resolve `-plug <name>` → installed `.clap`, or treat first arg as path.
+/// Returns `(clap_path, remaining_args)`.
+fn resolve_clap_target(args: &[String]) -> Result<(String, &[String]), String> {
+    if args.first().map(String::as_str) == Some("-plug") {
+        let name = args
+            .get(1)
+            .ok_or_else(|| "error: -plug needs a plugin name".to_string())?;
+        let dir = resolve_install_dir(InstallFormat::Clap)?;
+        let path = dir.join(format!("{name}.clap"));
+        if !path.exists() {
+            return Err(format!(
+                "error: {} not found — run `cargo aura install --clap -plug {name}` first",
+                path.display()
+            ));
+        }
+        Ok((path.to_string_lossy().into_owned(), &args[2..]))
+    } else {
+        let path = args
+            .first()
+            .ok_or_else(|| {
+                "error: need -plug <name> or path.clap — see `cargo aura preset --help`".to_string()
+            })?
+            .clone();
+        Ok((path, &args[1..]))
+    }
+}
+
 /// `cargo aura run [-plug <name> | path.clap] [aura-host-args…]`
 ///
 /// `-plug <name>` resolves to the installed CLAP artifact (same path as `install`).
@@ -615,29 +647,15 @@ fn cmd_run(args: &[String]) -> ExitCode {
         }
     };
 
-    // Resolve `-plug <name>` → installed .clap path before handing off to aura-host.
     let (resolved, rest): (Option<String>, &[String]) =
         if args.first().map(String::as_str) == Some("-plug") {
-            let Some(name) = args.get(1) else {
-                eprintln!("error: -plug needs a plugin name");
-                return ExitCode::FAILURE;
-            };
-            let dir = match resolve_install_dir(InstallFormat::Clap) {
-                Ok(d) => d,
+            match resolve_clap_target(args) {
+                Ok((p, rest)) => (Some(p), rest),
                 Err(e) => {
-                    eprintln!("error: {e}");
+                    eprintln!("{e}");
                     return ExitCode::FAILURE;
                 }
-            };
-            let path = dir.join(format!("{name}.clap"));
-            if !path.exists() {
-                eprintln!(
-                    "error: {} not found — run `cargo aura install --clap -plug {name}` first",
-                    path.display()
-                );
-                return ExitCode::FAILURE;
             }
-            (Some(path.to_string_lossy().into_owned()), &args[2..])
         } else {
             (None, args)
         };
@@ -653,6 +671,102 @@ fn cmd_run(args: &[String]) -> ExitCode {
         cmd.arg(p);
     }
     cmd.args(rest);
+    match cmd.status() {
+        Ok(s) if s.success() => ExitCode::SUCCESS,
+        Ok(s) => ExitCode::from(u8::try_from(s.code().unwrap_or(1)).unwrap_or(1)),
+        Err(e) => {
+            eprintln!("failed to run cargo: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// `cargo aura preset list|pull …` — thin shell over aura-host preset flags.
+fn cmd_preset(args: &[String]) -> ExitCode {
+    let Some(sub) = args.first().map(String::as_str) else {
+        eprintln!(
+            "usage:\n  cargo aura preset list  [-plug <name> | path.clap]\n  \
+             cargo aura preset pull  [-plug <name> | path.clap] --key <K> --out <file>"
+        );
+        return ExitCode::FAILURE;
+    };
+    if matches!(sub, "help" | "--help" | "-h") {
+        eprintln!(
+            "usage:\n  cargo aura preset list  [-plug <name> | path.clap]\n  \
+             cargo aura preset pull  [-plug <name> | path.clap] --key <K> --out <file>"
+        );
+        return ExitCode::SUCCESS;
+    }
+
+    let root = match aura_root() {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let (clap_path, rest) = match resolve_clap_target(&args[1..]) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let mut host_args: Vec<String> = vec![clap_path];
+    match sub {
+        "list" => {
+            host_args.push("--list-presets".into());
+            host_args.extend(rest.iter().cloned());
+        }
+        "pull" => {
+            let mut key: Option<String> = None;
+            let mut out: Option<String> = None;
+            let mut i = 0;
+            while i < rest.len() {
+                match rest[i].as_str() {
+                    "--key" => {
+                        i += 1;
+                        key = rest.get(i).cloned();
+                    }
+                    "--out" => {
+                        i += 1;
+                        out = rest.get(i).cloned();
+                    }
+                    other => {
+                        eprintln!("warn: unknown preset pull arg {other}");
+                    }
+                }
+                i += 1;
+            }
+            let Some(key) = key else {
+                eprintln!("error: preset pull needs --key <K>");
+                return ExitCode::FAILURE;
+            };
+            let Some(out) = out else {
+                eprintln!("error: preset pull needs --out <file>");
+                return ExitCode::FAILURE;
+            };
+            host_args.push("--pull-preset".into());
+            host_args.push(key);
+            host_args.push("--out".into());
+            host_args.push(out);
+        }
+        other => {
+            eprintln!("unknown preset subcommand: {other}");
+            return ExitCode::FAILURE;
+        }
+    }
+
+    let mut cmd = Command::new("cargo");
+    cmd.arg("run")
+        .arg("-p")
+        .arg("aura-host")
+        .arg("--manifest-path")
+        .arg(root.join("Cargo.toml"))
+        .arg("--")
+        .args(&host_args);
     match cmd.status() {
         Ok(s) if s.success() => ExitCode::SUCCESS,
         Ok(s) => ExitCode::from(u8::try_from(s.code().unwrap_or(1)).unwrap_or(1)),

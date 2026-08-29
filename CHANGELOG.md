@@ -7,6 +7,11 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ## [Unreleased]
 
+### Added
+
+- `cargo aura preset list|pull` — list factory presets via CLAP discovery; pull a
+  key to a v1 state blob (`aura-host --list-presets` / `--pull-preset` / `--out`).
+
 ### Removed
 
 - `tools/aura-gui` — superseded by `cargo aura run` / `aura-host`; tree deleted.

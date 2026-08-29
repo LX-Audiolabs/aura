@@ -5,6 +5,7 @@
 //!
 //! Usage:
 //!   aura-host <path.clap> [--plugin <id>] [--gui] [--list-params]
+//!                         [--list-presets] [--pull-preset <key> --out <file>]
 //!                         [--set <id>=<val>] [--play] [--list-midi]
 //!                         [--midi-in <name>]
 
@@ -16,12 +17,15 @@ mod gui;
 mod loader;
 mod midi;
 mod plugin_gui;
+mod preset;
 #[cfg(windows)]
 mod win32_embed;
 
 use std::ffi::CStr;
+use std::path::PathBuf;
 
 const USAGE: &str = "usage: aura-host <path.clap> [--plugin <id>] [--gui] [--list-params] \
+                     [--list-presets] [--pull-preset <key> --out <file>] \
                      [--set <id>=<val>] [--play] [--list-midi] [--midi-in <name>]";
 
 // A CLI flag struct is exactly the case this lint doesn't help — each bool
@@ -31,6 +35,9 @@ struct Args {
     path: String,
     plugin_id: Option<String>,
     list_params: bool,
+    list_presets: bool,
+    pull_preset: Option<String>,
+    pull_out: Option<PathBuf>,
     play: bool,
     gui: bool,
     list_midi: bool,
@@ -49,6 +56,9 @@ fn parse_args() -> Args {
         path: argv[0].clone(),
         plugin_id: None,
         list_params: false,
+        list_presets: false,
+        pull_preset: None,
+        pull_out: None,
         play: false,
         gui: false,
         list_midi: false,
@@ -79,7 +89,16 @@ fn parse_args() -> Args {
                     std::process::exit(1);
                 }
             }
+            "--pull-preset" => {
+                i += 1;
+                a.pull_preset = argv.get(i).cloned();
+            }
+            "--out" => {
+                i += 1;
+                a.pull_out = argv.get(i).map(PathBuf::from);
+            }
             "--list-params" => a.list_params = true,
+            "--list-presets" => a.list_presets = true,
             "--play" => a.play = true,
             "--gui" => a.gui = true,
             "--list-midi" => a.list_midi = true,
@@ -138,8 +157,22 @@ fn main() {
         }
     }
 
-    if !args.list_params && !args.play && !args.gui && args.sets.is_empty() {
+    if args.list_presets {
+        preset::print_list(&loader);
+    }
+
+    let needs_instance = args.list_params
+        || args.play
+        || args.gui
+        || !args.sets.is_empty()
+        || args.pull_preset.is_some();
+    if !needs_instance {
         return;
+    }
+
+    if args.pull_preset.is_some() && args.pull_out.is_none() {
+        eprintln!("error: --pull-preset needs --out <file>");
+        std::process::exit(1);
     }
 
     let host = loader::make_host();
@@ -163,6 +196,13 @@ fn main() {
             Ok(()) => println!("set param {id} = {value}"),
             Err(e) => eprintln!("error: set param {id}: {e}"),
         }
+    }
+
+    if let (Some(key), Some(out)) = (&args.pull_preset, &args.pull_out)
+        && let Err(e) = preset::pull(plugin, key, out)
+    {
+        eprintln!("error: pull preset: {e}");
+        std::process::exit(1);
     }
 
     if args.list_params {

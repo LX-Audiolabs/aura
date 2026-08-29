@@ -149,6 +149,8 @@ cargo aura install [--clap|--vst3|--lv2] [--release] [--hot] [-plug <crate>…]
 cargo aura watch  [--clap|--vst3|--lv2] [--release] [-plug <crate>…] [--no-install] [--hot]
 cargo aura preview [path] [--component N] [--no-watch]
 cargo aura run [-plug <name> | path.clap] […]        # aura-host: load .clap, audio, MIDI, GUI
+cargo aura preset list  [-plug <name> | path.clap]   # factory presets (discovery)
+cargo aura preset pull  [-plug <name> | path.clap] --key <K> --out <file>
 cargo aura mesh [agal-args…]                         # run agal orientation mesh
 cargo aura doctor                                    # toolchain / AURA_PATH / clap-validator
 ```

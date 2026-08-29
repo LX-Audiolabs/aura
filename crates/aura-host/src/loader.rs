@@ -206,9 +206,12 @@ pub fn make_host() -> &'static clap_host {
 // Loader
 // ---------------------------------------------------------------------------
 
+type GetFactoryFn = unsafe extern "C" fn(*const c_char) -> *const c_void;
+
 pub struct Loader {
     _lib: libloading::Library,
     factory: *const clap_plugin_factory,
+    get_factory_fn: GetFactoryFn,
     deinit: Option<unsafe extern "C" fn()>,
 }
 
@@ -240,8 +243,15 @@ impl Loader {
         Ok(Self {
             _lib: lib,
             factory: factory_raw.cast::<clap_plugin_factory>(),
+            get_factory_fn: get_factory,
             deinit: entry.deinit,
         })
+    }
+
+    /// Raw `clap_entry.get_factory` — used for preset-discovery (and future factories).
+    #[must_use]
+    pub fn get_factory(&self, id: &CStr) -> *const c_void {
+        unsafe { (self.get_factory_fn)(id.as_ptr()) }
     }
 
     pub fn plugin_count(&self) -> u32 {
