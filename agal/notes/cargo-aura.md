@@ -8,7 +8,7 @@
 | kind | `member` |
 | path | `tools/cargo-aura` |
 | description | Build tool for AURA audio plugins — cargo aura new|build|install|watch|mesh|doctor |
-| generated | `2026-08-27T17:47:49Z` |
+| generated | `2026-08-29T13:54:23Z` |
 
 ## Graph atoms (auto)
 
@@ -40,13 +40,13 @@ After `agal.agent.md` (L2). Escalate L0: `tools/cargo-aura` in json / `agal --pl
 ## Intent
 
 Author CLI: scaffold, build, install, watch, preview, doctor. Dev-host loop is
-`cargo aura run` → `aura-host` (not `aura-gui`). Orientation mesh is
-`cargo aura mesh` → `agal` (optional).
+`cargo aura run` → `aura-host`. Orientation mesh is
+`cargo aura mesh` → `agal` (optional). `tools/aura-gui` deleted (2026-08-28).
 
 ## Open
 
 - [x] In-host swap without unload — `cargo aura watch --hot` (`aura-hot` proxy + `.impl`); re-add instance
-- [x] `cargo aura run` — launches `aura-host` (replaces the old `cargo aura gui` / `aura-gui` console path)
+- [x] `cargo aura run` — launches `aura-host` (`aura-gui` removed)
 
 ## Decisions
 
@@ -60,7 +60,7 @@ Author CLI: scaffold, build, install, watch, preview, doctor. Dev-host loop is
 
 ```text
 [ATOM] type=decision | detail=watch = rebuild+install loop; preview = Slint interpreter
-[ATOM] type=decision | detail=run = launch aura-host; replaces cargo aura gui / aura-gui console
+[ATOM] type=decision | detail=run = launch aura-host; aura-gui tree removed 2026-08-28
 [ATOM] type=constraint | detail=cargo-aura stays dep-free
 [ATOM] type=decision | detail=mesh wraps agal; agal_optional
 ```

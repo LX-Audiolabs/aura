@@ -5,6 +5,12 @@ All notable changes to **AURA** (framework workspace) are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/versioning.md).
 
+## [Unreleased]
+
+### Removed
+
+- `tools/aura-gui` — superseded by `cargo aura run` / `aura-host`; tree deleted.
+
 ## [0.10.1] - 2026-08-28
 
 ### Changed
