@@ -1,5 +1,5 @@
 [package]
-name = "aura-vst3"
+name = "lx-aura-vst3"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,14 +9,17 @@ authors.workspace = true
 rust-version.workspace = true
 description = "VST3 format wrapper for AURA (thin PluginLogic bridge)"
 readme = "README.md"
-documentation = "https://docs.rs/aura-vst3"
+documentation = "https://docs.rs/lx-aura-vst3"
 keywords = ["vst3", "audio", "plugin"]
 categories = ["multimedia::audio"]
 publish = false
 
+[lib]
+name = "aura_vst3"
+
 [dependencies]
-aura-core = { workspace = true }
-aura-params = { workspace = true }
+lx-aura-core = { workspace = true }
+lx-aura-params = { workspace = true }
 vst3 = "0.3"
 
 [package.metadata.docs.rs]

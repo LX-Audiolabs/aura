@@ -9,7 +9,7 @@ description = "Hot-reload preview for AURA plugin .slint UIs (@aura widgets + bu
 publish = false
 
 [dependencies]
-aura-build = { workspace = true }
+lx-aura-build = { workspace = true }
 slint-interpreter = { workspace = true }
 notify = "8"
 spin_on = "0.1"

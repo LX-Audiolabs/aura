@@ -11,17 +11,17 @@ crate-type = ["cdylib", "lib"]
 
 [features]
 default = ["clap"]
-clap = ["aura/clap"]
-vst3 = ["aura/vst3"]
-lv2 = ["aura/lv2"]
+clap = ["lx-aura/clap"]
+vst3 = ["lx-aura/vst3"]
+lv2 = ["lx-aura/lv2"]
 
 [dependencies]
-aura = { workspace = true }
-aura-editor = { workspace = true, features = ["backend-femtovg"] }
+lx-aura = { workspace = true }
+lx-aura-editor = { workspace = true, features = ["backend-femtovg"] }
 slint = { workspace = true }
 
 [build-dependencies]
-aura-build = { workspace = true }
+lx-aura-build = { workspace = true }
 
 [lints]
 workspace = true

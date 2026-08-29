@@ -1,5 +1,5 @@
 [package]
-name = "aura-editor"
+name = "lx-aura-editor"
 version.workspace = true
 edition.workspace = true
 license = "MIT"
@@ -9,15 +9,18 @@ homepage.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 readme = "README.md"
-documentation = "https://docs.rs/aura-editor"
+documentation = "https://docs.rs/lx-aura-editor"
 keywords = ["slint", "audio", "plugin", "gui", "clap"]
 categories = ["multimedia::audio", "gui"]
 publish = false
 
+[lib]
+name = "aura_editor"
+
 [dependencies]
-aura-baseview = { workspace = true, default-features = false }
-aura-core = { workspace = true }
-aura-params = { workspace = true }
+lx-aura-baseview = { workspace = true, default-features = false }
+lx-aura-core = { workspace = true }
+lx-aura-params = { workspace = true }
 baseview = { workspace = true }
 slint = { workspace = true }
 raw-window-handle = { workspace = true }
@@ -29,10 +32,10 @@ i-slint-common = { version = "=1.17.1", features = ["fontconfig-dlopen"] }
 
 [features]
 default = ["backend-femtovg"]
-backend-femtovg = ["aura-baseview/backend-femtovg"]
-backend-skia = ["aura-baseview/backend-skia"]
-backend-wgpu = ["aura-baseview/backend-wgpu"]
-backend-wgpu-vulkan = ["aura-baseview/backend-wgpu-vulkan"]
+backend-femtovg = ["lx-aura-baseview/backend-femtovg"]
+backend-skia = ["lx-aura-baseview/backend-skia"]
+backend-wgpu = ["lx-aura-baseview/backend-wgpu"]
+backend-wgpu-vulkan = ["lx-aura-baseview/backend-wgpu-vulkan"]
 
 [package.metadata.docs.rs]
 features = ["backend-femtovg"]

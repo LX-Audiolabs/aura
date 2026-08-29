@@ -1,5 +1,5 @@
 [package]
-name = "aura-core"
+name = "lx-aura-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,14 +9,17 @@ authors.workspace = true
 rust-version.workspace = true
 description = "AURA core — PluginLogic, process, buses, host state blob"
 readme = "README.md"
-documentation = "https://docs.rs/aura-core"
+documentation = "https://docs.rs/lx-aura-core"
 keywords = ["audio", "plugin", "dsp", "clap"]
 categories = ["multimedia::audio"]
 publish = false
 
+[lib]
+name = "aura_core"
+
 [dependencies]
-aura-params = { workspace = true }
-aura-midi = { workspace = true }
+lx-aura-params = { workspace = true }
+lx-aura-midi = { workspace = true }
 
 [package.metadata.docs.rs]
 all-features = true

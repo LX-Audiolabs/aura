@@ -11,12 +11,12 @@ crate-type = ["cdylib", "lib"]
 
 [features]
 default = ["clap"]
-clap = ["aura/clap"]
-vst3 = ["aura/vst3"]
-lv2 = ["aura/lv2"]
+clap = ["lx-aura/clap"]
+vst3 = ["lx-aura/vst3"]
+lv2 = ["lx-aura/lv2"]
 
 [dependencies]
-aura = { workspace = true }
+lx-aura = { workspace = true }
 
 [lints]
 workspace = true

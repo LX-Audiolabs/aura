@@ -1,5 +1,5 @@
 [package]
-name = "aura-build"
+name = "lx-aura-build"
 version.workspace = true
 edition.workspace = true
 # Fonts: OFL — see fonts/OFL.txt (not re-licensed by this SPDX).
@@ -10,7 +10,7 @@ authors.workspace = true
 rust-version.workspace = true
 description = "AURA build helper — @aura Slint widgets + bundled fonts for slint-build"
 readme = "README.md"
-documentation = "https://docs.rs/aura-build"
+documentation = "https://docs.rs/lx-aura-build"
 keywords = ["slint", "audio", "plugin", "ui", "build"]
 categories = ["multimedia::audio", "development-tools::build-utils"]
 publish = false
@@ -20,6 +20,9 @@ include = [
     "fonts/**",
     "README.md",
 ]
+
+[lib]
+name = "aura_build"
 
 [dependencies]
 slint-build = { workspace = true }

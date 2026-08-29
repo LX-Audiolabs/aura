@@ -1,5 +1,5 @@
 [package]
-name = "aura"
+name = "lx-aura"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,27 +9,30 @@ authors.workspace = true
 rust-version.workspace = true
 description = "AURA — Audio Unified Rust Architecture (umbrella for plugin authors)"
 readme.workspace = true
-documentation = "https://docs.rs/aura"
+documentation = "https://docs.rs/lx-aura"
 keywords = ["audio", "plugin", "clap", "vst3", "slint"]
 categories = ["multimedia::audio"]
 publish = false
 
+[lib]
+name = "aura"
+
 [dependencies]
-aura-core = { workspace = true }
-aura-params = { workspace = true }
-aura-derive = { workspace = true }
-aura-midi = { workspace = true }
-aura-dsp = { workspace = true, optional = true }
-aura-clap = { workspace = true, optional = true }
-aura-vst3 = { workspace = true, optional = true }
-aura-lv2 = { workspace = true, optional = true }
+lx-aura-core = { workspace = true }
+lx-aura-params = { workspace = true }
+lx-aura-derive = { workspace = true }
+lx-aura-midi = { workspace = true }
+lx-aura-dsp = { workspace = true, optional = true }
+lx-aura-clap = { workspace = true, optional = true }
+lx-aura-vst3 = { workspace = true, optional = true }
+lx-aura-lv2 = { workspace = true, optional = true }
 
 [features]
 default = ["dsp"]
-dsp = ["dep:aura-dsp"]
-clap = ["dep:aura-clap"]
-vst3 = ["dep:aura-vst3"]
-lv2 = ["dep:aura-lv2"]
+dsp = ["dep:lx-aura-dsp"]
+clap = ["dep:lx-aura-clap"]
+vst3 = ["dep:lx-aura-vst3"]
+lv2 = ["dep:lx-aura-lv2"]
 
 [package.metadata.docs.rs]
 features = ["clap", "vst3", "lv2", "dsp"]

@@ -41,18 +41,18 @@ readme = "README.md"
 
 [workspace.dependencies]
 # --- AURA crates (version required for future `cargo package` / publish) ---
-aura = { path = "crates/aura", version = "0.11.0" }
-aura-params = { path = "crates/aura-params", version = "0.11.0" }
-aura-derive = { path = "crates/aura-derive", version = "0.11.0" }
-aura-core = { path = "crates/aura-core", version = "0.11.0" }
-aura-clap = { path = "crates/aura-clap", version = "0.11.0" }
-aura-vst3 = { path = "crates/aura-vst3", version = "0.11.0" }
-aura-lv2 = { path = "crates/aura-lv2", version = "0.11.0" }
-aura-baseview = { path = "crates/aura-baseview", version = "0.11.0", default-features = false }
-aura-editor = { path = "crates/aura-editor", version = "0.11.0", default-features = false }
-aura-dsp = { path = "crates/aura-dsp", version = "0.11.0" }
-aura-midi = { path = "crates/aura-midi", version = "0.11.0" }
-aura-build = { path = "crates/aura-build", version = "0.11.0" }
+lx-aura = { path = "crates/aura", version = "0.11.0" }
+lx-aura-params = { path = "crates/aura-params", version = "0.11.0" }
+lx-aura-derive = { path = "crates/aura-derive", version = "0.11.0" }
+lx-aura-core = { path = "crates/aura-core", version = "0.11.0" }
+lx-aura-clap = { path = "crates/aura-clap", version = "0.11.0" }
+lx-aura-vst3 = { path = "crates/aura-vst3", version = "0.11.0" }
+lx-aura-lv2 = { path = "crates/aura-lv2", version = "0.11.0" }
+lx-aura-baseview = { path = "crates/aura-baseview", version = "0.11.0", default-features = false }
+lx-aura-editor = { path = "crates/aura-editor", version = "0.11.0", default-features = false }
+lx-aura-dsp = { path = "crates/aura-dsp", version = "0.11.0" }
+lx-aura-midi = { path = "crates/aura-midi", version = "0.11.0" }
+lx-aura-build = { path = "crates/aura-build", version = "0.11.0" }
 aura-test = { path = "crates/aura-test", version = "0.11.0" }
 
 # --- Slint + windowing (pinned with aura-baseview) ---

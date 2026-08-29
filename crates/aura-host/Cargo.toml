@@ -39,7 +39,7 @@ windows-sys = { version = "0.61", features = [
 ] }
 
 [build-dependencies]
-aura-build = { path = "../aura-build" }
+lx-aura-build = { path = "../aura-build" }
 
 [lints]
 workspace = true

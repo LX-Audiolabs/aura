@@ -4,18 +4,19 @@
 //! every `aura-*` piece individually:
 //!
 //! ```toml
-//! aura = { path = ".../AURA/crates/aura", features = ["clap"] }
+//! lx-aura = { path = ".../AURA/crates/aura", features = ["clap"] }
 //! # optional UI:
-//! aura-baseview = { path = "...", features = ["backend-femtovg"] }
-//! aura-editor = { path = "...", features = ["backend-femtovg"] }
+//! lx-aura-baseview = { path = "...", features = ["backend-femtovg"] }
+//! lx-aura-editor = { path = "...", features = ["backend-femtovg"] }
 //! ```
 //!
 //! ```rust,ignore
 //! use aura::prelude::*;
 //! ```
 //!
+//! Package name is `lx-aura`; the Rust crate stays `aura` (`[lib] name`).
 //! Features: `clap` / `vst3` / `lv2` for formats; `dsp` (default) for
-//! `aura-dsp`. Params-only plugins: `default-features = false`.
+//! `lx-aura-dsp`. Params-only plugins: `default-features = false`.
 //!
 //! `#[derive(Params)]` requires this umbrella (or an equivalent
 //! `aura_params` + path setup) — generated code uses `::aura::params::…`.
@@ -81,10 +82,11 @@ pub mod prelude {
         AudioBuffer, AudioConfig, AudioTap, BoolParam, BusLayout, ChannelConfig, Editor, EnumParam,
         FactoryPreset, FactoryPresetState, FloatParam, FloatParamReadF32, IntParam, IntoEditor,
         MeterSlot, MidiBuffer, MidiDialect, MidiMessage, NoteBuffer, NoteEvent, NoteEventKind,
-        NoteExpression, NoteNameEntry, NoteTarget, NoteVoice, NoteVoiceTable, ParamEnum, ParamFlags,
-        ParamInfo, ParamRange, ParamUnit, ParamValueKind, Params, PluginCategory, PluginContext,
-        PluginInfo, PluginLogic, ProcessContext, ProcessMode, ProcessStatus, RawWindowHandle,
-        SmoothingStyle, Transport, Ump, UmpBuffer, decode_state, encode_state, layout_at,
+        NoteExpression, NoteNameEntry, NoteTarget, NoteVoice, NoteVoiceTable, ParamEnum,
+        ParamFlags, ParamInfo, ParamRange, ParamUnit, ParamValueKind, Params, PluginCategory,
+        PluginContext, PluginInfo, PluginLogic, ProcessContext, ProcessMode, ProcessStatus,
+        RawWindowHandle, SmoothingStyle, Transport, Ump, UmpBuffer, decode_state, encode_state,
+        layout_at,
     };
     // FloatParamReadF64: same method names as F32 → E0034 if both in prelude.
     // Use `aura::FloatParamReadF64` explicitly.

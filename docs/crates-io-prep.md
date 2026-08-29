@@ -11,28 +11,26 @@ Related: [`refinement-backlog.md`](./refinement-backlog.md),
 
 ---
 
-## Blocker: crate name collisions
+## Naming: `lx-aura-*` packages, `aura_*` libs
 
-crates.io names are global. **`aura-core` is already taken** (fosskers / Arch
-`aura` package manager, GPL-3.0-only, v0.8.x). Packaging dependents that resolve
-`aura-core = "0.11"` will hit *their* crate, not ours, until we own a unique name.
+crates.io names are global. **`aura-core` is taken** (fosskers / Arch `aura`
+package manager). Tier A+B therefore ship as:
 
-**Before any upload**, pick a prefix and rename (or reserve unused names):
+| Package (`[package] name`) | Rust crate (`[lib] name`) | Role |
+|----------------------------|---------------------------|------|
+| `lx-aura` | `aura` | Umbrella |
+| `lx-aura-core` | `aura_core` | `PluginLogic`, process, state |
+| `lx-aura-params` | `aura_params` | Params / smoothers |
+| `lx-aura-derive` | `aura_derive` | `#[derive(Params)]` |
+| `lx-aura-midi` | `aura_midi` | MIDI / UMP buffers |
+| `lx-aura-clap` / `-vst3` / `-lv2` | `aura_clap` / … | Format wrappers |
+| `lx-aura-dsp` | `aura_dsp` | Portable DSP |
+| `lx-aura-build` | `aura_build` | Slint `@aura` + fonts |
+| `lx-aura-baseview` | `aura_baseview` | Slint + baseview (**MIT**) |
+| `lx-aura-editor` | `aura_editor` | Host `Editor` adapter (**MIT**) |
 
-| Current | Suggested publish name (example) |
-|---------|----------------------------------|
-| `aura` | `lx-aura` or `aurafw` |
-| `aura-core` | `lx-aura-core` (**required** — taken) |
-| `aura-params` / `aura-derive` / … | same prefix |
-| `aura-baseview` / `aura-editor` | same prefix (MIT UI stack) |
-
-Internal path deps / repo layout can keep short names; publish names can differ
-via `[package] name` only if we accept Cargo.toml rename. Prefer one rename pass
-of the whole Tier A+B set under `lx-aura-*` (or similar) so docs stay consistent.
-
-Until rename: metadata + `cargo package` on **leaf** crates only (`aura-params`,
-`aura-derive`, `aura-midi`, `aura-build`, `aura-baseview`). Dependents fail
-package resolve against crates.io — expected.
+Repo folders stay `crates/aura-*`. Authors write `use aura::…` in Rust;
+Cargo.toml deps use the `lx-aura-*` keys (see consumer example below).
 
 ---
 
@@ -40,41 +38,28 @@ package resolve against crates.io — expected.
 
 ### Tier A — author + formats
 
-| Crate | Role | License |
-|-------|------|---------|
-| `aura-params` | Params / smoothers | GPL-3.0-or-later |
-| `aura-derive` | `#[derive(Params)]` | GPL-3.0-or-later |
-| `aura-midi` | MIDI / UMP buffers | GPL-3.0-or-later |
-| `aura-core` | `PluginLogic`, process, state | GPL-3.0-or-later |
-| `aura-clap` | CLAP wrapper | GPL-3.0-or-later |
-| `aura-vst3` | VST3 wrapper | GPL-3.0-or-later |
-| `aura-lv2` | LV2 wrapper (reduced subset) | GPL-3.0-or-later |
-| `aura` | Umbrella + features | GPL-3.0-or-later |
+Authors normally depend on **`lx-aura`** only (`features = ["clap", …]`).
 
-Authors normally depend on **`aura`** only (`features = ["clap", …]`).
+License: GPL-3.0-or-later for the stack above except baseview/editor (MIT).
 
 ### Tier B — UI + DSP + build
 
-| Crate | Role | License |
-|-------|------|---------|
-| `aura-dsp` | Portable DSP (`dsp` feature on `aura`) | GPL-3.0-or-later (+ NOTICE) |
-| `aura-build` | `slint-build` + `@aura` widgets / fonts | GPL-3.0-or-later (fonts OFL) |
-| `aura-baseview` | Slint + baseview window stack | **MIT** |
-| `aura-editor` | Host `Editor` adapter | **MIT** |
+`lx-aura-dsp` (via `dsp` feature) · `lx-aura-build` · `lx-aura-baseview` ·
+`lx-aura-editor`.
 
 ### Explicitly out (for now)
 
 `aura-hot` (untested) · `aura-host` · `cargo-aura` · `aura-preview` ·
-`aura-test` (dev-only) · smoke examples.
+`aura-test` (dev-only) · smoke examples. Package names unchanged.
 
 ---
 
 ## Publish order (when flipping `publish = true`)
 
 ```text
-aura-params → aura-derive → aura-midi → aura-core
-  → aura-dsp → aura-clap → aura-vst3 → aura-lv2
-  → aura-build → aura-baseview → aura-editor → aura
+lx-aura-params → lx-aura-derive → lx-aura-midi → lx-aura-core
+  → lx-aura-dsp → lx-aura-clap → lx-aura-vst3 → lx-aura-lv2
+  → lx-aura-build → lx-aura-baseview → lx-aura-editor → lx-aura
 ```
 
 Same workspace version on every crate (`version.workspace = true`).
@@ -92,8 +77,8 @@ rewrite them to crates.io deps on publish.
 `publish = false` blocks `cargo publish`. Package verification without upload:
 
 ```bash
-cargo package -p aura-params --no-verify --allow-dirty
-cargo package -p aura-derive --no-verify --allow-dirty
+cargo package -p lx-aura-params --no-verify --allow-dirty
+cargo package -p lx-aura-derive --no-verify --allow-dirty
 # … each Tier A/B crate …
 ```
 
@@ -105,9 +90,10 @@ Before a real publish: set `publish = true` only on the set above, then
 ## Checklist before first real publish
 
 - [x] Tier A+B package metadata (keywords, categories, rust-version, homepage)
-- [x] Per-crate README (or umbrella README for `aura`)
+- [x] Per-crate README (or umbrella README for `lx-aura`)
 - [x] Root `NOTICE` (DSP provenance + fonts pointer)
 - [x] P0/P1 refinement honesty (persist, dead APIs, surface docs)
+- [x] Package rename to `lx-aura-*` (lib names kept)
 - [ ] Human API freeze review (what is public vs `doc(hidden)`)
 - [ ] At least one product (Ember/Nimbus) cut on this version without API thrash
 - [ ] Flip `publish = true` + dry-run green + annotated tag
@@ -118,10 +104,16 @@ Before a real publish: set `publish = true` only on the set above, then
 ## Consumer example (after publish)
 
 ```toml
-aura = { version = "0.11", features = ["clap", "dsp"] }
-aura-baseview = { version = "0.11", features = ["backend-femtovg"] }
-aura-editor = { version = "0.11", features = ["backend-femtovg"] }
-aura-build = { version = "0.11" }  # [build-dependencies]
+lx-aura = { version = "0.11", features = ["clap", "dsp"] }
+lx-aura-baseview = { version = "0.11", features = ["backend-femtovg"] }
+lx-aura-editor = { version = "0.11", features = ["backend-femtovg"] }
+lx-aura-build = { version = "0.11" }  # [build-dependencies]
 ```
 
-Until then: path/git deps as today.
+```rust
+use aura::prelude::*;
+// aura_editor / aura_build via their lib names
+```
+
+Until then: path/git deps as today (`cargo aura new` emits path deps on
+`lx-aura` / `lx-aura-editor` / `lx-aura-build`).

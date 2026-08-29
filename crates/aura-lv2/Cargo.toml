@@ -1,5 +1,5 @@
 [package]
-name = "aura-lv2"
+name = "lx-aura-lv2"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,19 +9,22 @@ authors.workspace = true
 rust-version.workspace = true
 description = "LV2 format wrapper for AURA (Linux; reduced PluginLogic subset)"
 readme = "README.md"
-documentation = "https://docs.rs/aura-lv2"
+documentation = "https://docs.rs/lx-aura-lv2"
 keywords = ["lv2", "audio", "plugin", "linux"]
 categories = ["multimedia::audio"]
 publish = false
 
+[lib]
+name = "aura_lv2"
+
 [dependencies]
-aura-core = { workspace = true }
-aura-params = { workspace = true }
+lx-aura-core = { workspace = true }
+lx-aura-params = { workspace = true }
 lv2-sys = "2.0"
 
 [dev-dependencies]
-aura-derive = { workspace = true }
-aura = { workspace = true }
+lx-aura-derive = { workspace = true }
+lx-aura = { workspace = true }
 
 [package.metadata.docs.rs]
 all-features = true

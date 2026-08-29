@@ -9,8 +9,8 @@ description = "Test helpers for AURA plugins (state round-trip, process smoke)"
 publish = false
 
 [dependencies]
-aura-core = { workspace = true }
-aura-params = { workspace = true }
+lx-aura-core = { workspace = true }
+lx-aura-params = { workspace = true }
 
 [lints]
 workspace = true

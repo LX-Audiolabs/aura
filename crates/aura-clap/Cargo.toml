@@ -1,5 +1,5 @@
 [package]
-name = "aura-clap"
+name = "lx-aura-clap"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,14 +9,17 @@ authors.workspace = true
 rust-version.workspace = true
 description = "CLAP format wrapper for AURA (free-audio/clap via clap-sys)"
 readme = "README.md"
-documentation = "https://docs.rs/aura-clap"
+documentation = "https://docs.rs/lx-aura-clap"
 keywords = ["clap", "audio", "plugin", "vst"]
 categories = ["multimedia::audio"]
 publish = false
 
+[lib]
+name = "aura_clap"
+
 [dependencies]
-aura-core = { workspace = true }
-aura-params = { workspace = true }
+lx-aura-core = { workspace = true }
+lx-aura-params = { workspace = true }
 clap-sys = "0.5"
 
 [package.metadata.docs.rs]

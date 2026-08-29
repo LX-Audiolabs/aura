@@ -123,11 +123,12 @@ pub fn files(spec: &ScaffoldSpec) -> Vec<(String, String)> {
     let params_name = format!("{struct_name}Params");
 
     // Format features beyond the always-on CLAP.
-    let mut feature_lines = String::from("default = [\"clap\"]\nclap = [\"aura/clap\"]\n");
+    // Package keys are lx-aura-*; Rust lib names stay aura / aura_editor / …
+    let mut feature_lines = String::from("default = [\"clap\"]\nclap = [\"lx-aura/clap\"]\n");
     let mut human: Vec<&str> = vec!["CLAP"];
     let mut flags = String::from("--clap");
     for f in &spec.formats {
-        let _ = writeln!(feature_lines, "{f} = [\"aura/{f}\"]");
+        let _ = writeln!(feature_lines, "{f} = [\"lx-aura/{f}\"]");
         human.push(match f.as_str() {
             "vst3" => "VST3",
             "lv2" => "LV2",
@@ -155,12 +156,12 @@ crate-type = ["cdylib", "lib"]
 [features]
 {feature_lines}
 [dependencies]
-aura = {{ path = "{}/crates/aura" }}
-aura-editor = {{ path = "{}/crates/aura-editor", features = ["backend-femtovg"] }}
+lx-aura = {{ path = "{}/crates/aura" }}
+lx-aura-editor = {{ path = "{}/crates/aura-editor", features = ["backend-femtovg"] }}
 slint = {{ version = "=1.17.1", default-features = false, features = ["std", "compat-1-2"] }}
 
 [build-dependencies]
-aura-build = {{ path = "{}/crates/aura-build" }}
+lx-aura-build = {{ path = "{}/crates/aura-build" }}
 "#,
         spec.aura_root, spec.aura_root, spec.aura_root
     );
@@ -1378,7 +1379,7 @@ publish = false
 slint = {{ version = "=1.17.1", default-features = false, features = ["std", "compat-1-2"] }}
 
 [build-dependencies]
-aura-build = {{ path = "{aura_root}/crates/aura-build" }}
+lx-aura-build = {{ path = "{aura_root}/crates/aura-build" }}
 "#
     );
 
@@ -1751,8 +1752,11 @@ mod tests {
         assert!(lib.contains("aura::export_vst3!(MyPlug);"), "{lib}");
         assert!(lib.contains("aura::export_lv2!(MyPlug);"), "{lib}");
         let cargo = file(&files, "Cargo.toml");
-        assert!(cargo.contains("vst3 = [\"aura/vst3\"]"), "{cargo}");
-        assert!(cargo.contains("lv2 = [\"aura/lv2\"]"), "{cargo}");
+        assert!(cargo.contains("vst3 = [\"lx-aura/vst3\"]"), "{cargo}");
+        assert!(cargo.contains("lv2 = [\"lx-aura/lv2\"]"), "{cargo}");
+        assert!(cargo.contains("lx-aura = {"), "{cargo}");
+        assert!(cargo.contains("lx-aura-editor = {"), "{cargo}");
+        assert!(cargo.contains("lx-aura-build = {"), "{cargo}");
         assert!(cargo.contains("name = \"my-plug\""), "{cargo}");
     }
 
@@ -1874,7 +1878,7 @@ mod tests {
             .1
             .as_str();
         assert!(cargo.contains("name = \"my-ui\""), "{cargo}");
-        assert!(cargo.contains("aura-build"), "{cargo}");
+        assert!(cargo.contains("lx-aura-build"), "{cargo}");
         let barrel = out
             .iter()
             .find(|(p, _)| p == "ui/my-ui.slint")

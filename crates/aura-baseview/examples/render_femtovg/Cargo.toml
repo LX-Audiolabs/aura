@@ -7,7 +7,7 @@ publish = false
 [dependencies]
 baseview = { workspace = true }
 slint = { workspace = true }
-aura-baseview = { workspace = true, features = ["backend-femtovg"] }
+lx-aura-baseview = { workspace = true, features = ["backend-femtovg"] }
 
 [build-dependencies]
 slint-build = { workspace = true }
