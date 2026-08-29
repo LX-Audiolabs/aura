@@ -5,6 +5,14 @@ All notable changes to **AURA** (framework workspace) are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/versioning.md).
 
+## [Unreleased]
+
+### Added
+
+- Host state **v2** envelope (`AURA` magic): params + `#[persist]` fields via
+  `encode_state` / `decode_state`. Legacy v1 blobs still load. CLAP/VST3/LV2
+  unchanged call sites — they already use the shared codec.
+
 ## [0.11.0] - 2026-08-29
 
 ### Added

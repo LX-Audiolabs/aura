@@ -43,11 +43,10 @@ mod parse;
 ///   merge into this one (IDs stay as declared in the child; a
 ///   parent/child collision panics in `new()` via
 ///   `Params::assert_no_id_collisions`).
-/// - plain data with `#[persist]` (or `#[persist = "key"]`) — generates
-///   `serialize_persist` / `load_persist` on `Params`. **Not yet** folded
-///   into `encode_state` / format host blobs (see `docs/refinement-backlog.md`
-///   P0.1). Field type must be `RwLock<T>` / `Mutex<T>` with `T` one of
-///   `bool`, `u8`..`u64`, `i8`..`i64`, `f32`, `f64`, `String`.
+/// - plain data with `#[persist]` (or `#[persist = "key"]`) — saved in the
+///   host state blob via `encode_state` / `decode_state` (v2 envelope:
+///   params + persist). Field type must be `RwLock<T>` / `Mutex<T>` with
+///   `T` one of `bool`, `u8`..`u64`, `i8`..`i64`, `f32`, `f64`, `String`.
 ///
 /// `#[param(...)]` keys:
 ///

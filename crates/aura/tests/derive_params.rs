@@ -252,6 +252,22 @@ fn persist_round_trip_and_tolerance() {
 }
 
 #[test]
+fn host_state_blob_includes_persist() {
+    let p = TestParams::new();
+    p.set_plain(1, -3.0);
+    *p.ui_scale.write().expect("lock") = 1.25;
+    *p.active_tab.write().expect("lock") = 3;
+    let blob = aura::core::encode_state(&p);
+    assert!(blob.starts_with(b"AURA"));
+
+    let q = TestParams::new();
+    assert!(aura::core::decode_state(&q, &blob));
+    assert_eq!(q.get_plain(1), Some(-3.0));
+    assert_eq!(*q.ui_scale.read().expect("lock"), 1.25);
+    assert_eq!(*q.active_tab.read().expect("lock"), 3);
+}
+
+#[test]
 fn param_enum_derive_surface() {
     assert_eq!(Mode::variant_count(), 3);
     assert_eq!(Mode::variant_names(), &["Clean", "Crunch+", "Dirt"]);

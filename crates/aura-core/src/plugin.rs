@@ -100,7 +100,7 @@ pub trait PluginLogic: 'static {
     }
 
     /// Load a host-chosen preset file (CLAP `preset-load` FILE location).
-    /// Default: v1 param blob ([`crate::decode_state`]).
+    /// Default: shared host blob ([`crate::decode_state`], v1 or v2).
     ///
     /// # Errors
     ///

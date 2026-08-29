@@ -3,16 +3,27 @@
 //! speaks the same byte layout and a session saved via one format
 //! restores identically in another.
 //!
-//! v1 blob: `u32 LE` param count, then per param `u32 LE` id +
-//! `u64 LE` f64 bits. Flat by design; versioning lands when the
-//! layout ever changes. `#[persist]` UI state is separate
-//! (`Params::serialize_persist`) and not part of this blob.
+//! **v1** (legacy): `u32 LE` param count, then per param `u32 LE` id +
+//! `u64 LE` f64 bits. Still decoded for old sessions.
+//!
+//! **v2** (current when encoding): magic `AURA` + `u32 LE` version(=2) +
+//! `u32 LE` length of the v1 params payload + that payload + `u32 LE`
+//! length of the [`Params::serialize_persist`] payload + that payload.
+//! Empty persist still uses v2 so the envelope is stable for new saves.
 
 use aura_params::Params;
 
-/// Serialize all param values (own + nested, via
-/// [`Params::collect_values`]) into the flat v1 blob.
+const MAGIC: &[u8; 4] = b"AURA";
+const VERSION_V2: u32 = 2;
+
+/// Serialize param values + `#[persist]` fields into the host state blob.
 pub fn encode_state(params: &dyn Params) -> Vec<u8> {
+    let params_blob = encode_params_v1(params);
+    let persist_blob = params.serialize_persist();
+    encode_v2(&params_blob, &persist_blob)
+}
+
+fn encode_params_v1(params: &dyn Params) -> Vec<u8> {
     let (ids, values) = params.collect_values();
     let mut blob = Vec::with_capacity(4 + ids.len() * 12);
     #[allow(clippy::cast_possible_truncation)] // param counts are small
@@ -24,11 +35,80 @@ pub fn encode_state(params: &dyn Params) -> Vec<u8> {
     blob
 }
 
-/// Restore param values from a v1 blob. Unknown IDs are ignored by
-/// [`Params::restore_values`]; a truncated/malformed blob is rejected
-/// wholesale (`false`, state untouched). On success smoothers snap to
-/// the restored targets so no ramp audibly "catches up".
+fn encode_v2(params_blob: &[u8], persist_blob: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(4 + 4 + 4 + params_blob.len() + 4 + persist_blob.len());
+    out.extend_from_slice(MAGIC);
+    out.extend_from_slice(&VERSION_V2.to_le_bytes());
+    #[allow(clippy::cast_possible_truncation)]
+    out.extend_from_slice(&(params_blob.len() as u32).to_le_bytes());
+    out.extend_from_slice(params_blob);
+    #[allow(clippy::cast_possible_truncation)]
+    out.extend_from_slice(&(persist_blob.len() as u32).to_le_bytes());
+    out.extend_from_slice(persist_blob);
+    out
+}
+
+/// Restore param values (and persist fields when present) from a v1 or v2 blob.
+///
+/// Unknown IDs are ignored by [`Params::restore_values`]; a truncated/malformed
+/// blob is rejected wholesale (`false`, state untouched). On success smoothers
+/// snap to the restored targets so no ramp audibly "catches up".
 pub fn decode_state(params: &dyn Params, blob: &[u8]) -> bool {
+    if blob.len() >= 4 && &blob[..4] == MAGIC {
+        decode_v2(params, blob)
+    } else {
+        decode_params_v1(params, blob)
+    }
+}
+
+fn decode_v2(params: &dyn Params, blob: &[u8]) -> bool {
+    let mut cursor = 4usize; // skip magic
+    let mut take = |n: usize| -> Option<&[u8]> {
+        let s = blob.get(cursor..cursor + n)?;
+        cursor += n;
+        Some(s)
+    };
+    let Some(version) = take(4)
+        .and_then(|b| b.try_into().ok())
+        .map(u32::from_le_bytes)
+    else {
+        return false;
+    };
+    if version != VERSION_V2 {
+        return false;
+    }
+    let Some(params_len) = take(4)
+        .and_then(|b| b.try_into().ok())
+        .map(u32::from_le_bytes)
+    else {
+        return false;
+    };
+    let Some(params_blob) = take(params_len as usize) else {
+        return false;
+    };
+    let Some(persist_len) = take(4)
+        .and_then(|b| b.try_into().ok())
+        .map(u32::from_le_bytes)
+    else {
+        return false;
+    };
+    let Some(persist_blob) = take(persist_len as usize) else {
+        return false;
+    };
+    // Reject trailing garbage — keeps corrupt blobs from partial apply.
+    if cursor != blob.len() {
+        return false;
+    }
+    if !decode_params_v1(params, params_blob) {
+        return false;
+    }
+    if !persist_blob.is_empty() {
+        params.load_persist(persist_blob);
+    }
+    true
+}
+
+fn decode_params_v1(params: &dyn Params, blob: &[u8]) -> bool {
     let mut cursor = 0usize;
     let mut take = |n: usize| -> Option<&[u8]> {
         let s = blob.get(cursor..cursor + n)?;
@@ -42,7 +122,6 @@ pub fn decode_state(params: &dyn Params, blob: &[u8]) -> bool {
         return false;
     };
     // Each entry is 12 bytes; reject lying counts before allocating.
-    // Header is 4 bytes (already consumed); remaining payload must fit.
     let need = (count as usize).saturating_mul(12);
     if blob.len().saturating_sub(4) < need {
         return false;
@@ -176,6 +255,68 @@ mod tests {
         }
     }
 
+    /// Same as [`TwoParams`] plus a tiny persist payload for host-blob tests.
+    struct PersistParams {
+        inner: TwoParams,
+        persist: std::sync::Mutex<Vec<u8>>,
+    }
+
+    impl PersistParams {
+        fn new(a: f64, b: f64, persist: Vec<u8>) -> Self {
+            Self {
+                inner: TwoParams::new(a, b),
+                persist: std::sync::Mutex::new(persist),
+            }
+        }
+    }
+
+    impl aura_params::__private::Sealed for PersistParams {}
+
+    impl Params for PersistParams {
+        fn param_infos(&self) -> Vec<ParamInfo> {
+            self.inner.param_infos()
+        }
+        fn count(&self) -> usize {
+            self.inner.count()
+        }
+        fn get_normalized(&self, id: u32) -> Option<f64> {
+            self.inner.get_normalized(id)
+        }
+        fn set_normalized(&self, id: u32, value: f64) {
+            self.inner.set_normalized(id, value);
+        }
+        fn get_plain(&self, id: u32) -> Option<f64> {
+            self.inner.get_plain(id)
+        }
+        fn set_plain(&self, id: u32, value: f64) {
+            self.inner.set_plain(id, value);
+        }
+        fn format_value(&self, id: u32, value: f64) -> Option<String> {
+            self.inner.format_value(id, value)
+        }
+        fn parse_value(&self, id: u32, text: &str) -> Option<f64> {
+            self.inner.parse_value(id, text)
+        }
+        fn snap_smoothers(&self) {
+            self.inner.snap_smoothers();
+        }
+        fn set_sample_rate(&self, sample_rate: f64) {
+            self.inner.set_sample_rate(sample_rate);
+        }
+        fn collect_values(&self) -> (Vec<u32>, Vec<f64>) {
+            self.inner.collect_values()
+        }
+        fn restore_values(&self, values: &[(u32, f64)]) {
+            self.inner.restore_values(values);
+        }
+        fn serialize_persist(&self) -> Vec<u8> {
+            self.persist.lock().expect("lock").clone()
+        }
+        fn load_persist(&self, data: &[u8]) {
+            *self.persist.lock().expect("lock") = data.to_vec();
+        }
+    }
+
     #[test]
     fn round_trip_restores_values() {
         let src = TwoParams::new(0.25, 0.75);
@@ -184,6 +325,40 @@ mod tests {
         assert!(decode_state(&dst, &blob));
         assert_eq!(dst.get_plain(1), Some(0.25));
         assert_eq!(dst.get_plain(2), Some(0.75));
+    }
+
+    #[test]
+    fn round_trip_restores_persist_payload() {
+        let src = PersistParams::new(0.1, 0.2, b"ui-tab=2".to_vec());
+        let blob = encode_state(&src);
+        assert!(
+            blob.starts_with(b"AURA"),
+            "persist forces versioned envelope"
+        );
+        let dst = PersistParams::new(0.0, 0.0, Vec::new());
+        assert!(decode_state(&dst, &blob));
+        assert_eq!(dst.get_plain(1), Some(0.1));
+        assert_eq!(dst.get_plain(2), Some(0.2));
+        assert_eq!(dst.persist.lock().expect("lock").as_slice(), b"ui-tab=2");
+    }
+
+    #[test]
+    fn legacy_v1_blob_still_loads() {
+        // Hand-built v1: count=1, id=1, value=0.5
+        let mut v1 = Vec::new();
+        v1.extend_from_slice(&1u32.to_le_bytes());
+        v1.extend_from_slice(&1u32.to_le_bytes());
+        v1.extend_from_slice(&0.5f64.to_bits().to_le_bytes());
+        let dst = TwoParams::new(0.0, 0.0);
+        assert!(decode_state(&dst, &v1));
+        assert_eq!(dst.get_plain(1), Some(0.5));
+    }
+
+    #[test]
+    fn empty_persist_still_uses_v2_envelope() {
+        let src = TwoParams::new(0.25, 0.75);
+        let blob = encode_state(&src);
+        assert!(blob.starts_with(b"AURA"));
     }
 
     #[test]

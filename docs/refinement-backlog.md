@@ -32,16 +32,9 @@ Canonical elsewhere (do not duplicate specs here):
 
 ### 1. `#[persist]` not in host state
 
-Derive docs say persist fields are saved with the host blob. `encode_state` /
-`decode_state` only serialize param values; format wrappers never call
-`Params::serialize_persist` / `load_persist`.
-
-- [ ] Decide: **wire** into a versioned envelope (v2 blob), or **document** as
-      unused until wired and soft-warn in derive docs.
-- [ ] Prefer wire: `aura-core/src/state.rs` + clap/vst3/lv2 `state_save`/`load`
-      + `aura-test` round-trip for persist fields.
-- Hints: `aura-derive` persist docs; `aura-params` `serialize_persist`;
-  format `state_save` sites.
+- [x] **Wired** (2026-08-29): `encode_state` / `decode_state` use v2 envelope
+      (`AURA` + ver 2 + params + persist). Formats already call these helpers.
+      Legacy v1 blobs still decode. Tests in `aura-core` state + `aura` derive.
 
 ### 2. `PluginLogic::supports_in_place`
 
@@ -149,9 +142,9 @@ Checklist:
 
 ## Suggested order of work
 
-1. P0.1 persist decision + wire or honest docs  
+1. ~~P0.1 persist~~ done  
 2. P0.2 / P0.3 kill-or-implement dead APIs  
-3. P0.4 + de-slop README  
+3. P0.4 remaining (`aura-params` ghost-format docs) + leftover de-slop  
 4. P1.5–7 umbrella / prelude / dsp feature  
 5. P1.5 automation docs + P1.10 LV2 honesty  
 6. P2 metadata only when crates.io is back on the table  
