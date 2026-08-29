@@ -73,9 +73,9 @@ jobs:
       - name: cargo test --workspace
         if: runner.os == 'Linux'
         run: cargo test --workspace
-      - name: cargo test --workspace (exclude aura-lv2)
+      - name: cargo test --workspace (exclude lx-aura-lv2)
         if: runner.os != 'Linux'
-        run: cargo test --workspace --exclude aura-lv2
+        run: cargo test --workspace --exclude lx-aura-lv2
 
   docs:
     name: Docs
