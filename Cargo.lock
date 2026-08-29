@@ -3406,9 +3406,7 @@ name = "lx-aura-lv2"
 version = "0.12.0"
 dependencies = [
  "lv2-sys",
- "lx-aura",
  "lx-aura-core",
- "lx-aura-derive",
  "lx-aura-params",
 ]
 
