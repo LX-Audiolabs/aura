@@ -4,13 +4,22 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
 authors.workspace = true
-description = "AURA core: process, editor, plugin info (minimal surface)"
+rust-version.workspace = true
+description = "AURA core — PluginLogic, process, buses, host state blob"
+readme = "README.md"
+documentation = "https://docs.rs/aura-core"
+keywords = ["audio", "plugin", "dsp", "clap"]
+categories = ["multimedia::audio"]
 publish = false
 
 [dependencies]
 aura-params = { workspace = true }
 aura-midi = { workspace = true }
+
+[package.metadata.docs.rs]
+all-features = true
 
 [lints]
 workspace = true

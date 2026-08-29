@@ -3,9 +3,15 @@ name = "aura-editor"
 version.workspace = true
 edition.workspace = true
 license = "MIT"
-description = "AURA host Editor adapter (Slint on aura-baseview) for CLAP/VST3/LV2 GUI"
+description = "AURA host Editor adapter (Slint on aura-baseview) for CLAP/VST3/LV2"
 repository.workspace = true
+homepage.workspace = true
 authors.workspace = true
+rust-version.workspace = true
+readme = "README.md"
+documentation = "https://docs.rs/aura-editor"
+keywords = ["slint", "audio", "plugin", "gui", "clap"]
+categories = ["multimedia::audio", "gui"]
 publish = false
 
 [dependencies]
@@ -18,19 +24,18 @@ raw-window-handle = { workspace = true }
 log = "0.4"
 paste = "1"
 
-# Linux cross-build from Windows: avoid linking host fontconfig.
-# fontique uses dlopen at runtime; RUST_FONTCONFIG_DLOPEN=on is set in
-# .cargo/config.toml [env] so yeslogic-fontconfig-sys skips pkg-config.
 [target.'cfg(target_os = "linux")'.dependencies]
 i-slint-common = { version = "=1.17.1", features = ["fontconfig-dlopen"] }
 
 [features]
 default = ["backend-femtovg"]
-# Pass renderer choice through to the window stack.
 backend-femtovg = ["aura-baseview/backend-femtovg"]
 backend-skia = ["aura-baseview/backend-skia"]
 backend-wgpu = ["aura-baseview/backend-wgpu"]
 backend-wgpu-vulkan = ["aura-baseview/backend-wgpu-vulkan"]
+
+[package.metadata.docs.rs]
+features = ["backend-femtovg"]
 
 [lints]
 workspace = true

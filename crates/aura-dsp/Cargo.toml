@@ -4,24 +4,20 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
 authors.workspace = true
 rust-version.workspace = true
-description = "AURA DSP — synthesis, effects, analysis, maths (JUCE juce_dsp analogue; LX FX)"
+description = "AURA DSP — synthesis, effects, analysis, maths"
+readme = "README.md"
+documentation = "https://docs.rs/aura-dsp"
 publish = false
 keywords = ["dsp", "synthesis", "audio", "filter", "effects"]
 categories = ["multimedia::audio"]
 
-# Core primitives forked from naad v1.2.5 (GPL-3.0-only) by Robert MacCracken.
-# https://github.com/MacCracken/naad/tree/main/rust-old
-# Upstream rewritten in Cyrius; this Rust version maintained as part of AURA.
-# Selective algorithm ports (in-tree, not Cargo deps — flat API only):
-#   fundsp (MIT/Apache-2.0) — DSF, soft-saw table, Karplus-Strong, Moog ladder
-#   InfiniteDSP (MIT) — PredictiveLadder ZDF
-# Layout: oscillators/filters/fx/analysis under this crate; MIDI in `aura-midi`.
+# Provenance: see repo NOTICE (naad / fundsp / InfiniteDSP).
 
 [dependencies]
-# AudioTap (lock-free sample ring) backs `analysis::ScopeRing` — G15.
-aura-params = { path = "../aura-params" }
+aura-params = { workspace = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 smallvec = { version = "1", features = ["serde", "const_generics"] }
@@ -34,7 +30,7 @@ realfft = "3"
 atomic_float = "1.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"], optional = true }
 goonj = { version = "1", features = ["binaural"], optional = true }
-hisab = { version = "1.1", optional = true }
+hisab = { version = "1.4", optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }
@@ -47,6 +43,9 @@ logging = ["dep:tracing-subscriber"]
 dev-logging = ["logging"]
 acoustics = ["dep:goonj", "dep:hisab"]
 full = ["synthesis", "acoustics", "logging"]
+
+[package.metadata.docs.rs]
+features = ["full"]
 
 [[bench]]
 name = "benchmarks"

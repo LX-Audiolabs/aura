@@ -4,8 +4,14 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
 authors.workspace = true
-description = "AURA LV2 format wrapper (thin, over PluginLogic)"
+rust-version.workspace = true
+description = "LV2 format wrapper for AURA (Linux; reduced PluginLogic subset)"
+readme = "README.md"
+documentation = "https://docs.rs/aura-lv2"
+keywords = ["lv2", "audio", "plugin", "linux"]
+categories = ["multimedia::audio"]
 publish = false
 
 [dependencies]
@@ -16,6 +22,9 @@ lv2-sys = "2.0"
 [dev-dependencies]
 aura-derive = { workspace = true }
 aura = { workspace = true }
+
+[package.metadata.docs.rs]
+all-features = true
 
 [lints]
 workspace = true

@@ -24,6 +24,8 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 - `ProcessContext::clear_midi` → `clear_events` (clears midi/notes/ump in+out).
 - Docs: automation timing per format; LV2 reduced subset; CLAP-oriented trait
   hooks labeled; derive requires `aura` umbrella.
+- Tier A+B crates.io **prep** (metadata, READMEs, `NOTICE`, `docs/crates-io-prep.md`);
+  `publish = false` unchanged — no upload yet.
 
 ### Removed
 

@@ -4,12 +4,21 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
 authors.workspace = true
-description = "AURA parameter system (ranges, smoothers, atomic params)"
+rust-version.workspace = true
+description = "AURA parameters — ranges, smoothers, atomic params, AudioTap"
+readme = "README.md"
+documentation = "https://docs.rs/aura-params"
+keywords = ["audio", "plugin", "parameters", "automation"]
+categories = ["multimedia::audio"]
 publish = false
 
 [dependencies]
 bitflags = "2"
+
+[package.metadata.docs.rs]
+all-features = true
 
 [lints]
 workspace = true

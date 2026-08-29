@@ -3,10 +3,15 @@ name = "aura-baseview"
 version.workspace = true
 edition.workspace = true
 license = "MIT"
-description = "AURA Slint + baseview window stack (FemtoVG / Skia / software) — no plugin host API"
+description = "AURA Slint + baseview window stack (FemtoVG / Skia / software)"
 repository.workspace = true
+homepage.workspace = true
 authors.workspace = true
-# Path-only for now; crates.io later as distinct from BillyDM slint-baseview.
+rust-version.workspace = true
+readme = "README.md"
+documentation = "https://docs.rs/aura-baseview"
+keywords = ["slint", "baseview", "audio", "plugin", "gui"]
+categories = ["multimedia::audio", "gui"]
 publish = false
 
 [dependencies]
@@ -23,11 +28,13 @@ pollster = { version = "1.0", optional = true }
 
 [features]
 default = ["backend-femtovg"]
-# Toolkit is always Slint + baseview; only the renderer is chosen.
 backend-femtovg = ["slint/renderer-femtovg", "baseview/opengl"]
 backend-skia = ["slint/renderer-skia", "dep:i-slint-renderer-skia"]
 backend-wgpu = ["slint/renderer-software", "dep:wgpu", "dep:pollster"]
 backend-wgpu-vulkan = ["backend-wgpu"]
+
+[package.metadata.docs.rs]
+features = ["backend-femtovg"]
 
 [lints]
 workspace = true

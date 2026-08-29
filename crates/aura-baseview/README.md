@@ -37,7 +37,9 @@ use aura_baseview::slint_window::SlintWindow;
 
 **MIT** — see [`LICENSE-MIT`](./LICENSE-MIT).  
 
-**crates.io:** not yet. We publish only when AURA is *usable* end-to-end (`cargo aura` + CLAP + UI path). Until then path/git deps only. `aura-baseview` remains the natural first publish candidate (MIT, no host API; distinct from BillyDM `slint-baseview`).
+**crates.io:** prepared with Tier B (`docs/crates-io-prep.md`); `publish = false`
+until the explicit first-release decision. Distinct from BillyDM
+`slint-baseview`.
 
 ## Examples
 

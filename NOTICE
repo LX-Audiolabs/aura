@@ -1,0 +1,24 @@
+AURA — third-party notices
+==========================
+
+This NOTICE applies when distributing AURA crates or binaries that include them.
+Our code is primarily GPL-3.0-or-later (see LICENSE). UI window crates
+`aura-baseview` and `aura-editor` are MIT (see each crate's LICENSE-MIT).
+
+DSP provenance (aura-dsp)
+-------------------------
+- Core primitives adapted from naad v1.2.5 (GPL-3.0-only) by Robert MacCracken
+  https://github.com/MacCracken/naad/tree/main/rust-old
+- Selective algorithm ports (in-tree, flat API), not Cargo deps:
+  - fundsp (MIT OR Apache-2.0) — DSF, soft-saw, Karplus-Strong, Moog ladder
+  - InfiniteDSP (MIT) — PredictiveLadder ZDF
+
+Other dependencies
+------------------
+See each crate's Cargo.toml / cargo license output for the full graph
+(clap-sys, vst3-rs, lv2-sys, Slint, baseview, etc.). Keep their attribution
+requirements when redistributing.
+
+Fonts bundled with aura-build
+-----------------------------
+See crates/aura-build/fonts/OFL.txt (and per-font notices in that directory).

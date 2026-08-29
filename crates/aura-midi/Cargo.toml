@@ -4,14 +4,20 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
 authors.workspace = true
 rust-version.workspace = true
-description = "AURA MIDI — messages, buffers, note helpers (JUCE juce_audio_basics/midi analogue)"
-publish = false
-keywords = ["midi", "audio", "plugin", "music"]
+description = "AURA MIDI — messages, buffers, UMP (MIDI 2) helpers"
+readme = "README.md"
+documentation = "https://docs.rs/aura-midi"
+keywords = ["midi", "audio", "plugin", "ump"]
 categories = ["multimedia::audio"]
+publish = false
 
 [dependencies]
+
+[package.metadata.docs.rs]
+all-features = true
 
 [lints]
 workspace = true

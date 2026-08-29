@@ -35,24 +35,25 @@ license = "GPL-3.0-or-later"
 rust-version = "1.92"
 description = "AURA — Audio Unified Rust Architecture (Slint + CLAP/VST3/LV2)"
 repository = "https://github.com/LX-Audiolabs/aura"
+homepage = "https://github.com/LX-Audiolabs/aura"
 authors = ["LX Audiolabs"]
 readme = "README.md"
 
 [workspace.dependencies]
-# --- AURA crates ---
-aura = { path = "crates/aura" }
-aura-params = { path = "crates/aura-params" }
-aura-derive = { path = "crates/aura-derive" }
-aura-core = { path = "crates/aura-core" }
-aura-clap = { path = "crates/aura-clap" }
-aura-vst3 = { path = "crates/aura-vst3" }
-aura-lv2 = { path = "crates/aura-lv2" }
-aura-baseview = { path = "crates/aura-baseview", default-features = false }
-aura-editor = { path = "crates/aura-editor", default-features = false }
-aura-dsp = { path = "crates/aura-dsp" }
-aura-midi = { path = "crates/aura-midi" }
-aura-build = { path = "crates/aura-build" }
-aura-test = { path = "crates/aura-test" }
+# --- AURA crates (version required for future `cargo package` / publish) ---
+aura = { path = "crates/aura", version = "0.11.0" }
+aura-params = { path = "crates/aura-params", version = "0.11.0" }
+aura-derive = { path = "crates/aura-derive", version = "0.11.0" }
+aura-core = { path = "crates/aura-core", version = "0.11.0" }
+aura-clap = { path = "crates/aura-clap", version = "0.11.0" }
+aura-vst3 = { path = "crates/aura-vst3", version = "0.11.0" }
+aura-lv2 = { path = "crates/aura-lv2", version = "0.11.0" }
+aura-baseview = { path = "crates/aura-baseview", version = "0.11.0", default-features = false }
+aura-editor = { path = "crates/aura-editor", version = "0.11.0", default-features = false }
+aura-dsp = { path = "crates/aura-dsp", version = "0.11.0" }
+aura-midi = { path = "crates/aura-midi", version = "0.11.0" }
+aura-build = { path = "crates/aura-build", version = "0.11.0" }
+aura-test = { path = "crates/aura-test", version = "0.11.0" }
 
 # --- Slint + windowing (pinned with aura-baseview) ---
 # 0.3.1 had Linux --release dbg! breakage; 0.3.2 removes it + Win32 destroy/X11 fixes.

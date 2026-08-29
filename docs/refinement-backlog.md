@@ -88,15 +88,16 @@ Canonical elsewhere (do not duplicate specs here):
 
 ---
 
-## P2 — polish / crates.io prep (later)
+## P2 — polish / crates.io prep
 
 - [ ] Export naming: keep `export!`, add `export_clap!` alias for symmetry.
-- [ ] Per-crate metadata: keywords, categories, readme, `rust-version`, docs.rs features.
-- [ ] NOTICE / provenance for `aura-dsp` (naad and friends) vs GPL-or-later workspace.
-- [ ] MIT (`aura-baseview` / `aura-editor`) vs GPL story written once for consumers.
+- [x] Per-crate metadata: keywords, categories, readme, rust-version, docs.rs
+      (Tier A+B; `publish = false` — see `docs/crates-io-prep.md`).
+- [x] Root `NOTICE` (DSP provenance + fonts pointer).
+- [x] MIT vs GPL called out in crates-io-prep + editor README.
 - [ ] `ParamEventQueue` full-drop behavior documented.
 - [ ] Split fat `aura-clap` modules further.
-- [ ] README / crate intros: finish de-slop pass (see below).
+- [x] README / sample.rs de-slop (earlier passes).
 
 ---
 
@@ -130,7 +131,8 @@ Checklist:
 1. ~~P0~~ done  
 2. ~~P1~~ done (extension-trait de-CLAP still optional later)  
 3. ~~leftover deslop sample.rs~~ done  
-4. P2 metadata / NOTICE only when crates.io is back on the table  
+4. ~~P2 metadata / NOTICE~~ prep done (`crates-io-prep.md`); actual publish later  
+5. Optional: `export_clap!` alias, ParamEventQueue doc, clap module split  
 
 Tick boxes here as you go. When a chunk lands, one line in `CHANGELOG` under
 Unreleased is enough — no second mega-doc.

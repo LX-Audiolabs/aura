@@ -4,14 +4,23 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
 authors.workspace = true
-description = "AURA VST3 format wrapper (thin, over PluginLogic)"
+rust-version.workspace = true
+description = "VST3 format wrapper for AURA (thin PluginLogic bridge)"
+readme = "README.md"
+documentation = "https://docs.rs/aura-vst3"
+keywords = ["vst3", "audio", "plugin"]
+categories = ["multimedia::audio"]
 publish = false
 
 [dependencies]
 aura-core = { workspace = true }
 aura-params = { workspace = true }
 vst3 = "0.3"
+
+[package.metadata.docs.rs]
+all-features = true
 
 [lints]
 workspace = true
