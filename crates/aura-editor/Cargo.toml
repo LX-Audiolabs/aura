@@ -12,7 +12,7 @@ readme = "README.md"
 documentation = "https://docs.rs/lx-aura-editor"
 keywords = ["slint", "audio", "plugin", "gui", "clap"]
 categories = ["multimedia::audio", "gui"]
-publish = false
+publish = true
 
 [lib]
 name = "aura_editor"

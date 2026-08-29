@@ -13,7 +13,7 @@ readme = "README.md"
 documentation = "https://docs.rs/lx-aura-build"
 keywords = ["slint", "audio", "plugin", "ui", "build"]
 categories = ["multimedia::audio", "development-tools::build-utils"]
-publish = false
+publish = true
 include = [
     "src/**",
     "ui/**",

@@ -12,7 +12,7 @@ readme = "README.md"
 documentation = "https://docs.rs/lx-aura-midi"
 keywords = ["midi", "audio", "plugin", "ump"]
 categories = ["multimedia::audio"]
-publish = false
+publish = true
 
 [lib]
 name = "aura_midi"

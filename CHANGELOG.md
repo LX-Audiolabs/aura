@@ -7,6 +7,10 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ## [Unreleased]
 
+### Changed
+
+- Tier A+B: `publish = true` (first crates.io upload = **0.12.0**).
+
 ## [0.12.0] - 2026-08-29
 
 ### Added
@@ -27,7 +31,8 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 - Docs: automation timing per format; LV2 reduced subset; CLAP-oriented trait
   hooks labeled; derive requires `aura` umbrella.
 - Tier A+B crates.io **prep** (metadata, READMEs, `NOTICE`, `docs/crates-io-prep.md`);
-  `publish = false` unchanged — no upload yet.
+  `publish = false` at tag time — flipped true for crates.io upload of 0.12.0
+  in a follow-up commit (`lx-aura-*`).
 
 ### Removed
 

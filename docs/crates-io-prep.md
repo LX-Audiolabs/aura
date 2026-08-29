@@ -1,6 +1,6 @@
 # crates.io prep (do not publish until checklist is green)
 
-Stand: 2026-08-29 · Workspace **0.11.0**
+Stand: 2026-08-29 · Workspace **0.12.0** (git tag `v0.12.0`)
 
 **Policy:** We will not publish half-baked `0.0.x` noise. First publish = real
 author surface, honest docs, Tier A+B metadata complete, dry-run clean.
@@ -63,7 +63,7 @@ lx-aura-params → lx-aura-derive → lx-aura-midi → lx-aura-core
 ```
 
 Same workspace version on every crate (`version.workspace = true`).
-Workspace path deps also carry `version = "0.11.0"` so `cargo package` can
+Workspace path deps also carry `version = "0.12.0"` so `cargo package` can
 rewrite them to crates.io deps on publish.
 
 **When bumping the workspace version**, update both
@@ -94,20 +94,24 @@ Before a real publish: set `publish = true` only on the set above, then
 - [x] Root `NOTICE` (DSP provenance + fonts pointer)
 - [x] P0/P1 refinement honesty (persist, dead APIs, surface docs)
 - [x] Package rename to `lx-aura-*` (lib names kept)
-- [ ] Human API freeze review (what is public vs `doc(hidden)`)
-- [ ] At least one product (Ember/Nimbus) cut on this version without API thrash
-- [ ] Flip `publish = true` + dry-run green + annotated tag
-- [ ] Actual `cargo publish` in order
+- [x] Human API freeze review — signed off 2026-08-29: `aura::prelude` +
+      format exports = author API; `aura-hot` out; LV2 subset / MIDI-learn hint
+      honesty already documented. Product rebuild (Aether/Meridian/Equilibrium/
+      Loom/Ember/Nimbus + …) + Reaper smoke = no API thrash on 0.12.
+- [x] Product soak on this version (same plugins; `lx-aura-*` deps; Reaper OK)
+- [x] Annotated git tag `v0.12.0` (repo release)
+- [x] Flip `publish = true` on Tier A+B
+- [ ] crates.io dry-run / publish in order (**first crates.io version = 0.12.0**)
 
 ---
 
 ## Consumer example (after publish)
 
 ```toml
-lx-aura = { version = "0.11", features = ["clap", "dsp"] }
-lx-aura-baseview = { version = "0.11", features = ["backend-femtovg"] }
-lx-aura-editor = { version = "0.11", features = ["backend-femtovg"] }
-lx-aura-build = { version = "0.11" }  # [build-dependencies]
+lx-aura = { version = "0.12", features = ["clap", "dsp"] }
+lx-aura-baseview = { version = "0.12", features = ["backend-femtovg"] }
+lx-aura-editor = { version = "0.12", features = ["backend-femtovg"] }
+lx-aura-build = { version = "0.12" }  # [build-dependencies]
 ```
 
 ```rust

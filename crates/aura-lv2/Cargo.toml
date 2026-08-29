@@ -12,7 +12,7 @@ readme = "README.md"
 documentation = "https://docs.rs/lx-aura-lv2"
 keywords = ["lv2", "audio", "plugin", "linux"]
 categories = ["multimedia::audio"]
-publish = false
+publish = true
 
 [lib]
 name = "aura_lv2"

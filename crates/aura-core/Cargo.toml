@@ -12,7 +12,7 @@ readme = "README.md"
 documentation = "https://docs.rs/lx-aura-core"
 keywords = ["audio", "plugin", "dsp", "clap"]
 categories = ["multimedia::audio"]
-publish = false
+publish = true
 
 [lib]
 name = "aura_core"

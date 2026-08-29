@@ -12,7 +12,7 @@ readme.workspace = true
 documentation = "https://docs.rs/lx-aura"
 keywords = ["audio", "plugin", "clap", "vst3", "slint"]
 categories = ["multimedia::audio"]
-publish = false
+publish = true
 
 [lib]
 name = "aura"

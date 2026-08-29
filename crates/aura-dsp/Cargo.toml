@@ -10,7 +10,7 @@ rust-version.workspace = true
 description = "AURA DSP — synthesis, effects, analysis, maths"
 readme = "README.md"
 documentation = "https://docs.rs/lx-aura-dsp"
-publish = false
+publish = true
 keywords = ["dsp", "synthesis", "audio", "filter", "effects"]
 categories = ["multimedia::audio"]
 

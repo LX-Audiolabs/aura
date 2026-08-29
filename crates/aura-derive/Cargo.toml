@@ -12,7 +12,7 @@ readme = "README.md"
 documentation = "https://docs.rs/lx-aura-derive"
 keywords = ["audio", "plugin", "proc-macro", "derive"]
 categories = ["multimedia::audio"]
-publish = false
+publish = true
 
 [lib]
 name = "aura_derive"
