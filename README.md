@@ -198,7 +198,7 @@ cargo clippy --workspace --all-targets
 | `aura-dsp` + `aura-midi` | Portable DSP / MIDI helpers |
 | `aura-hot` | CLAP hot-reload proxy (`cargo aura watch --hot`) |
 | `aura-host` | Standalone dev host — load `.clap`, MIDI in, params, plugin GUI (CLI + Slint shell) |
-| `aura-test` | State round-trip + process smokes (dev-dep) |
+| `lx-aura-test` (`aura_test`) | State round-trip + process smokes (`[dev-dependencies]`) |
 | `cargo-aura` | Scaffold, build, install, watch, doctor, preview, run, mesh |
 | `aura-preview` | Slint UI preview (`cargo aura preview`) |
 

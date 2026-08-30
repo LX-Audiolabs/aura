@@ -171,7 +171,7 @@ lx-aura-build = {{ path = "{}/crates/aura-build" }}
             cargo_toml,
             r#"
 [dev-dependencies]
-aura-test = {{ path = "{}/crates/aura-test" }}
+lx-aura-test = {{ path = "{}/crates/aura-test" }}
 "#,
             spec.aura_root
         );

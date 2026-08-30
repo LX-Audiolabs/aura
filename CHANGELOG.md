@@ -7,6 +7,11 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ## [Unreleased]
 
+### Added
+
+- `lx-aura-test` (`aura_test`) on crates.io — Tier C dev-dep helpers (state
+  round-trip / process smoke). Same workspace version **0.12.0**.
+
 ### Changed
 
 - Tier A+B: `publish = true` (first crates.io upload = **0.12.0**).

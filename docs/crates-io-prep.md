@@ -1,7 +1,8 @@
 # crates.io prep
 
 Stand: 2026-08-29 · Workspace **0.12.0** (git tag `v0.12.0`) ·
-**Tier A+B published to crates.io** as `lx-aura-*` 0.12.0.
+**Tier A+B+C published to crates.io** as `lx-aura-*` 0.12.0
+(incl. `lx-aura-test`).
 
 **Policy:** No half-baked `0.0.x` noise. First registry upload was **0.12.0**
 after rename, freeze, and product soak.
@@ -28,6 +29,7 @@ package manager). Tier A+B therefore ship as:
 | `lx-aura-build` | `aura_build` | Slint `@aura` + fonts |
 | `lx-aura-baseview` | `aura_baseview` | Slint + baseview (**MIT**) |
 | `lx-aura-editor` | `aura_editor` | Host `Editor` adapter (**MIT**) |
+| `lx-aura-test` | `aura_test` | Dev-dep test helpers |
 
 Repo folders stay `crates/aura-*`. Authors write `use aura::…` in Rust;
 Cargo.toml deps use the `lx-aura-*` keys (see consumer example below).
@@ -47,10 +49,15 @@ License: GPL-3.0-or-later for the stack above except baseview/editor (MIT).
 `lx-aura-dsp` (via `dsp` feature) · `lx-aura-build` · `lx-aura-baseview` ·
 `lx-aura-editor`.
 
+### Tier C — test helpers (dev-dep)
+
+`lx-aura-test` (`aura_test`) — state round-trip / process smoke. Publish with
+A+B; plugins and scaffolds use it as `[dev-dependencies]` only.
+
 ### Explicitly out (for now)
 
 `aura-hot` (untested) · `aura-host` · `cargo-aura` · `aura-preview` ·
-`aura-test` (dev-only) · smoke examples. Package names unchanged.
+smoke examples. Package names unchanged.
 
 ---
 
@@ -60,6 +67,7 @@ License: GPL-3.0-or-later for the stack above except baseview/editor (MIT).
 lx-aura-params → lx-aura-derive → lx-aura-midi → lx-aura-core
   → lx-aura-dsp → lx-aura-clap → lx-aura-vst3 → lx-aura-lv2
   → lx-aura-build → lx-aura-baseview → lx-aura-editor → lx-aura
+  → lx-aura-test   # after core+params (dev helper)
 ```
 
 Same workspace version on every crate (`version.workspace = true`).

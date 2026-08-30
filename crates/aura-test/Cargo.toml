@@ -1,16 +1,28 @@
 [package]
-name = "aura-test"
+name = "lx-aura-test"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
 authors.workspace = true
-description = "Test helpers for AURA plugins (state round-trip, process smoke)"
-publish = false
+rust-version.workspace = true
+description = "AURA test helpers — state round-trip and process smoke (dev-dependency)"
+readme = "README.md"
+documentation = "https://docs.rs/lx-aura-test"
+keywords = ["audio", "plugin", "test", "dsp"]
+categories = ["development-tools::testing", "multimedia::audio"]
+publish = true
+
+[lib]
+name = "aura_test"
 
 [dependencies]
 lx-aura-core = { workspace = true }
 lx-aura-params = { workspace = true }
+
+[package.metadata.docs.rs]
+all-features = true
 
 [lints]
 workspace = true
