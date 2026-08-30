@@ -1,4 +1,14 @@
 {
+  // CargoTom false-positives on workspace deps (e.g. "expected value at line 1
+  // column 1" / "coundt find crate in workspace"). Cargo/RA are source of truth.
+  "languages": {
+    "TOML": {
+      "language_servers": ["!cargo-tom", "..."]
+    },
+    "Rust": {
+      "language_servers": ["rust-analyzer", "!cargo-tom", "..."]
+    }
+  },
   "lsp": {
     "rust-analyzer": {
       "initialization_options": {
