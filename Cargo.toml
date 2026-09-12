@@ -85,6 +85,9 @@ pedantic = { level = "warn", priority = -1 }
 # already unwind; pin so a future abort default cannot reintroduce host aborts.
 [profile.dev]
 panic = "unwind"
+# Incremental caches ate ~90 GB in lx-audiolabs-dev/debug/incremental.
+# Full rebuilds are cheap enough here; don't regrow that.
+incremental = false
 
 [profile.release]
 panic = "unwind"
