@@ -1,0 +1,42 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "dependencyDashboard": true,
+  "prConcurrentLimit": 8,
+  "cargo": {
+    "enabled": true,
+    "schedule": ["before 4am on monday"],
+    "addLabels": ["dependencies", "rust"]
+  },
+  "github-actions": {
+    "enabled": true,
+    "schedule": ["before 4am on the first day of the month"],
+    "addLabels": ["dependencies", "ci"]
+  },
+  "rust-toolchain": {
+    "enabled": false
+  },
+  "packageRules": [
+    {
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["baseview"],
+      "matchPackageVersions": "0.3.1",
+      "enabled": false
+    },
+    {
+      "matchManagers": ["cargo"],
+      "matchPackagePatterns": ["slint", "slint-build", "slint-interpreter"],
+      "groupName": "slint"
+    },
+    {
+      "matchManagers": ["cargo"],
+      "matchPackagePatterns": ["clap-sys", "clap"],
+      "groupName": "clap"
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "matchPackageNames": ["dtolnay/rust-toolchain"],
+      "enabled": false
+    }
+  ]
+}
