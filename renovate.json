@@ -19,12 +19,6 @@
   "packageRules": [
     {
       "matchManagers": ["cargo"],
-      "matchPackageNames": ["baseview"],
-      "matchPackageVersions": "0.3.1",
-      "enabled": false
-    },
-    {
-      "matchManagers": ["cargo"],
       "matchPackagePatterns": ["slint", "slint-build", "slint-interpreter"],
       "groupName": "slint"
     },
