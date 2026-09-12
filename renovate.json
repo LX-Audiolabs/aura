@@ -1,6 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended"],
+  "timezone": "Europe/Berlin",
   "dependencyDashboard": true,
   "prConcurrentLimit": 8,
   "cargo": {
