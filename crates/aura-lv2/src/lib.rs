@@ -783,6 +783,9 @@ unsafe extern "C" fn state_save<L: PluginLogic>(
             if blob.is_empty() {
                 return LV2_State_Status_LV2_STATE_SUCCESS;
             }
+            // LV2_State_Flags underlying repr: u32 on Linux, i32 on Windows.
+            // The cast is required on Windows and redundant (thus linted) on Linux.
+            #[allow(clippy::unnecessary_cast)]
             let flags = (LV2_State_Flags::LV2_STATE_IS_POD.0
                 | LV2_State_Flags::LV2_STATE_IS_PORTABLE.0) as u32;
             unsafe {

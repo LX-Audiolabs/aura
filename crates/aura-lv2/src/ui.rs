@@ -295,7 +295,7 @@ unsafe extern "C" fn ui_instantiate<L: PluginLogic>(
             }
             #[cfg(target_os = "linux")]
             {
-                *widget = &raw mut (*ptr).x11_window as *mut u64 as LV2UI_Widget;
+                *widget = &raw mut (*ptr).x11_window as LV2UI_Widget;
             }
             #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
             {
