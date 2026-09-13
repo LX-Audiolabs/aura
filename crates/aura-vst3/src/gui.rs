@@ -10,11 +10,8 @@ use std::sync::{Arc, Mutex, PoisonError};
 use aura_core::editor::{Editor, EditorBridge, PluginContext, RawWindowHandle};
 use aura_params::Params;
 use vst3::Steinberg::Vst::{IComponentHandler, IComponentHandlerTrait, ParamID, ParamValue};
-#[cfg(target_os = "windows")]
 use vst3::Steinberg::kPlatformTypeHWND;
-#[cfg(target_os = "macos")]
 use vst3::Steinberg::kPlatformTypeNSView;
-#[cfg(target_os = "linux")]
 use vst3::Steinberg::kPlatformTypeX11EmbedWindowID;
 use vst3::Steinberg::{
     FIDString, IPlugFrame, IPlugView, IPlugViewContentScaleSupport,
@@ -232,24 +229,13 @@ fn supported_platform(type_: FIDString) -> bool {
         return false;
     };
     // Compare to Steinberg constants (NUL-terminated statics).
-    #[cfg(target_os = "windows")]
-    {
-        let hwnd = unsafe { CStr::from_ptr(kPlatformTypeHWND) }.to_bytes();
-        bytes == hwnd
-    }
-    #[cfg(target_os = "macos")]
-    {
-        let ns = unsafe { CStr::from_ptr(kPlatformTypeNSView) }.to_bytes();
-        bytes == ns
-    }
-    #[cfg(target_os = "linux")]
-    {
-        let x11 = unsafe { CStr::from_ptr(kPlatformTypeX11EmbedWindowID) }.to_bytes();
-        bytes == x11
-    }
-    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
-    {
-        let _ = bytes;
+    if cfg!(target_os = "windows") {
+        bytes == unsafe { CStr::from_ptr(kPlatformTypeHWND) }.to_bytes()
+    } else if cfg!(target_os = "macos") {
+        bytes == unsafe { CStr::from_ptr(kPlatformTypeNSView) }.to_bytes()
+    } else if cfg!(target_os = "linux") {
+        bytes == unsafe { CStr::from_ptr(kPlatformTypeX11EmbedWindowID) }.to_bytes()
+    } else {
         false
     }
 }
@@ -258,22 +244,14 @@ fn map_parent(parent: *mut c_void, type_: FIDString) -> Option<RawWindowHandle> 
     if parent.is_null() || !supported_platform(type_) {
         return None;
     }
-    #[cfg(target_os = "windows")]
-    {
+    if cfg!(target_os = "windows") {
         Some(RawWindowHandle::Win32(parent))
-    }
-    #[cfg(target_os = "macos")]
-    {
+    } else if cfg!(target_os = "macos") {
         Some(RawWindowHandle::AppKit(parent))
-    }
-    #[cfg(target_os = "linux")]
-    {
+    } else if cfg!(target_os = "linux") {
         // X11 window id passed as pointer-sized integer.
         Some(RawWindowHandle::X11(parent as u64))
-    }
-    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
-    {
-        let _ = (parent, type_);
+    } else {
         None
     }
 }

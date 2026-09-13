@@ -2220,16 +2220,11 @@ fn scale_physical_to_logical(pw: u32, ph: u32, host_scale: f64) -> (u32, u32) {
 }
 
 fn platform_window_api() -> &'static CStr {
-    #[cfg(target_os = "windows")]
-    {
+    if cfg!(target_os = "windows") {
         CLAP_WINDOW_API_WIN32
-    }
-    #[cfg(target_os = "macos")]
-    {
+    } else if cfg!(target_os = "macos") {
         CLAP_WINDOW_API_COCOA
-    }
-    #[cfg(target_os = "linux")]
-    {
+    } else {
         CLAP_WINDOW_API_X11
     }
 }

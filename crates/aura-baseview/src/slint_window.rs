@@ -46,7 +46,13 @@ impl SlintRawHandle {
         match handle {
             Rwh::Win32(h) => SlintRawHandle::Win32(h.hwnd.get() as *mut std::ffi::c_void),
             Rwh::AppKit(h) => SlintRawHandle::AppKit(h.ns_view.as_ptr()),
-            Rwh::Xlib(h) => SlintRawHandle::X11(u64::from(h.window)),
+            Rwh::Xlib(h) => {
+                // `c_ulong` is 32-bit on Windows (LLP64), 64-bit elsewhere (LP64).
+                let xid = h.window;
+                #[cfg(target_os = "windows")]
+                let xid = u64::from(xid);
+                SlintRawHandle::X11(xid)
+            }
             _ => SlintRawHandle::Unsupported,
         }
     }

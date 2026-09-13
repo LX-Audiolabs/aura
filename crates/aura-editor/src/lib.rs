@@ -52,7 +52,7 @@ pub(crate) fn map_baseview_handle(
         #[cfg(target_os = "macos")]
         Rwh::AppKit(h) => Some(RawWindowHandle::AppKit(h.ns_view.as_ptr())),
         #[cfg(target_os = "linux")]
-        Rwh::Xlib(h) => Some(RawWindowHandle::X11(h.window as u64)),
+        Rwh::Xlib(h) => Some(RawWindowHandle::X11(h.window)),
         _ => None,
     })
 }

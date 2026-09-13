@@ -388,21 +388,14 @@ fn map_parent_widget(widget: LV2UI_Widget) -> Option<RawWindowHandle> {
     if widget.is_null() {
         return None;
     }
-    #[cfg(target_os = "windows")]
-    {
+    if cfg!(target_os = "windows") {
         Some(RawWindowHandle::Win32(widget))
-    }
-    #[cfg(target_os = "macos")]
-    {
+    } else if cfg!(target_os = "macos") {
         Some(RawWindowHandle::AppKit(widget))
-    }
-    #[cfg(target_os = "linux")]
-    {
+    } else if cfg!(target_os = "linux") {
         // LV2 X11UI widget is a Window (unsigned long); the feature data is Window*.
         Some(RawWindowHandle::X11(widget as u64))
-    }
-    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
-    {
+    } else {
         None
     }
 }
