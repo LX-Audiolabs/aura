@@ -2429,7 +2429,13 @@ unsafe extern "C" fn gui_set_parent<L: PluginLogic>(
     } else if api == CLAP_WINDOW_API_COCOA {
         RawWindowHandle::AppKit(unsafe { window.specific.cocoa })
     } else if api == CLAP_WINDOW_API_X11 {
-        RawWindowHandle::X11(u64::from(unsafe { window.specific.x11 }))
+        // `clap_xwnd` is `c_ulong`: 32-bit on Windows (LLP64), 64-bit elsewhere (LP64).
+        // Widen losslessly to `u64`; skip the no-op conversion on Unix to avoid
+        // clippy::useless_conversion.
+        let xid = unsafe { window.specific.x11 };
+        #[cfg(target_os = "windows")]
+        let xid = u64::from(xid);
+        RawWindowHandle::X11(xid)
     } else {
         return false;
     };
