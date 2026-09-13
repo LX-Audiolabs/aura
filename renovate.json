@@ -3,6 +3,7 @@
   "extends": ["config:recommended"],
   "timezone": "Europe/Berlin",
   "dependencyDashboard": true,
+  "dependencyDashboardApproval": true,
   "prConcurrentLimit": 8,
   "cargo": {
     "enabled": true,
