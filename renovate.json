@@ -6,7 +6,6 @@
   "prConcurrentLimit": 8,
   "cargo": {
     "enabled": true,
-    "schedule": ["before 4am on monday"],
     "addLabels": ["dependencies", "rust"]
   },
   "github-actions": {
