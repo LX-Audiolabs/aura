@@ -58,7 +58,7 @@ lx-aura-test = { path = "crates/aura-test", version = "0.12.0" }
 # --- Slint + windowing (pinned with aura-baseview) ---
 # 0.3.1 had Linux --release dbg! breakage; 0.3.2 removes it + Win32 destroy/X11 fixes.
 # WGL path unchanged vs 0.3.0. Master has vsync deprecation (#322) not yet released.
-baseview = "=0.3.2"
+baseview = "=0.3.4"
 slint = { version = "=1.17.1", default-features = false, features = [
     "std",
     "raw-window-handle-06",
