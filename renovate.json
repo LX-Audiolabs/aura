@@ -10,9 +10,7 @@
     "addLabels": ["dependencies", "rust"]
   },
   "github-actions": {
-    "enabled": true,
-    "schedule": ["before 4am on the first day of the month"],
-    "addLabels": ["dependencies", "ci"]
+    "enabled": false
   },
   "rust-toolchain": {
     "enabled": false
@@ -20,18 +18,13 @@
   "packageRules": [
     {
       "matchManagers": ["cargo"],
-      "matchPackagePatterns": ["slint", "slint-build", "slint-interpreter"],
+      "matchPackageNames": ["slint", "slint-build", "slint-interpreter"],
       "groupName": "slint"
     },
     {
       "matchManagers": ["cargo"],
-      "matchPackagePatterns": ["clap-sys", "clap"],
+      "matchPackageNames": ["clap-sys", "clap"],
       "groupName": "clap"
-    },
-    {
-      "matchManagers": ["github-actions"],
-      "matchPackageNames": ["dtolnay/rust-toolchain"],
-      "enabled": false
     }
   ]
 }
