@@ -30,3 +30,4 @@ docs/*
 # fastembed embedding model cache (carnet) — large binaries, never commit.
 .fastembed_cache/
 docs/
+.claude/
