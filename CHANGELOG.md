@@ -5,16 +5,20 @@ All notable changes to **AURA** (framework workspace) are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/versioning.md).
 
-## [Unreleased]
+## [0.13.0] - 2026-09-17
 
 ### Added
 
 - `lx-aura-test` (`aura_test`) on crates.io — Tier C dev-dep helpers (state
-  round-trip / process smoke). Same workspace version **0.12.0**.
+  round-trip / process smoke). Same workspace version **0.13.0**.
 
 ### Changed
 
-- Tier A+B: `publish = true` (first crates.io upload = **0.12.0**).
+- Slint **1.17.1 → 1.18.0** (`slint`, `slint-build`, `slint-interpreter`,
+  `i-slint-renderer-skia`, `i-slint-common`). 1.18 moves to `wgpu ^30`,
+  matching the workspace `wgpu = "30"` pin — resolves the duplicate
+  wgpu 28/29/30 in the dependency graph.
+- Tier A+B: `publish = true` (first crates.io upload).
 
 ## [0.12.0] - 2026-08-29
 

@@ -20,7 +20,7 @@ midir = "0.11"
 crossbeam-queue = "0.3"
 # Desktop tool: full Slint (not the plugin-minimal feature set),
 # plus raw-window-handle-06 so Phase 3 can get our own window's native HWND.
-slint = { version = "=1.17.1", default-features = true, features = [
+slint = { version = "=1.18.0", default-features = true, features = [
     "backend-winit",
     "renderer-femtovg",
     "compat-1-2",
