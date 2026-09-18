@@ -20,8 +20,9 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 - Old names kept as aliases: `backend-femtovg` → gl, `backend-wgpu` → software,
   `backend-wgpu-vulkan` → software + Vulkan-only wgpu backends.
 - `aura-editor` only requests baseview `GlConfig` when `backend-femtovg-gl` is enabled.
-- `GlInitError` is now an alias of the shared `InitError` (also used by `backend-femtovg-wgpu`).
-- FemtoVG render errors are logged once to stderr instead of silently dropped.
+- `GlInitError` / `WgpuInitError` are aliases of the shared `InitError`.
+- FemtoVG render errors are logged to stderr (per window; re-log on long streaks)
+  instead of silently dropped.
 
 ## [0.13.0] - 2026-09-17
 

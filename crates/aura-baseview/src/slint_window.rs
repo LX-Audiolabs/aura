@@ -196,6 +196,9 @@ where
     request_resize: Option<RequestResizeFn>,
     /// Frame counter for throttled host re-assert (avoid resize spam).
     frames: Cell<u32>,
+    /// Consecutive FemtoVG `render()` failures (soft-fail path). Resets on success.
+    #[cfg(any(feature = "backend-femtovg-gl", feature = "backend-femtovg-wgpu"))]
+    render_fail_streak: Cell<u32>,
 }
 
 /// Field bundle built by `SlintWindow::init_policy_fields`.
@@ -558,6 +561,8 @@ where
             pending_host_correct,
             request_resize,
             frames,
+            #[cfg(any(feature = "backend-femtovg-gl", feature = "backend-femtovg-wgpu"))]
+            render_fail_streak: Cell::new(0),
         })
     }
 
@@ -806,13 +811,17 @@ where
         (self.update)(&self.component, &mut *self.state.borrow_mut());
         // baseview closes the window on on_frame Err — swallow transient GL /
         // surface glitches (DAW context steal / driver hiccup) so the editor
-        // stays open.
-        if let Err(e) = self.adapter.renderer.render() {
-            // ponytail: log once per process; wgpu Lost/Outdated needs a surface reconfigure.
-            static LOGGED: std::sync::atomic::AtomicBool =
-                std::sync::atomic::AtomicBool::new(false);
-            if !LOGGED.swap(true, Ordering::Relaxed) {
-                eprintln!("LX UI: render failed, frame skipped: {e}");
+        // stays open. FemtoVG-wgpu already reconfigures Lost/Outdated inside
+        // begin_rendering; leftover Err (e.g. Validation) is soft-failed here.
+        match self.adapter.renderer.render() {
+            Ok(()) => self.render_fail_streak.set(0),
+            Err(e) => {
+                let n = self.render_fail_streak.get().saturating_add(1);
+                self.render_fail_streak.set(n);
+                // First fail + every ~5s at 60fps so permanent blank stays visible.
+                if n == 1 || n.is_multiple_of(300) {
+                    eprintln!("LX UI: render failed, frame skipped ({n} consecutive): {e}");
+                }
             }
         }
         Ok(())

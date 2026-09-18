@@ -46,7 +46,7 @@ impl SkiaWindowAdapter {
         let wh: Arc<dyn HasWindowHandle + Send + Sync> = handles.clone();
         let dh: Arc<dyn HasDisplayHandle + Send + Sync> = handles;
         renderer
-            .set_window_handle(wh, dh, physical_size, None)
+            .set_window_handle(wh, dh, physical_size, None, false)
             .expect("Failed to set skia window handle");
 
         Rc::new_cyclic(|weak_self| {

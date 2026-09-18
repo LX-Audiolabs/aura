@@ -46,6 +46,9 @@ pub use init_error::InitError;
 /// Kept for compatibility; same type as [`InitError`].
 #[cfg(feature = "backend-femtovg-gl")]
 pub type GlInitError = InitError;
+/// Kept for compatibility; same type as [`InitError`].
+#[cfg(feature = "backend-femtovg-wgpu")]
+pub type WgpuInitError = InitError;
 #[cfg(feature = "backend-software")]
 pub mod blit;
 #[cfg(feature = "backend-femtovg-wgpu")]
