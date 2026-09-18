@@ -9,41 +9,10 @@
 
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 
+use crate::owned_handles::OwnedWindowHandles;
 use i_slint_renderer_skia::{SkiaRenderer, SkiaSharedContext};
-use raw_window_handle::{
-    DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawDisplayHandle,
-    RawWindowHandle, WindowHandle,
-};
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use slint::{PhysicalSize, Window, platform::WindowAdapter};
-
-/// Owned window handle pair extracted from `baseview::WindowContext`.
-///
-/// `i-slint-renderer-skia` requires `Arc<dyn HasWindowHandle + Send + Sync>`,
-/// but `baseview::WindowContext` is `Rc`-based (not `Send`). We extract raw
-/// handles which are immutable integers/pointers — safe to share.
-struct OwnedWindowHandles {
-    raw_window: RawWindowHandle,
-    raw_display: RawDisplayHandle,
-}
-
-// SAFETY: Raw window/display handles are platform handle integers that remain
-// valid for the adapter's lifetime. They are never mutated after extraction.
-unsafe impl Send for OwnedWindowHandles {}
-unsafe impl Sync for OwnedWindowHandles {}
-
-impl HasWindowHandle for OwnedWindowHandles {
-    fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
-        // SAFETY: raw handle extracted from valid WindowContext, valid for adapter lifetime.
-        Ok(unsafe { WindowHandle::borrow_raw(self.raw_window) })
-    }
-}
-
-impl HasDisplayHandle for OwnedWindowHandles {
-    fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
-        // SAFETY: raw handle extracted from valid WindowContext, valid for adapter lifetime.
-        Ok(unsafe { DisplayHandle::borrow_raw(self.raw_display) })
-    }
-}
 
 pub struct SkiaWindowAdapter {
     pub renderer: SkiaRenderer,
@@ -71,14 +40,8 @@ impl SkiaWindowAdapter {
         #[cfg(target_os = "linux")]
         let renderer = SkiaRenderer::default_opengl(&skia_context);
 
-        let handles = {
-            let wh = window_handle.window_handle().expect("window_handle");
-            let dh = window_handle.display_handle().expect("display_handle");
-            Arc::new(OwnedWindowHandles {
-                raw_window: wh.as_raw(),
-                raw_display: dh.as_raw(),
-            })
-        };
+        let handles =
+            Arc::new(OwnedWindowHandles::new(window_handle).expect("window/display handle"));
 
         let wh: Arc<dyn HasWindowHandle + Send + Sync> = handles.clone();
         let dh: Arc<dyn HasDisplayHandle + Send + Sync> = handles;

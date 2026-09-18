@@ -1,3 +1,4 @@
+use crate::init_error::InitError;
 use crate::open_gl_interface::SlintGlContext;
 use baseview::gl::GlContext;
 use slint::{
@@ -6,32 +7,9 @@ use slint::{
 };
 use std::{
     cell::RefCell,
-    fmt,
     panic::{AssertUnwindSafe, catch_unwind},
     rc::Rc,
 };
-
-/// Soft-fail error when OpenGL / `FemtoVG` cannot start (no host panic).
-#[derive(Debug)]
-pub struct GlInitError {
-    pub message: String,
-}
-
-impl GlInitError {
-    pub fn new(message: impl Into<String>) -> Self {
-        Self {
-            message: message.into(),
-        }
-    }
-}
-
-impl fmt::Display for GlInitError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.message)
-    }
-}
-
-impl std::error::Error for GlInitError {}
 
 pub struct BaseviewSlintWindowAdapter {
     pub renderer: FemtoVGRenderer,
@@ -44,24 +22,24 @@ impl BaseviewSlintWindowAdapter {
     /// shaders / context are unavailable (old Linux/macOS hosts).
     ///
     /// # Errors
-    /// Returns [`GlInitError`] when the OpenGL context or `FemtoVG` renderer
+    /// Returns [`InitError`] when the OpenGL context or `FemtoVG` renderer
     /// init fails or panics.
     pub fn try_new(
         physical_size: PhysicalSize,
         gl_context: GlContext,
-    ) -> Result<Rc<Self>, GlInitError> {
+    ) -> Result<Rc<Self>, InitError> {
         let gl_interface = SlintGlContext::new(gl_context);
 
         // Prefer Result from FemtoVG; also catch panics from broken drivers.
         let renderer = match catch_unwind(AssertUnwindSafe(|| FemtoVGRenderer::new(gl_interface))) {
             Ok(Ok(r)) => r,
             Ok(Err(e)) => {
-                return Err(GlInitError::new(format!(
+                return Err(InitError::new(format!(
                     "LX UI: OpenGL 3.2 Core unavailable or FemtoVG init failed ({e})"
                 )));
             }
             Err(_) => {
-                return Err(GlInitError::new(
+                return Err(InitError::new(
                     "LX UI: OpenGL 3.2 Core unavailable or FemtoVG init panicked",
                 ));
             }

@@ -39,14 +39,19 @@ pub mod baseview_slint_window_adapter;
 #[cfg(feature = "backend-femtovg-gl")]
 pub mod open_gl_interface;
 
+#[cfg(any(feature = "backend-femtovg-gl", feature = "backend-femtovg-wgpu"))]
+mod init_error;
+#[cfg(any(feature = "backend-femtovg-gl", feature = "backend-femtovg-wgpu"))]
+pub use init_error::InitError;
+/// Kept for compatibility; same type as [`InitError`].
 #[cfg(feature = "backend-femtovg-gl")]
-pub use baseview_slint_window_adapter::GlInitError;
-#[cfg(feature = "backend-femtovg-wgpu")]
-pub mod femtovg_wgpu_window_adapter;
-#[cfg(feature = "backend-femtovg-wgpu")]
-pub use femtovg_wgpu_window_adapter::WgpuInitError;
+pub type GlInitError = InitError;
 #[cfg(feature = "backend-software")]
 pub mod blit;
+#[cfg(feature = "backend-femtovg-wgpu")]
+pub mod femtovg_wgpu_window_adapter;
+#[cfg(any(feature = "backend-femtovg-wgpu", feature = "backend-skia"))]
+mod owned_handles;
 pub mod platform;
 pub mod scale;
 #[cfg(feature = "backend-skia")]

@@ -1,13 +1,15 @@
 #[cfg(feature = "backend-femtovg-gl")]
-use crate::baseview_slint_window_adapter::BaseviewSlintWindowAdapter;
+use crate::baseview_slint_window_adapter::BaseviewSlintWindowAdapter as Adapter;
 #[cfg(feature = "backend-software")]
 use crate::blit::BlitPipeline;
 #[cfg(feature = "backend-femtovg-wgpu")]
-use crate::femtovg_wgpu_window_adapter::FemtovgWgpuWindowAdapter;
+use crate::femtovg_wgpu_window_adapter::FemtovgWgpuWindowAdapter as Adapter;
+#[cfg(feature = "backend-femtovg-gl")]
+use crate::init_error::InitError;
 use crate::platform;
 use crate::scale::{EditorScale, RequestResizeFn, SizePolicy, to_physical_px, unpack_size};
 #[cfg(feature = "backend-skia")]
-use crate::skia_window_adapter::SkiaWindowAdapter;
+use crate::skia_window_adapter::SkiaWindowAdapter as Adapter;
 #[cfg(feature = "backend-software")]
 use crate::software_renderer::render_to_rgba;
 use crate::translate::translate_mouse_button;
@@ -154,27 +156,12 @@ where
     pub component: C,
     pub state: RefCell<S>,
     pub update: U,
-    #[cfg(all(
+    #[cfg(any(
         feature = "backend-femtovg-gl",
-        not(feature = "backend-femtovg-wgpu"),
-        not(feature = "backend-skia"),
-        not(feature = "backend-software")
-    ))]
-    pub adapter: Rc<BaseviewSlintWindowAdapter>,
-    #[cfg(all(
         feature = "backend-femtovg-wgpu",
-        not(feature = "backend-femtovg-gl"),
-        not(feature = "backend-skia"),
-        not(feature = "backend-software")
+        feature = "backend-skia"
     ))]
-    pub adapter: Rc<FemtovgWgpuWindowAdapter>,
-    #[cfg(all(
-        feature = "backend-skia",
-        not(feature = "backend-femtovg-gl"),
-        not(feature = "backend-femtovg-wgpu"),
-        not(feature = "backend-software")
-    ))]
-    pub adapter: Rc<SkiaWindowAdapter>,
+    pub adapter: Rc<Adapter>,
     #[cfg(all(
         feature = "backend-software",
         not(feature = "backend-femtovg-gl"),
@@ -229,29 +216,10 @@ where
     S: Send + 'static,
     U: Fn(&C, &mut S) + Send + 'static,
 {
-    #[cfg(all(
+    #[cfg(any(
         feature = "backend-femtovg-gl",
-        not(feature = "backend-femtovg-wgpu"),
-        not(feature = "backend-skia"),
-        not(feature = "backend-software")
-    ))]
-    fn slint_window_ref(&self) -> &slint::Window {
-        &self.adapter.slint_window
-    }
-    #[cfg(all(
         feature = "backend-femtovg-wgpu",
-        not(feature = "backend-femtovg-gl"),
-        not(feature = "backend-skia"),
-        not(feature = "backend-software")
-    ))]
-    fn slint_window_ref(&self) -> &slint::Window {
-        &self.adapter.slint_window
-    }
-    #[cfg(all(
-        feature = "backend-skia",
-        not(feature = "backend-femtovg-gl"),
-        not(feature = "backend-femtovg-wgpu"),
-        not(feature = "backend-software")
+        feature = "backend-skia"
     ))]
     fn slint_window_ref(&self) -> &slint::Window {
         &self.adapter.slint_window
@@ -455,11 +423,58 @@ where
         )
     }
 
-    #[cfg(all(
+    #[cfg(feature = "backend-femtovg-gl")]
+    fn open_adapter(
+        window: &WindowContext,
+        size: PhysicalSize,
+    ) -> Result<Rc<Adapter>, HandlerError> {
+        // Soft-fail: missing GL context (old/broken GLX, no 3.2 Core) — do not panic.
+        let Some(gl_context) = window.gl_context() else {
+            return Err(HandlerError::from(InitError::new(
+                "LX UI: OpenGL 3.2 Core unavailable or FemtoVG init failed \
+                 (no OpenGL context on window — editor left closed)",
+            )));
+        };
+        if let Err(e) = unsafe { gl_context.make_current() } {
+            return Err(HandlerError::from(InitError::new(format!(
+                "LX UI: OpenGL make_current failed ({e}) — editor left closed"
+            ))));
+        }
+        // SAFETY: context is current on this GUI thread.
+        if let Err(e) = unsafe { crate::open_gl_interface::reject_software_gl11(&gl_context) } {
+            let _ = unsafe { gl_context.make_not_current() };
+            return Err(HandlerError::from(InitError::new(format!(
+                "LX UI: {e} — editor left closed"
+            ))));
+        }
+        // Leave GL current on the GUI thread for subsequent FemtoVG frames.
+        Adapter::try_new(size, gl_context.clone()).map_err(|e| {
+            let _ = unsafe { gl_context.make_not_current() };
+            HandlerError::from(e)
+        })
+    }
+
+    #[cfg(feature = "backend-femtovg-wgpu")]
+    fn open_adapter(
+        window: &WindowContext,
+        size: PhysicalSize,
+    ) -> Result<Rc<Adapter>, HandlerError> {
+        Adapter::try_new(size, window).map_err(HandlerError::from)
+    }
+
+    #[cfg(feature = "backend-skia")]
+    #[allow(clippy::unnecessary_wraps)] // same signature as the fallible backends
+    fn open_adapter(
+        window: &WindowContext,
+        size: PhysicalSize,
+    ) -> Result<Rc<Adapter>, HandlerError> {
+        Ok(Adapter::new(size, window))
+    }
+
+    #[cfg(any(
         feature = "backend-femtovg-gl",
-        not(feature = "backend-femtovg-wgpu"),
-        not(feature = "backend-skia"),
-        not(feature = "backend-software")
+        feature = "backend-femtovg-wgpu",
+        feature = "backend-skia"
     ))]
     fn new<B>(
         window: &WindowContext,
@@ -472,32 +487,6 @@ where
     where
         B: FnOnce(&mut S) -> C + Send + 'static,
     {
-        // Soft-fail: missing GL context (old/broken GLX, no 3.2 Core) — do not panic.
-        let Some(gl_context) = window.gl_context() else {
-            return Err(HandlerError::from(
-                crate::baseview_slint_window_adapter::GlInitError::new(
-                    "LX UI: OpenGL 3.2 Core unavailable or FemtoVG init failed \
-                     (no OpenGL context on window — editor left closed)",
-                ),
-            ));
-        };
-        if let Err(e) = unsafe { gl_context.make_current() } {
-            return Err(HandlerError::from(
-                crate::baseview_slint_window_adapter::GlInitError::new(format!(
-                    "LX UI: OpenGL make_current failed ({e}) — editor left closed"
-                )),
-            ));
-        }
-        // SAFETY: context is current on this GUI thread.
-        if let Err(e) = unsafe { crate::open_gl_interface::reject_software_gl11(&gl_context) } {
-            let _ = unsafe { gl_context.make_not_current() };
-            return Err(HandlerError::from(
-                crate::baseview_slint_window_adapter::GlInitError::new(format!(
-                    "LX UI: {e} — editor left closed"
-                )),
-            ));
-        }
-
         let open_scale = if policy.host_driven_scale {
             policy.scale.get()
         } else {
@@ -509,16 +498,7 @@ where
 
         // One-shot set_platform + per-open adapter handoff (reopen-safe).
         platform::ensure_platform();
-        let adapter = match BaseviewSlintWindowAdapter::try_new(
-            PhysicalSize::new(phys_w, phys_h),
-            gl_context.clone(),
-        ) {
-            Ok(a) => a,
-            Err(e) => {
-                let _ = unsafe { gl_context.make_not_current() };
-                return Err(HandlerError::from(e));
-            }
-        };
+        let adapter = Self::open_adapter(window, PhysicalSize::new(phys_w, phys_h))?;
         platform::set_next_adapter(adapter.clone() as Rc<dyn slint::platform::WindowAdapter>);
 
         let component = build(&mut state);
@@ -540,7 +520,6 @@ where
         }
 
         // Force child HWND to content physical size (not OS-DPI logical).
-        // Leave GL current on the GUI thread for subsequent FemtoVG frames.
         let _ = window.resize(dpi::PhysicalSize::new(phys_w, phys_h));
 
         let (
@@ -556,7 +535,8 @@ where
 
         // Windows: ask host to match our frame immediately (Bitwig/Reaper/FL
         // often open the parent too small, then clip the child).
-        if Self::host_resize_pushback_allowed() {
+        // Skia never did this; kept as-is (behavior-preserving refactor).
+        if cfg!(not(feature = "backend-skia")) && Self::host_resize_pushback_allowed() {
             pending_host_correct.set(Some((lw, lh)));
         }
 
@@ -565,179 +545,7 @@ where
             last_cursor_pos: RefCell::new(LogicalPosition::new(0.0, 0.0)),
             component,
             state: RefCell::new(state),
-            adapter: adapter.clone(),
-            window_ctx: window.clone(),
-            key_capture: KeyCapture::default(),
-            pending_clipboard_paste: Cell::new(false),
-            ctrl_held: Cell::new(false),
-            scale,
-            last_applied_scale,
-            host_driven_scale,
-            logical_size,
-            pending_size,
-            pending_host_correct,
-            request_resize,
-            frames,
-        })
-    }
-
-    #[cfg(all(
-        feature = "backend-femtovg-wgpu",
-        not(feature = "backend-femtovg-gl"),
-        not(feature = "backend-skia"),
-        not(feature = "backend-software")
-    ))]
-    fn new<B>(
-        window: &WindowContext,
-        mut state: S,
-        update: U,
-        build: B,
-        policy: SizePolicy,
-        request_resize: Option<RequestResizeFn>,
-    ) -> Result<SlintWindow<C, S, U>, HandlerError>
-    where
-        B: FnOnce(&mut S) -> C + Send + 'static,
-    {
-        let open_scale = if policy.host_driven_scale {
-            policy.scale.get()
-        } else {
-            window.size().scale_factor
-        };
-        let (lw, lh) = policy.design_size;
-        let phys_w = to_physical_px(lw, open_scale);
-        let phys_h = to_physical_px(lh, open_scale);
-
-        platform::ensure_platform();
-        let adapter = match FemtovgWgpuWindowAdapter::try_new(
-            PhysicalSize::new(phys_w, phys_h),
-            window,
-        ) {
-            Ok(a) => a,
-            Err(e) => return Err(HandlerError::from(e)),
-        };
-        platform::set_next_adapter(adapter.clone() as Rc<dyn slint::platform::WindowAdapter>);
-
-        let component = build(&mut state);
-        platform::clear_next_adapter();
-
-        #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-        {
-            adapter
-                .slint_window
-                .dispatch_event(slint::platform::WindowEvent::ScaleFactorChanged {
-                    scale_factor: open_scale as f32,
-                });
-            adapter
-                .slint_window
-                .dispatch_event(slint::platform::WindowEvent::Resized {
-                    size: LogicalSize::new(lw as f32, lh as f32),
-                });
-        }
-
-        let _ = window.resize(dpi::PhysicalSize::new(phys_w, phys_h));
-
-        let (
-            scale,
-            last_applied_scale,
-            host_driven_scale,
-            logical_size,
-            pending_size,
-            pending_host_correct,
-            request_resize,
-            frames,
-        ) = Self::init_policy_fields(policy, request_resize, open_scale);
-
-        if Self::host_resize_pushback_allowed() {
-            pending_host_correct.set(Some((lw, lh)));
-        }
-
-        Ok(SlintWindow {
-            update,
-            last_cursor_pos: RefCell::new(LogicalPosition::new(0.0, 0.0)),
-            component,
-            state: RefCell::new(state),
-            adapter: adapter.clone(),
-            window_ctx: window.clone(),
-            key_capture: KeyCapture::default(),
-            pending_clipboard_paste: Cell::new(false),
-            ctrl_held: Cell::new(false),
-            scale,
-            last_applied_scale,
-            host_driven_scale,
-            logical_size,
-            pending_size,
-            pending_host_correct,
-            request_resize,
-            frames,
-        })
-    }
-
-    #[cfg(all(
-        feature = "backend-skia",
-        not(feature = "backend-femtovg-gl"),
-        not(feature = "backend-femtovg-wgpu"),
-        not(feature = "backend-software")
-    ))]
-    fn new<B>(
-        window: &WindowContext,
-        mut state: S,
-        update: U,
-        build: B,
-        policy: SizePolicy,
-        request_resize: Option<RequestResizeFn>,
-    ) -> Result<SlintWindow<C, S, U>, HandlerError>
-    where
-        B: FnOnce(&mut S) -> C + Send + 'static,
-    {
-        let open_scale = if policy.host_driven_scale {
-            policy.scale.get()
-        } else {
-            window.size().scale_factor
-        };
-        let (lw, lh) = policy.design_size;
-        let phys_w = to_physical_px(lw, open_scale);
-        let phys_h = to_physical_px(lh, open_scale);
-
-        platform::ensure_platform();
-        let adapter = SkiaWindowAdapter::new(PhysicalSize::new(phys_w, phys_h), window);
-        platform::set_next_adapter(adapter.clone() as Rc<dyn slint::platform::WindowAdapter>);
-
-        let component = build(&mut state);
-        platform::clear_next_adapter();
-
-        #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-        {
-            adapter
-                .slint_window
-                .dispatch_event(slint::platform::WindowEvent::ScaleFactorChanged {
-                    scale_factor: open_scale as f32,
-                });
-            adapter
-                .slint_window
-                .dispatch_event(slint::platform::WindowEvent::Resized {
-                    size: LogicalSize::new(lw as f32, lh as f32),
-                });
-        }
-
-        let _ = window.resize(dpi::PhysicalSize::new(phys_w, phys_h));
-
-        let (
-            scale,
-            last_applied_scale,
-            host_driven_scale,
-            logical_size,
-            pending_size,
-            pending_host_correct,
-            request_resize,
-            frames,
-        ) = Self::init_policy_fields(policy, request_resize, open_scale);
-
-        Ok(SlintWindow {
-            update,
-            last_cursor_pos: RefCell::new(LogicalPosition::new(0.0, 0.0)),
-            component,
-            state: RefCell::new(state),
-            adapter: adapter.clone(),
+            adapter,
             window_ctx: window.clone(),
             key_capture: KeyCapture::default(),
             pending_clipboard_paste: Cell::new(false),
@@ -989,37 +797,24 @@ where
     S: Send + 'static,
     U: Fn(&C, &mut S) + Send + 'static,
 {
-    #[cfg(all(
-        feature = "backend-femtovg-gl",
-        not(feature = "backend-femtovg-wgpu"),
-        not(feature = "backend-skia"),
-        not(feature = "backend-software")
-    ))]
+    #[cfg(any(feature = "backend-femtovg-gl", feature = "backend-femtovg-wgpu"))]
     fn on_frame(&self) -> Result<(), HandlerError> {
         slint::platform::update_timers_and_animations();
         self.flush_pending_clipboard_paste();
         // HiDPI / size reconcile before author sync + paint (truce-slint).
         self.reconcile_pending();
         (self.update)(&self.component, &mut *self.state.borrow_mut());
-        // baseview closes the window on on_frame Err — swallow transient GL
-        // glitches (DAW context steal / driver hiccup) so the editor stays open.
-        let _ = self.adapter.renderer.render();
-        Ok(())
-    }
-
-    #[cfg(all(
-        feature = "backend-femtovg-wgpu",
-        not(feature = "backend-femtovg-gl"),
-        not(feature = "backend-skia"),
-        not(feature = "backend-software")
-    ))]
-    fn on_frame(&self) -> Result<(), HandlerError> {
-        slint::platform::update_timers_and_animations();
-        self.flush_pending_clipboard_paste();
-        self.reconcile_pending();
-        (self.update)(&self.component, &mut *self.state.borrow_mut());
-        // Same soft-fail as GL: don't tear down the editor on a bad frame.
-        let _ = self.adapter.renderer.render();
+        // baseview closes the window on on_frame Err — swallow transient GL /
+        // surface glitches (DAW context steal / driver hiccup) so the editor
+        // stays open.
+        if let Err(e) = self.adapter.renderer.render() {
+            // ponytail: log once per process; wgpu Lost/Outdated needs a surface reconfigure.
+            static LOGGED: std::sync::atomic::AtomicBool =
+                std::sync::atomic::AtomicBool::new(false);
+            if !LOGGED.swap(true, Ordering::Relaxed) {
+                eprintln!("LX UI: render failed, frame skipped: {e}");
+            }
+        }
         Ok(())
     }
 
