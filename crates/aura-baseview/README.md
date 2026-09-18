@@ -18,14 +18,27 @@ Upstream upgrades (baseview / Slint / renderer) are version bumps **here**, not 
 
 ## Features
 
-| Always | Choose |
-|--------|--------|
-| Slint UI | `backend-femtovg` (default, OpenGL) |
-| baseview host window | `backend-skia` |
-| | `backend-wgpu` (software + wgpu blit) |
+Exactly one canonical renderer:
+
+| Feature | Renderer |
+|---------|----------|
+| `backend-femtovg-gl` (**default**) | FemtoVG + OpenGL |
+| `backend-femtovg-wgpu` | FemtoVG + wgpu (GPU, no software blit) |
+| `backend-skia` | Skia |
+| `backend-software` | Software renderer + wgpu blit |
+
+Transition aliases (same as enabling the canonical feature):
+
+| Alias | Resolves to |
+|-------|-------------|
+| `backend-femtovg` | `backend-femtovg-gl` |
+| `backend-wgpu` | `backend-software` |
+| `backend-wgpu-vulkan` | `backend-software` + Vulkan-only wgpu backends |
 
 ```toml
-aura-baseview = { path = "...", features = ["backend-femtovg"] }
+lx-aura-baseview = { version = "0.14", features = ["backend-femtovg-wgpu"] }
+# or keep the old name during cutover:
+lx-aura-baseview = { version = "0.14", features = ["backend-femtovg"] }
 ```
 
 ```rust

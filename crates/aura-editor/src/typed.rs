@@ -12,7 +12,9 @@ use aura_baseview::slint_window::SlintWindow;
 use aura_baseview::{RequestResizeFn, SizePolicy, pack_size, to_physical_px};
 use aura_core::editor::{Editor, PluginContext, RawWindowHandle};
 use aura_params::Params;
-use baseview::{WindowSettings, gl::GlConfig};
+use baseview::WindowSettings;
+#[cfg(feature = "backend-femtovg-gl")]
+use baseview::gl::GlConfig;
 use slint::ComponentHandle;
 
 use super::ui_zoom::UiZoom;
@@ -266,11 +268,12 @@ where
 
         let options = WindowSettings::new()
             .with_title("LX Audiolabs")
-            .with_size(baseview::dpi::PhysicalSize::new(phys_w, phys_h))
-            .with_gl_config(GlConfig {
-                alpha_bits: 8,
-                ..GlConfig::default()
-            });
+            .with_size(baseview::dpi::PhysicalSize::new(phys_w, phys_h));
+        #[cfg(feature = "backend-femtovg-gl")]
+        let options = options.with_gl_config(GlConfig {
+            alpha_bits: 8,
+            ..GlConfig::default()
+        });
 
         let build = Arc::clone(&self.build);
         let sync = Arc::clone(&self.sync);

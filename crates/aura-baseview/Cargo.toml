@@ -3,7 +3,7 @@ name = "lx-aura-baseview"
 version.workspace = true
 edition.workspace = true
 license = "MIT"
-description = "AURA Slint + baseview window stack (FemtoVG / Skia / software)"
+description = "AURA Slint + baseview window stack (FemtoVG-GL / FemtoVG-WGPU / Skia / software)"
 repository.workspace = true
 homepage.workspace = true
 authors.workspace = true
@@ -26,18 +26,29 @@ keyboard-types = { version = "0.8.3", default-features = false }
 copypasta = "0.10"
 
 i-slint-renderer-skia = { version = "=1.18.0", optional = true }
+i-slint-renderer-femtovg = { version = "=1.18.0", optional = true, default-features = false, features = ["wgpu-30"] }
 wgpu = { workspace = true, optional = true }
 pollster = { version = "1.0", optional = true }
 
 [features]
-default = ["backend-femtovg"]
-backend-femtovg = ["slint/renderer-femtovg", "baseview/opengl"]
+default = ["backend-femtovg-gl"]
+# Canonical backends (exactly one):
+backend-femtovg-gl = ["slint/renderer-femtovg", "baseview/opengl"]
+backend-femtovg-wgpu = [
+    "slint/renderer-femtovg-wgpu",
+    "slint/unstable-wgpu-30",
+    "dep:i-slint-renderer-femtovg",
+    "dep:wgpu",
+]
 backend-skia = ["slint/renderer-skia", "dep:i-slint-renderer-skia"]
-backend-wgpu = ["slint/renderer-software", "dep:wgpu", "dep:pollster"]
-backend-wgpu-vulkan = ["backend-wgpu"]
+backend-software = ["slint/renderer-software", "dep:wgpu", "dep:pollster"]
+# Transition aliases (non-breaking):
+backend-femtovg = ["backend-femtovg-gl"]
+backend-wgpu = ["backend-software"]
+backend-wgpu-vulkan = ["backend-software"]
 
 [package.metadata.docs.rs]
-features = ["backend-femtovg"]
+features = ["backend-femtovg-gl"]
 
 [lints]
 workspace = true
