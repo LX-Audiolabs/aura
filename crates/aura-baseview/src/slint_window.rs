@@ -196,7 +196,7 @@ where
     request_resize: Option<RequestResizeFn>,
     /// Frame counter for throttled host re-assert (avoid resize spam).
     frames: Cell<u32>,
-    /// Consecutive FemtoVG `render()` failures (soft-fail path). Resets on success.
+    /// Consecutive `FemtoVG` `render()` failures (soft-fail path). Resets on success.
     #[cfg(any(feature = "backend-femtovg-gl", feature = "backend-femtovg-wgpu"))]
     render_fail_streak: Cell<u32>,
 }
