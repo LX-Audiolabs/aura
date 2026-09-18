@@ -31,14 +31,17 @@ paste = "1"
 i-slint-common = { version = "=1.18.0", features = ["fontconfig-dlopen"] }
 
 [features]
-default = ["backend-femtovg"]
-backend-femtovg = ["lx-aura-baseview/backend-femtovg"]
+default = ["backend-femtovg-gl"]
+backend-femtovg-gl = ["lx-aura-baseview/backend-femtovg-gl"]
+backend-femtovg-wgpu = ["lx-aura-baseview/backend-femtovg-wgpu"]
 backend-skia = ["lx-aura-baseview/backend-skia"]
+backend-software = ["lx-aura-baseview/backend-software"]
+backend-femtovg = ["lx-aura-baseview/backend-femtovg"]
 backend-wgpu = ["lx-aura-baseview/backend-wgpu"]
 backend-wgpu-vulkan = ["lx-aura-baseview/backend-wgpu-vulkan"]
 
 [package.metadata.docs.rs]
-features = ["backend-femtovg"]
+features = ["backend-femtovg-gl"]
 
 [lints]
 workspace = true

@@ -5,6 +5,22 @@ All notable changes to **AURA** (framework workspace) are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/versioning.md).
 
+## [0.14.0] - 2026-03-22
+
+### Added
+
+- `backend-femtovg-wgpu` — FemtoVG rendered via wgpu (Slint `renderer-femtovg-wgpu` +
+  `unstable-wgpu-30`), surface from baseview raw-window-handle. Not the software blit path.
+- Canonical feature names: `backend-femtovg-gl`, `backend-femtovg-wgpu`, `backend-skia`,
+  `backend-software`.
+
+### Changed
+
+- Default renderer feature renamed to `backend-femtovg-gl` (still FemtoVG + OpenGL).
+- Old names kept as aliases: `backend-femtovg` → gl, `backend-wgpu` → software,
+  `backend-wgpu-vulkan` → software + Vulkan-only wgpu backends.
+- `aura-editor` only requests baseview `GlConfig` when `backend-femtovg-gl` is enabled.
+
 ## [0.13.0] - 2026-09-17
 
 ### Added

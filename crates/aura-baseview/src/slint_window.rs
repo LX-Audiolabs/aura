@@ -1,19 +1,21 @@
-#[cfg(feature = "backend-femtovg")]
+#[cfg(feature = "backend-femtovg-gl")]
 use crate::baseview_slint_window_adapter::BaseviewSlintWindowAdapter;
-#[cfg(feature = "backend-wgpu")]
+#[cfg(feature = "backend-software")]
 use crate::blit::BlitPipeline;
+#[cfg(feature = "backend-femtovg-wgpu")]
+use crate::femtovg_wgpu_window_adapter::FemtovgWgpuWindowAdapter;
 use crate::platform;
 use crate::scale::{EditorScale, RequestResizeFn, SizePolicy, to_physical_px, unpack_size};
 #[cfg(feature = "backend-skia")]
 use crate::skia_window_adapter::SkiaWindowAdapter;
-#[cfg(feature = "backend-wgpu")]
+#[cfg(feature = "backend-software")]
 use crate::software_renderer::render_to_rgba;
 use crate::translate::translate_mouse_button;
 use baseview::{
     Event, EventStatus, HandlerError, Window, WindowContext, WindowSettings, WindowSize, dpi,
 };
 use keyboard_types::{Code, Key};
-#[cfg(feature = "backend-wgpu")]
+#[cfg(feature = "backend-software")]
 use raw_window_handle::HasDisplayHandle;
 use raw_window_handle::HasWindowHandle;
 use slint::{ComponentHandle, LogicalPosition, LogicalSize, PhysicalSize, platform::WindowEvent};
@@ -117,7 +119,7 @@ impl std::ops::Deref for SlintParentedWindow {
     }
 }
 
-#[cfg(feature = "backend-wgpu")]
+#[cfg(feature = "backend-software")]
 use slint::platform::software_renderer::{MinimalSoftwareWindow, PremultipliedRgbaColor};
 
 #[derive(Default, Debug, Clone, PartialEq)]
@@ -130,7 +132,7 @@ pub enum KeyCapture {
 }
 
 /// Wgpu rendering state, created once when the window opens.
-#[cfg(feature = "backend-wgpu")]
+#[cfg(feature = "backend-software")]
 pub(crate) struct WgpuState {
     slint_window: Rc<MinimalSoftwareWindow>,
     device: wgpu::Device,
@@ -152,13 +154,31 @@ where
     pub component: C,
     pub state: RefCell<S>,
     pub update: U,
-    #[cfg(all(feature = "backend-femtovg", not(feature = "backend-skia")))]
+    #[cfg(all(
+        feature = "backend-femtovg-gl",
+        not(feature = "backend-femtovg-wgpu"),
+        not(feature = "backend-skia"),
+        not(feature = "backend-software")
+    ))]
     pub adapter: Rc<BaseviewSlintWindowAdapter>,
-    #[cfg(all(feature = "backend-skia", not(feature = "backend-femtovg")))]
+    #[cfg(all(
+        feature = "backend-femtovg-wgpu",
+        not(feature = "backend-femtovg-gl"),
+        not(feature = "backend-skia"),
+        not(feature = "backend-software")
+    ))]
+    pub adapter: Rc<FemtovgWgpuWindowAdapter>,
+    #[cfg(all(
+        feature = "backend-skia",
+        not(feature = "backend-femtovg-gl"),
+        not(feature = "backend-femtovg-wgpu"),
+        not(feature = "backend-software")
+    ))]
     pub adapter: Rc<SkiaWindowAdapter>,
     #[cfg(all(
-        feature = "backend-wgpu",
-        not(feature = "backend-femtovg"),
+        feature = "backend-software",
+        not(feature = "backend-femtovg-gl"),
+        not(feature = "backend-femtovg-wgpu"),
         not(feature = "backend-skia")
     ))]
     pub(crate) wgpu: WgpuState,
@@ -210,24 +230,36 @@ where
     U: Fn(&C, &mut S) + Send + 'static,
 {
     #[cfg(all(
-        feature = "backend-femtovg",
+        feature = "backend-femtovg-gl",
+        not(feature = "backend-femtovg-wgpu"),
         not(feature = "backend-skia"),
-        not(feature = "backend-wgpu")
+        not(feature = "backend-software")
+    ))]
+    fn slint_window_ref(&self) -> &slint::Window {
+        &self.adapter.slint_window
+    }
+    #[cfg(all(
+        feature = "backend-femtovg-wgpu",
+        not(feature = "backend-femtovg-gl"),
+        not(feature = "backend-skia"),
+        not(feature = "backend-software")
     ))]
     fn slint_window_ref(&self) -> &slint::Window {
         &self.adapter.slint_window
     }
     #[cfg(all(
         feature = "backend-skia",
-        not(feature = "backend-femtovg"),
-        not(feature = "backend-wgpu")
+        not(feature = "backend-femtovg-gl"),
+        not(feature = "backend-femtovg-wgpu"),
+        not(feature = "backend-software")
     ))]
     fn slint_window_ref(&self) -> &slint::Window {
         &self.adapter.slint_window
     }
     #[cfg(all(
-        feature = "backend-wgpu",
-        not(feature = "backend-femtovg"),
+        feature = "backend-software",
+        not(feature = "backend-femtovg-gl"),
+        not(feature = "backend-femtovg-wgpu"),
         not(feature = "backend-skia")
     ))]
     fn slint_window_ref(&self) -> &slint::Window {
@@ -261,10 +293,25 @@ where
         // Keep HWND pixel size in lockstep with the renderer (no OS DPI multiply).
         self.resize_child_physical(phys_w, phys_h);
 
-        #[cfg(all(
-            feature = "backend-femtovg",
-            not(feature = "backend-skia"),
-            not(feature = "backend-wgpu")
+        #[cfg(any(
+            all(
+                feature = "backend-femtovg-gl",
+                not(feature = "backend-femtovg-wgpu"),
+                not(feature = "backend-skia"),
+                not(feature = "backend-software")
+            ),
+            all(
+                feature = "backend-femtovg-wgpu",
+                not(feature = "backend-femtovg-gl"),
+                not(feature = "backend-skia"),
+                not(feature = "backend-software")
+            ),
+            all(
+                feature = "backend-skia",
+                not(feature = "backend-femtovg-gl"),
+                not(feature = "backend-femtovg-wgpu"),
+                not(feature = "backend-software")
+            )
         ))]
         {
             self.adapter.update_size(PhysicalSize::new(phys_w, phys_h));
@@ -281,27 +328,9 @@ where
                 });
         }
         #[cfg(all(
-            feature = "backend-skia",
-            not(feature = "backend-femtovg"),
-            not(feature = "backend-wgpu")
-        ))]
-        {
-            self.adapter.update_size(PhysicalSize::new(phys_w, phys_h));
-            self.adapter.slint_window.dispatch_event(
-                slint::platform::WindowEvent::ScaleFactorChanged {
-                    scale_factor: scale_f32,
-                },
-            );
-            #[allow(clippy::cast_precision_loss)]
-            self.adapter
-                .slint_window
-                .dispatch_event(slint::platform::WindowEvent::Resized {
-                    size: LogicalSize::new(lw as f32, lh as f32),
-                });
-        }
-        #[cfg(all(
-            feature = "backend-wgpu",
-            not(feature = "backend-femtovg"),
+            feature = "backend-software",
+            not(feature = "backend-femtovg-gl"),
+            not(feature = "backend-femtovg-wgpu"),
             not(feature = "backend-skia")
         ))]
         {
@@ -427,9 +456,10 @@ where
     }
 
     #[cfg(all(
-        feature = "backend-femtovg",
+        feature = "backend-femtovg-gl",
+        not(feature = "backend-femtovg-wgpu"),
         not(feature = "backend-skia"),
-        not(feature = "backend-wgpu")
+        not(feature = "backend-software")
     ))]
     fn new<B>(
         window: &WindowContext,
@@ -552,9 +582,101 @@ where
     }
 
     #[cfg(all(
+        feature = "backend-femtovg-wgpu",
+        not(feature = "backend-femtovg-gl"),
+        not(feature = "backend-skia"),
+        not(feature = "backend-software")
+    ))]
+    fn new<B>(
+        window: &WindowContext,
+        mut state: S,
+        update: U,
+        build: B,
+        policy: SizePolicy,
+        request_resize: Option<RequestResizeFn>,
+    ) -> Result<SlintWindow<C, S, U>, HandlerError>
+    where
+        B: FnOnce(&mut S) -> C + Send + 'static,
+    {
+        let open_scale = if policy.host_driven_scale {
+            policy.scale.get()
+        } else {
+            window.size().scale_factor
+        };
+        let (lw, lh) = policy.design_size;
+        let phys_w = to_physical_px(lw, open_scale);
+        let phys_h = to_physical_px(lh, open_scale);
+
+        platform::ensure_platform();
+        let adapter = match FemtovgWgpuWindowAdapter::try_new(
+            PhysicalSize::new(phys_w, phys_h),
+            window,
+        ) {
+            Ok(a) => a,
+            Err(e) => return Err(HandlerError::from(e)),
+        };
+        platform::set_next_adapter(adapter.clone() as Rc<dyn slint::platform::WindowAdapter>);
+
+        let component = build(&mut state);
+        platform::clear_next_adapter();
+
+        #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+        {
+            adapter
+                .slint_window
+                .dispatch_event(slint::platform::WindowEvent::ScaleFactorChanged {
+                    scale_factor: open_scale as f32,
+                });
+            adapter
+                .slint_window
+                .dispatch_event(slint::platform::WindowEvent::Resized {
+                    size: LogicalSize::new(lw as f32, lh as f32),
+                });
+        }
+
+        let _ = window.resize(dpi::PhysicalSize::new(phys_w, phys_h));
+
+        let (
+            scale,
+            last_applied_scale,
+            host_driven_scale,
+            logical_size,
+            pending_size,
+            pending_host_correct,
+            request_resize,
+            frames,
+        ) = Self::init_policy_fields(policy, request_resize, open_scale);
+
+        if Self::host_resize_pushback_allowed() {
+            pending_host_correct.set(Some((lw, lh)));
+        }
+
+        Ok(SlintWindow {
+            update,
+            last_cursor_pos: RefCell::new(LogicalPosition::new(0.0, 0.0)),
+            component,
+            state: RefCell::new(state),
+            adapter: adapter.clone(),
+            window_ctx: window.clone(),
+            key_capture: KeyCapture::default(),
+            pending_clipboard_paste: Cell::new(false),
+            ctrl_held: Cell::new(false),
+            scale,
+            last_applied_scale,
+            host_driven_scale,
+            logical_size,
+            pending_size,
+            pending_host_correct,
+            request_resize,
+            frames,
+        })
+    }
+
+    #[cfg(all(
         feature = "backend-skia",
-        not(feature = "backend-femtovg"),
-        not(feature = "backend-wgpu")
+        not(feature = "backend-femtovg-gl"),
+        not(feature = "backend-femtovg-wgpu"),
+        not(feature = "backend-software")
     ))]
     fn new<B>(
         window: &WindowContext,
@@ -632,8 +754,9 @@ where
     }
 
     #[cfg(all(
-        feature = "backend-wgpu",
-        not(feature = "backend-femtovg"),
+        feature = "backend-software",
+        not(feature = "backend-femtovg-gl"),
+        not(feature = "backend-femtovg-wgpu"),
         not(feature = "backend-skia")
     ))]
     fn new<B>(
@@ -816,9 +939,10 @@ where
     }
 
     #[cfg(any(
-        feature = "backend-femtovg",
+        feature = "backend-femtovg-gl",
+        feature = "backend-femtovg-wgpu",
         feature = "backend-skia",
-        feature = "backend-wgpu"
+        feature = "backend-software"
     ))]
     fn flush_pending_clipboard_paste(&self) {
         if self.pending_clipboard_paste.replace(false)
@@ -866,9 +990,10 @@ where
     U: Fn(&C, &mut S) + Send + 'static,
 {
     #[cfg(all(
-        feature = "backend-femtovg",
+        feature = "backend-femtovg-gl",
+        not(feature = "backend-femtovg-wgpu"),
         not(feature = "backend-skia"),
-        not(feature = "backend-wgpu")
+        not(feature = "backend-software")
     ))]
     fn on_frame(&self) -> Result<(), HandlerError> {
         slint::platform::update_timers_and_animations();
@@ -885,9 +1010,28 @@ where
     }
 
     #[cfg(all(
+        feature = "backend-femtovg-wgpu",
+        not(feature = "backend-femtovg-gl"),
+        not(feature = "backend-skia"),
+        not(feature = "backend-software")
+    ))]
+    fn on_frame(&self) -> Result<(), HandlerError> {
+        slint::platform::update_timers_and_animations();
+        self.flush_pending_clipboard_paste();
+        self.reconcile_pending();
+        (self.update)(&self.component, &mut *self.state.borrow_mut());
+        // Same soft-fail as GL: don't tear down the editor on a bad frame.
+        if let Err(_e) = self.adapter.renderer.render() {
+            return Ok(());
+        }
+        Ok(())
+    }
+
+    #[cfg(all(
         feature = "backend-skia",
-        not(feature = "backend-femtovg"),
-        not(feature = "backend-wgpu")
+        not(feature = "backend-femtovg-gl"),
+        not(feature = "backend-femtovg-wgpu"),
+        not(feature = "backend-software")
     ))]
     fn on_frame(&self) -> Result<(), HandlerError> {
         slint::platform::update_timers_and_animations();
@@ -902,8 +1046,9 @@ where
     }
 
     #[cfg(all(
-        feature = "backend-wgpu",
-        not(feature = "backend-femtovg"),
+        feature = "backend-software",
+        not(feature = "backend-femtovg-gl"),
+        not(feature = "backend-femtovg-wgpu"),
         not(feature = "backend-skia")
     ))]
     fn on_frame(&self) -> Result<(), HandlerError> {
@@ -1169,12 +1314,12 @@ fn inject_clipboard_text(win: &slint::Window, text: &str) {
 
 // --- wgpu surface creation ---
 
-#[cfg(feature = "backend-wgpu")]
+#[cfg(feature = "backend-software")]
 fn string_err(s: impl Into<String>) -> HandlerError {
     HandlerError::from(std::io::Error::new(std::io::ErrorKind::Other, s.into()))
 }
 
-#[cfg(feature = "backend-wgpu")]
+#[cfg(feature = "backend-software")]
 fn create_wgpu_surface(
     window: &WindowContext,
 ) -> Result<

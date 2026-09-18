@@ -190,16 +190,16 @@ where
         let phys_w = to_physical_px(dw, content_scale);
         let phys_h = to_physical_px(dh, content_scale);
 
-        // FemtoVG needs OpenGL (baseview opengl feature); other backends
-        // ignore the GL config. alpha_bits=8 helps embedded plugin windows
-        // in DAW hosts.
+        // FemtoVG-GL needs OpenGL (baseview opengl feature). Other backends
+        // must not require GlConfig — it is cfg'd behind baseview/opengl.
         let options = WindowSettings::new()
             .with_title("AURA")
-            .with_size(baseview::dpi::PhysicalSize::new(phys_w, phys_h))
-            .with_gl_config(baseview::gl::GlConfig {
-                alpha_bits: 8,
-                ..baseview::gl::GlConfig::default()
-            });
+            .with_size(baseview::dpi::PhysicalSize::new(phys_w, phys_h));
+        #[cfg(feature = "backend-femtovg-gl")]
+        let options = options.with_gl_config(baseview::gl::GlConfig {
+            alpha_bits: 8,
+            ..baseview::gl::GlConfig::default()
+        });
 
         let build = Arc::clone(&self.build);
         let sync = Arc::clone(&self.sync);
