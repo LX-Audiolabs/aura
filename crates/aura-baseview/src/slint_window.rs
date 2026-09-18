@@ -1003,9 +1003,7 @@ where
         (self.update)(&self.component, &mut *self.state.borrow_mut());
         // baseview closes the window on on_frame Err — swallow transient GL
         // glitches (DAW context steal / driver hiccup) so the editor stays open.
-        if let Err(_e) = self.adapter.renderer.render() {
-            return Ok(());
-        }
+        let _ = self.adapter.renderer.render();
         Ok(())
     }
 
@@ -1021,9 +1019,7 @@ where
         self.reconcile_pending();
         (self.update)(&self.component, &mut *self.state.borrow_mut());
         // Same soft-fail as GL: don't tear down the editor on a bad frame.
-        if let Err(_e) = self.adapter.renderer.render() {
-            return Ok(());
-        }
+        let _ = self.adapter.renderer.render();
         Ok(())
     }
 

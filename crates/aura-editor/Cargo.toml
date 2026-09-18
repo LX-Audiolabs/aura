@@ -36,7 +36,7 @@ backend-femtovg-gl = ["lx-aura-baseview/backend-femtovg-gl"]
 backend-femtovg-wgpu = ["lx-aura-baseview/backend-femtovg-wgpu"]
 backend-skia = ["lx-aura-baseview/backend-skia"]
 backend-software = ["lx-aura-baseview/backend-software"]
-backend-femtovg = ["lx-aura-baseview/backend-femtovg"]
+backend-femtovg = ["backend-femtovg-gl"]
 backend-wgpu = ["lx-aura-baseview/backend-wgpu"]
 backend-wgpu-vulkan = ["lx-aura-baseview/backend-wgpu-vulkan"]
 
