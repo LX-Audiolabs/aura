@@ -31,3 +31,4 @@ docs/*
 .fastembed_cache/
 docs/
 .claude/
+.forgejo/workflows/
