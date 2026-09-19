@@ -2,7 +2,6 @@
 
 [![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.92-orange.svg)](rust-toolchain.toml)
-[![CI](https://github.com/LX-Audiolabs/aura/actions/workflows/framework.yml/badge.svg)](https://github.com/LX-Audiolabs/aura/actions/workflows/framework.yml)
 [![Slint](https://img.shields.io/badge/UI-Slint-2379F4.svg)](https://slint.dev)
 [![agal](https://img.shields.io/badge/powered%20by-agal-00ADD8.svg)](https://github.com/LX-Audiolabs/agal)
 
@@ -14,8 +13,8 @@ Runtime + formats + build + CLI live here. Agent orientation: **[agal](https://g
 
 | | |
 |--|--|
-| **Status** | **0.11.x** — basis complete; used in production LX plugins ([lx-audiolabs-plugins](https://github.com/LX-Audiolabs/lx-audiolabs-plugins)) |
-| **Dependency** | path / git deps (`publish = false`); crates.io deferred until API refinement |
+| **Status** | **0.14.x** — basis complete; used in production LX plugins ([lx-audiolabs-plugins](https://github.com/LX-Audiolabs/lx-audiolabs-plugins)) |
+| **Dependency** | `lx-aura` / `lx-aura-*` published to crates.io; `aura-host` / `aura-hot` / examples path-only (`publish = false`) |
 | **License** | [GPL-3.0-or-later](./LICENSE) — see [docs/licensing-compliance.md](./docs/licensing-compliance.md) |
 | **Rust** | 1.92+ MSRV (stable channel in `rust-toolchain.toml`), edition 2024 |
 
@@ -38,9 +37,9 @@ AURA is intentionally narrow. Wrong stack → use another framework.
 
 - **Always:** Slint UI + **baseview** host window (embed, scale, keys, clipboard, …).
 - **Choose renderer** (features / project config), not toolkit:
-  - **FemtoVG** (OpenGL) — default
-  - **Skia** — optional
-  - **Software / wgpu blit** — optional
+  - **FemtoVG** — default: `backend-femtovg-gl` (OpenGL) or `backend-femtovg-wgpu` (wgpu)
+  - **Skia** — optional (`backend-skia`)
+  - **Software** — optional (`backend-software`)
 - There is no “raw egui editor” mode and no second UI framework in AURA.
 
 Required UI path: **`aura-baseview`** (window/renderer) + **`aura-editor`** (host adapter) + **`aura-build`** (compile-time).
@@ -266,7 +265,7 @@ More detail: crate docs (`cargo doc -p aura --open`), [docs/versioning.md](./doc
 | Latency / remote-controls / tail / render | done |
 | VST3 (Win/mac) | done (host smoke) |
 | LV2 (Linux) process + UI extension | done (UI host smoke depends on host) |
-| crates.io publish | **last** — after framework test pass; path/git only until then |
+| crates.io publish | done (`lx-aura` + `lx-aura-*` on crates.io since 0.13.0) |
 | `clap.preset-load` + factory discovery | done (`factory_presets`) |
 | Poly mod / note expression | done (CLAP → `ProcessContext.notes`; `NoteVoiceTable` + `NOTE_END`) |
 | Native MIDI 2 process | done (`ProcessContext.ump` / `ump_out`; 7-bit `midi` remains) |
@@ -284,7 +283,7 @@ Issues and PRs welcome on this framework repo.
 - Keep the **scope** (Slint + CLAP-first ship matrix). Do not add AU/egui/AAX “just in case.”
 - Prefer small, tested changes. One assert for non-trivial logic.
 - Match workspace versioning: single version in root `Cargo.toml` + `CHANGELOG.md`.
-- CI: Framework (build/install smokes per OS matrix) + Quality (fmt, clippy, tests).
+- CI (Forgejo, self-hosted): `fmt --check` + `clippy -D warnings`.
 
 ```bash
 cargo fmt --all
