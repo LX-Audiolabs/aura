@@ -5,6 +5,13 @@ All notable changes to **AURA** (framework workspace) are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/versioning.md).
 
+## [Unreleased]
+
+### Changed
+
+- Slint **1.18.0 → 1.18.1** (patch: layout/repeater panics, Skia Vulkan close,
+  interpreter two-way bindings, ComboBox min width).
+
 ## [0.14.0] - 2026-09-18
 
 ### Added
