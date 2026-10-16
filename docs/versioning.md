@@ -9,7 +9,7 @@ Last pass: 2026-10-16.
 | | |
 |--|--|
 | **Scheme** | [Semantic Versioning 2.0](https://semver.org/) |
-| **Workspace version** | `0.14.1` in root `Cargo.toml` → `[workspace.package] version` (cut in the release task) |
+| **Workspace version** | `0.14.1` in root `Cargo.toml` → `[workspace.package] version` |
 | **Crates** | all `lx-aura-*` + tools use `version.workspace = true`; path deps also pin `version = "0.14.1"` |
 | **crates.io** | Tier A+B+C `publish = true` as `lx-aura-*` (since 0.12.0 / test crate 0.13.0) |
 | **Git tags** | `vMAJOR.MINOR.PATCH` (annotated), e.g. `v0.1.0` |

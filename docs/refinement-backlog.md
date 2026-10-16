@@ -91,7 +91,7 @@ Canonical elsewhere (do not duplicate specs here):
 
 - [x] Export naming: `export_clap!` alias (0.14.1)
 - [x] Per-crate metadata: keywords, categories, readme, rust-version, docs.rs
-      (Tier A+B; `publish = false` — see `docs/crates-io-prep.md`).
+      (Tier A+B+C; `publish = true` — see `docs/crates-io-prep.md`).
 - [x] Root `NOTICE` (DSP provenance + fonts pointer).
 - [x] MIT vs GPL called out in crates-io-prep + editor README.
 - [x] `ParamEventQueue` full-drop documented
