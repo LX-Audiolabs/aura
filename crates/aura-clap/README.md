@@ -20,13 +20,14 @@ Rules:
 
 ### Version snapshot (check when bumping)
 
+Checked **2026-10-16**.
+
 | | Version |
 |--|---------|
 | free-audio/clap (upstream) | **1.2.10** (as of check against `main` `version.h`) |
-| clap-sys on crates.io `0.5` | reports **1.2.2** in `CLAP_VERSION_*` |
-| clap-sys git master | has been at **1.2.3** |
+| clap-sys (this workspace lock) | **0.5.0** — `CLAP_VERSION_*` = **1.2.2** |
 
-Hosts accept 1.2.x plugins as CLAP 1.x. Track free-audio for **new** extensions; do not block development on revision parity alone.
+Bump clap-sys only when a **new extension** needs bindings. Revision lag inside 1.2.x is not a ship blocker.
 
 ## Usage
 
