@@ -218,7 +218,7 @@ mod tests {
         scope.push(0.2, -0.2);
         assert_eq!(scope.drain(), vec![[0.1, -0.1], [0.2, -0.2]]);
         // Fully drained: nothing left until the next push.
-        assert!(scope.drain().is_empty());
+        assert_eq!(scope.drain().len(), 0);
     }
 
     #[test]

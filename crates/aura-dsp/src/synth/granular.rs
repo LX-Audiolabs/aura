@@ -367,7 +367,7 @@ mod tests {
         assert!((engine.grain_rate - back.grain_rate).abs() < f32::EPSILON);
         assert!((engine.grain_duration_ms - back.grain_duration_ms).abs() < f32::EPSILON);
         // Source is skipped in serde, so it should be empty after roundtrip.
-        assert!(back.source.is_empty());
+        assert_eq!(back.source.len(), 0);
     }
 
     #[test]

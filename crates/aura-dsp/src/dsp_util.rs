@@ -996,7 +996,7 @@ mod tests {
             .map(|i| (i as f32 / sr * freq * std::f32::consts::TAU).sin())
             .collect();
         let frames = stft_magnitudes(&signal, 2048, 512, SpectralWindow::Hann);
-        assert!(!frames.is_empty());
+        assert_ne!(frames.len(), 0);
 
         // Each frame's peak bin should map to ~freq.
         let bin_hz = sr / 2048.0;
@@ -1019,11 +1019,20 @@ mod tests {
     #[test]
     fn test_stft_rejects_invalid_inputs() {
         // Non-power-of-2 window
-        assert!(stft_magnitudes(&vec![0.0; 4096], 1000, 256, SpectralWindow::Hann).is_empty());
+        assert_eq!(
+            stft_magnitudes(&vec![0.0; 4096], 1000, 256, SpectralWindow::Hann).len(),
+            0
+        );
         // Hop = 0
-        assert!(stft_magnitudes(&vec![0.0; 4096], 1024, 0, SpectralWindow::Hann).is_empty());
+        assert_eq!(
+            stft_magnitudes(&vec![0.0; 4096], 1024, 0, SpectralWindow::Hann).len(),
+            0
+        );
         // Signal shorter than window
-        assert!(stft_magnitudes(&vec![0.0; 100], 1024, 256, SpectralWindow::Hann).is_empty());
+        assert_eq!(
+            stft_magnitudes(&vec![0.0; 100], 1024, 256, SpectralWindow::Hann).len(),
+            0
+        );
     }
 
     #[cfg(feature = "synthesis")]
@@ -1036,7 +1045,7 @@ mod tests {
             .collect();
         let stft = stft_magnitudes(&signal, 4096, 1024, SpectralWindow::Hann);
         let chroma = chromagram(&stft, 4096, sr);
-        assert!(!chroma.is_empty());
+        assert_ne!(chroma.len(), 0);
         for frame in &chroma {
             let (peak_pc, _) = frame
                 .iter()

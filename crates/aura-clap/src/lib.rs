@@ -2699,7 +2699,7 @@ mod remote_controls_tests {
     #[test]
     fn ungrouped_params_produce_no_page() {
         let infos = [info(0, ""), info(1, "")];
-        assert!(remote_control_pages(&infos).is_empty());
+        assert_eq!(remote_control_pages(&infos).len(), 0);
     }
 
     #[test]

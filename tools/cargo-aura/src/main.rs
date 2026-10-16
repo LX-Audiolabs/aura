@@ -2427,8 +2427,8 @@ mod tests {
         let p = parse_build_args(&args).unwrap();
         assert_eq!(p.formats, vec!["clap", "vst3"]);
         assert!(p.release);
-        assert!(p.plugins.is_empty());
-        assert!(p.rest.is_empty());
+        assert_eq!(p.plugins.len(), 0);
+        assert_eq!(p.rest.len(), 0);
     }
 
     #[test]
@@ -2455,7 +2455,7 @@ mod tests {
         assert_eq!(p.formats, vec!["clap", "vst3"]);
         assert!(p.release);
         assert_eq!(p.plugins, vec!["aether", "meridian", "equilibrium"]);
-        assert!(p.rest.is_empty());
+        assert_eq!(p.rest.len(), 0);
     }
 
     #[test]

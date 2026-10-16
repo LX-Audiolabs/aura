@@ -58,6 +58,6 @@ mod tests {
                 ParamEvent::GestureEnd(1),
             ]
         );
-        assert!(q.drain().is_empty());
+        assert_eq!(q.drain().len(), 0);
     }
 }
