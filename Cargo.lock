@@ -556,7 +556,7 @@ dependencies = [
 
 [[package]]
 name = "aura-host"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "clap-sys",
  "cpal",
@@ -571,14 +571,14 @@ dependencies = [
 
 [[package]]
 name = "aura-hot"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "clap-sys",
 ]
 
 [[package]]
 name = "aura-preview"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "image",
  "lx-aura-build",
@@ -887,7 +887,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-aura"
-version = "0.14.0"
+version = "0.14.1"
 
 [[package]]
 name = "cast"
@@ -3366,7 +3366,7 @@ checksum = "9dd0f9e7de3649dcec348de51cbf611ab88688b97c0ce038f8c07b996b2a8e30"
 
 [[package]]
 name = "lx-aura"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "lx-aura-clap",
  "lx-aura-core",
@@ -3380,7 +3380,7 @@ dependencies = [
 
 [[package]]
 name = "lx-aura-baseview"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "baseview",
  "copypasta",
@@ -3395,7 +3395,7 @@ dependencies = [
 
 [[package]]
 name = "lx-aura-build"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "slint-build",
  "slint-interpreter",
@@ -3404,7 +3404,7 @@ dependencies = [
 
 [[package]]
 name = "lx-aura-clap"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "clap-sys",
  "lx-aura-core",
@@ -3413,7 +3413,7 @@ dependencies = [
 
 [[package]]
 name = "lx-aura-core"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "lx-aura-midi",
  "lx-aura-params",
@@ -3421,7 +3421,7 @@ dependencies = [
 
 [[package]]
 name = "lx-aura-derive"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3430,7 +3430,7 @@ dependencies = [
 
 [[package]]
 name = "lx-aura-dsp"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "atomic_float",
  "criterion",
@@ -3449,7 +3449,7 @@ dependencies = [
 
 [[package]]
 name = "lx-aura-editor"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "baseview",
  "i-slint-common",
@@ -3464,7 +3464,7 @@ dependencies = [
 
 [[package]]
 name = "lx-aura-lv2"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "lv2-sys",
  "lx-aura-core",
@@ -3473,18 +3473,18 @@ dependencies = [
 
 [[package]]
 name = "lx-aura-midi"
-version = "0.14.0"
+version = "0.14.1"
 
 [[package]]
 name = "lx-aura-params"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "bitflags 2.13.2",
 ]
 
 [[package]]
 name = "lx-aura-test"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "lx-aura-core",
  "lx-aura-params",
@@ -3492,7 +3492,7 @@ dependencies = [
 
 [[package]]
 name = "lx-aura-vst3"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "lx-aura-core",
  "lx-aura-params",
@@ -5584,14 +5584,14 @@ dependencies = [
 
 [[package]]
 name = "smoke-aux"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "lx-aura",
 ]
 
 [[package]]
 name = "smoke-gain"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "lx-aura",
  "lx-aura-build",
@@ -5601,21 +5601,21 @@ dependencies = [
 
 [[package]]
 name = "smoke-midi-fx"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "lx-aura",
 ]
 
 [[package]]
 name = "smoke-sidechain"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "lx-aura",
 ]
 
 [[package]]
 name = "smoke-synth"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "lx-aura",
 ]

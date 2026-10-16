@@ -7,10 +7,22 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-10-16
+
+### Added
+
+- `export_clap!` — alias of `export!` (symmetry with `export_vst3!` / `export_lv2!`).
+
 ### Changed
 
 - Slint **1.18.0 → 1.18.1** (patch: layout/repeater panics, Skia Vulkan close,
   interpreter two-way bindings, ComboBox min width).
+
+### Fixed
+
+- Docs: `ParamEventQueue` poison drop; clap-sys snapshot date; CLAP leftover
+  table is product-triggered; editor README names `AuraSlintEditor` as the
+  author skeleton.
 
 ## [0.14.0] - 2026-09-18
 
