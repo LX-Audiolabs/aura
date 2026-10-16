@@ -587,6 +587,7 @@ impl PluginLogic for {struct_name} {{
     }}
 
     fn editor(_params: Arc<Self::Params>) -> Option<Box<dyn Editor>> {{
+        // Editor skeleton: AuraSlintEditor::new(size, build, sync). @aura widgets; not @material.
         Some(
             aura_editor::AuraSlintEditor::new(
                 (320, 200),
@@ -918,6 +919,7 @@ use crate::{{{params_name} as Params, {params_name}ParamId as P}};
 slint::include_modules!();
 
 pub fn create_editor(_params: Arc<Params>) -> Option<Box<dyn Editor>> {{
+    // Editor skeleton: AuraSlintEditor::new(size, build, sync). @aura widgets; not @material.
     Some(
         AuraSlintEditor::new(
             (320, 200),
@@ -1057,6 +1059,7 @@ impl PluginLogic for {struct_name} {{
     }}
 
     fn editor(_params: Arc<Self::Params>) -> Option<Box<dyn Editor>> {{
+        // Editor skeleton: AuraSlintEditor::new(size, build, sync). @aura widgets; not @material.
         Some(
             aura_editor::AuraSlintEditor::new(
                 (360, 220),
@@ -1285,6 +1288,7 @@ impl PluginLogic for {struct_name} {{
     }}
 
     fn editor(_params: Arc<Self::Params>) -> Option<Box<dyn Editor>> {{
+        // Editor skeleton: AuraSlintEditor::new(size, build, sync). @aura widgets; not @material.
         Some(
             aura_editor::AuraSlintEditor::new(
                 (320, 200),

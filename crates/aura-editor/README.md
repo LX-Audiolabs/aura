@@ -13,3 +13,17 @@ Renderer features are forwarded from `lx-aura-baseview` — see that crate's REA
 
 License: **MIT** (see `LICENSE-MIT`). Core/params remain GPL when linked into a
 plugin — see repository `docs/licensing-compliance.md`.
+
+## Author skeleton
+
+AURA’s editor is this adapter — not a second UI crate.
+
+1. Implement `PluginLogic::editor`.
+2. Return `AuraSlintEditor::new((W, H), build, sync).into_editor()`.
+3. `build`: construct the Slint component, wire callbacks → `ctx.bridge` / params.
+4. `sync`: each frame, copy host param values into the component.
+5. Widgets: `@aura` (knob / meter / slider). Window/parent/renderer: `aura-baseview`.
+
+Optional product layer already in this crate: `typed::LxSlintEditor`, `ui_zoom::UiZoom` (75/100/125). Skip unless you want typed `automate()` / zoom.
+
+`@material` is for future **tool** chrome, not plugin editors.
