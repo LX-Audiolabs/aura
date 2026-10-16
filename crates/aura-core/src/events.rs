@@ -10,10 +10,15 @@ pub enum ParamEvent {
     GestureEnd(u32),
 }
 
-/// Minimal thread-safe queue: the editor pushes (GUI thread), the format
-/// wrapper drains in `process` / `flush` (audio thread) and emits host
-/// events. A plain mutex is fine — uncontended in practice
-/// (ponytail: no lock-free ring until profiling says so).
+/// GUI → audio-thread param event queue.
+///
+/// Editor (`push`, GUI thread) → format wrapper (`drain` in `process` / `flush`,
+/// audio thread) → host automation events.
+///
+/// **Capacity:** unbounded `Mutex<Vec<_>>`. Not a ring. A poisoned lock
+/// (`push` no-op, `drain` returns empty) **drops events** rather than
+/// panicking the audio thread. That full-drop is intentional
+/// (`ponytail:` no lock-free ring until profiling says so).
 #[derive(Default)]
 pub struct ParamEventQueue {
     inner: Mutex<Vec<ParamEvent>>,
@@ -32,5 +37,27 @@ impl ParamEventQueue {
             Ok(mut v) => std::mem::take(&mut *v),
             Err(_) => Vec::new(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn drain_fifo_oldest_first() {
+        let q = ParamEventQueue::default();
+        q.push(ParamEvent::GestureBegin(1));
+        q.push(ParamEvent::Value { id: 1, plain: 0.5 });
+        q.push(ParamEvent::GestureEnd(1));
+        assert_eq!(
+            q.drain(),
+            [
+                ParamEvent::GestureBegin(1),
+                ParamEvent::Value { id: 1, plain: 0.5 },
+                ParamEvent::GestureEnd(1),
+            ]
+        );
+        assert!(q.drain().is_empty());
     }
 }
