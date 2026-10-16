@@ -265,7 +265,7 @@ More detail: crate docs (`cargo doc -p aura --open`), [docs/versioning.md](./doc
 | Latency / remote-controls / tail / render | done |
 | VST3 (Win/mac) | done (host smoke) |
 | LV2 (Linux) process + UI extension | done (UI host smoke depends on host) |
-| crates.io publish | done (`lx-aura` + `lx-aura-*` on crates.io since 0.13.0) |
+| crates.io publish | done (`lx-aura-*` on crates.io; workspace 0.14.1 after the release task) |
 | `clap.preset-load` + factory discovery | done (`factory_presets`) |
 | Poly mod / note expression | done (CLAP → `ProcessContext.notes`; `NoteVoiceTable` + `NOTE_END`) |
 | Native MIDI 2 process | done (`ProcessContext.ump` / `ump_out`; 7-bit `midi` remains) |

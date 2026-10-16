@@ -1,9 +1,9 @@
 # AURA — refinement backlog (pre–crates.io)
 
-Stand: 2026-08-29 · Workspace **0.11.0**
+Stand: 2026-10-16 · Workspace **0.14.1**
 
-Piecewise checklist after a publishable-surface review. **crates.io stays deferred**
-until this list is in better shape and we trust the author API.
+Piecewise checklist after a publishable-surface review. **crates.io published**
+0.12.0 (`lx-aura-*` Tier A+B+C); remaining P2 polish below.
 
 **Not AURA work:** real-synth polish → **Ember** (product); real-FX → **Nimbus**
 in `lx-audiolabs-dev`. Packaging/signing → `lx-audiolabs-plugins`. CI already
@@ -22,8 +22,7 @@ Canonical elsewhere (do not duplicate specs here):
 
 ## Policy
 
-- [x] **crates.io deferred** — first publish only after P0 honesty + a deliberate
-  API freeze review. Keep `publish = false`.
+- [x] ~~**crates.io deferred**~~ — published **0.12.0** as `lx-aura-*` (Tier A+B+C).
 - [x] Product DSP (Ember / Nimbus) out of this backlog.
 
 ---
@@ -90,13 +89,13 @@ Canonical elsewhere (do not duplicate specs here):
 
 ## P2 — polish / crates.io prep
 
-- [ ] Export naming: keep `export!`, add `export_clap!` alias for symmetry.
+- [x] Export naming: `export_clap!` alias (0.14.1)
 - [x] Per-crate metadata: keywords, categories, readme, rust-version, docs.rs
       (Tier A+B; `publish = false` — see `docs/crates-io-prep.md`).
 - [x] Root `NOTICE` (DSP provenance + fonts pointer).
 - [x] MIT vs GPL called out in crates-io-prep + editor README.
-- [ ] `ParamEventQueue` full-drop behavior documented.
-- [ ] Split fat `aura-clap` modules further.
+- [x] `ParamEventQueue` full-drop documented
+- [ ] Split fat `aura-clap` modules — **deferred** (`Instance` spans process+gui; no test net)
 - [x] README / sample.rs de-slop (earlier passes).
 
 ---

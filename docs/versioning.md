@@ -2,16 +2,16 @@
 
 How we number releases. Short, so agents and humans do the same thing.
 
-Last pass: 2026-08-20.
+Last pass: 2026-10-16.
 
 ## Current
 
 | | |
 |--|--|
 | **Scheme** | [Semantic Versioning 2.0](https://semver.org/) |
-| **Workspace version** | `0.11.0` in root `Cargo.toml` → `[workspace.package] version` |
-| **Crates** | all `aura-*` + `cargo-aura` / `aura-preview` use `version.workspace = true` |
-| **crates.io** | `publish = false` — deferred until `docs/refinement-backlog.md` P0 + deliberate API review |
+| **Workspace version** | `0.14.1` in root `Cargo.toml` → `[workspace.package] version` (cut in the release task) |
+| **Crates** | all `lx-aura-*` + tools use `version.workspace = true`; path deps also pin `version = "0.14.1"` |
+| **crates.io** | Tier A+B+C `publish = true` as `lx-aura-*` (since 0.12.0 / test crate 0.13.0) |
 | **Git tags** | `vMAJOR.MINOR.PATCH` (annotated), e.g. `v0.1.0` |
 | **Changelog** | root [`CHANGELOG.md`](../CHANGELOG.md) ([Keep a Changelog](https://keepachangelog.com/)) |
 
@@ -74,6 +74,7 @@ Wire IDs (`clap_id`, `vst3_id`, `lv2_uri`, param `id`s) are **forever** once a p
 ```text
 [ ] CHANGELOG: Unreleased → [X.Y.Z] + date
 [ ] Cargo.toml workspace.package.version = X.Y.Z
+[ ] all [workspace.dependencies] lx-aura-* version pins
 [ ] cargo test -p aura-core -p aura-clap -p aura-vst3 -p aura-lv2 (smoke optional)
 [ ] commit + tag vX.Y.Z + push --tags
 ```

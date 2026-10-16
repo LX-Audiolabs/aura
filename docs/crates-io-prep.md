@@ -10,6 +10,12 @@ after rename, freeze, and product soak.
 Related: [`refinement-backlog.md`](./refinement-backlog.md),
 [`licensing-compliance.md`](./licensing-compliance.md), root [`NOTICE`](../NOTICE).
 
+### After 0.12.0
+
+- 0.13.0 — `lx-aura-test` published
+- 0.14.0 — renderer features (`backend-femtovg-gl` / `wgpu`)
+- 0.14.1 — Slint 1.18.1 + alias/docs (this cut)
+
 ---
 
 ## Naming: `lx-aura-*` packages, `aura_*` libs
@@ -116,10 +122,10 @@ Before a real publish: set `publish = true` only on the set above, then
 ## Consumer example (after publish)
 
 ```toml
-lx-aura = { version = "0.12", features = ["clap", "dsp"] }
-lx-aura-baseview = { version = "0.12", features = ["backend-femtovg"] }
-lx-aura-editor = { version = "0.12", features = ["backend-femtovg"] }
-lx-aura-build = { version = "0.12" }  # [build-dependencies]
+lx-aura = { version = "0.14", features = ["clap", "dsp"] }
+lx-aura-baseview = { version = "0.14", features = ["backend-femtovg"] }
+lx-aura-editor = { version = "0.14", features = ["backend-femtovg"] }
+lx-aura-build = { version = "0.14" }  # [build-dependencies]
 ```
 
 ```rust
