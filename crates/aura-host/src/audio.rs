@@ -129,8 +129,9 @@ impl Engine {
         if self.device_channels == 0 {
             return;
         }
-        // ponytail: every queued MIDI message lands at frame 0 of the next block —
-        // sample-accurate timestamps need cpal's OutputCallbackInfo, add if it matters.
+        // MIDI timestamps: every queued message lands at frame 0 of this
+        // block. Sample-accurate times need cpal OutputCallbackInfo.
+        // Out of scope for 0.14.x — see docs/aura-host-idea.md.
         self.events.clear();
         while let Some(msg) = self.midi_rx.pop() {
             self.events.push_midi(msg, self.dialect, 0);

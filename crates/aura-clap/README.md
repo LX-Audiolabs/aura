@@ -84,14 +84,11 @@ Ship-capable CLAP core is **done**. Remaining work is product-driven or optional
 
 | Item | Gap / notes | Trigger |
 |------|-------------|---------|
-| ~~**`clap.preset-load`**~~ | landed | `factory_presets` + FILE blob load; vault-format files override `load_preset_from_file` |
-| ~~**Poly param modulation**~~ | landed — `note_id ≥ 0` → `ProcessContext.notes` (`ParamMod`); smoke-synth Gain is `modulatable_per_note` | plugin owns voice table |
-| ~~**Note expression**~~ | landed — `CLAP_EVENT_NOTE_EXPRESSION` → `NoteEventKind::Expression`; prefer `MidiDialect::Clap` | Bitwig expression / MPE host proof |
-| ~~**Native MIDI 2 process**~~ | landed v0.7.2 — `ProcessContext.ump` / `ump_out`; `NoteVoiceTable` + `NOTE_END` | plugin owns envelopes; call `mark_silent` |
-| ~~**Multi-out (one aux)**~~ | landed — `BusLayout::with_aux` + `smoke-aux`; REAPER: 2 in / 4 out (2 main + 2 aux) OK 2026-08-29 | product may still want >1 aux / >1 SC |
-| **>1 sidechain / N aux** | still one SC in + one aux out max | more buses than the single optional pair |
-| **Rich state hooks** (host blob > flat params) | G5 | Presets that need non-param bytes in host state |
-| **SysEx typed decode** | raw `SysEx8` / Flex already on `ump` | hardware bridge that needs a typed API |
+| **>1 sidechain / N aux** | one SC in + one aux out max (`BusLayout::with_sidechain` / `with_aux`) | plugin needs more buses than that pair |
+| **Rich state hooks** (host blob > flat params) | v2 envelope is params + `#[persist]`. Extra opaque bytes = G5 | preset that is not param+persist |
+| **SysEx typed decode** | raw `SysEx8` / Flex already on `ump` | hardware bridge that wants a typed API |
+
+Framework **done**, not this cycle: poly mod, note expression, MIDI 2, one aux, preset-load.
 
 ### Host proof (framework landed; Bitwig re-check 2026-08-28)
 
@@ -105,7 +102,8 @@ Install: `cargo aura install --clap --release -plug smoke-synth smoke-midi-fx sm
 - [~] **Layouts** — switch stereo/mono on the instrument (smoke-synth declares both). *N/A in Bitwig — often no CLAP layout picker; `audio-ports-config` still advertised.*
 - [x] **Offline** — bounce the clip; no hang. (`clap.render` → `ProcessMode::Offline`)
 - [x] **Sidechain** — `AURA Smoke Sidechain` (Audio FX + mono SC). Bitwig: SC route audible via Amount mix (2026-08-28).
-- [ ] Multi-page `remote-controls` / non-zero `latency` / mid-block automation — use `smoke-gain` + a later product plug; not blocking the note path.
+- [ ] Multi-page `remote-controls` — needs `ParamInfo.group`; smoke-gain has none
+- [ ] Non-zero `latency` / mid-block automation — `PluginLogic::latency` + `CHUNKED` exist; prove on a product plug
 
 **aura-host GUI note:** only plugins with `PluginLogic::editor` enable “Open plugin GUI” (`smoke-gain`). `smoke-synth` is headless — button stays disabled. AURA rejects CLAP floating; host embeds on Windows.
 
