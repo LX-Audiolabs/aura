@@ -64,6 +64,9 @@ pub use aura_derive::{ParamEnum, Params};
 #[cfg(feature = "clap")]
 pub use aura_clap::export;
 
+#[cfg(feature = "clap")]
+pub use aura_clap::export_clap;
+
 #[cfg(feature = "vst3")]
 pub use aura_vst3::export_vst3;
 

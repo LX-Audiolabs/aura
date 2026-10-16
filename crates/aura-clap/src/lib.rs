@@ -141,6 +141,16 @@ macro_rules! export {
     };
 }
 
+/// Alias of [`export!`] for symmetry with `export_vst3!` / `export_lv2!`.
+///
+/// Prefer [`export!`] in new code; this name exists so format exports read as a set.
+#[macro_export]
+macro_rules! export_clap {
+    ($logic:ty) => {
+        $crate::export!($logic);
+    };
+}
+
 // ---------------------------------------------------------------------------
 // Entry
 // ---------------------------------------------------------------------------

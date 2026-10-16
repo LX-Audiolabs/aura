@@ -85,7 +85,7 @@ impl PluginLogic for SmokeAux {
 }
 
 #[cfg(feature = "clap")]
-aura::export!(SmokeAux);
+aura::export_clap!(SmokeAux);
 
 #[cfg(feature = "vst3")]
 aura::export_vst3!(SmokeAux);
