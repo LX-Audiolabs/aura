@@ -1,10 +1,9 @@
 name: ci
 
+# Match MOSAIC: PR is the merge gate; no second full run on main.
 on:
   pull_request:
-  push:
-    branches:
-      - main
+    types: [opened, synchronize, reopened]
 
 jobs:
   check:
@@ -13,7 +12,23 @@ jobs:
       CARGO_PROFILE_DEV_DEBUG: "0"
       CARGO_BUILD_JOBS: "2"
     steps:
-      - name: Checkout
-        run: git clone --depth 1 "http://oauth2:${{ secrets.FORGEJO_TOKEN }}@192.168.129.29:3000/${{ github.repository }}.git" .
-      - run: cargo fmt --all --check
-      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Checkout PR commit and main
+        env:
+          CI_TOKEN: ${{ forgejo.token }}
+        run: |
+          set -euo pipefail
+          git init
+          git remote add origin "http://192.168.129.29:3000/${{ forgejo.repository }}.git"
+          auth=$(printf 'oauth2:%s' "$CI_TOKEN" | base64 -w0)
+          git -c "http.extraheader=Authorization: Basic $auth" fetch --depth 1 origin main "${{ forgejo.ref }}"
+          git checkout --force "${{ forgejo.sha }}"
+          test "$(git rev-parse HEAD)" = "${{ forgejo.sha }}"
+      - name: Check changes and Rust workspace
+        run: |
+          set -euo pipefail
+          git diff --check origin/main HEAD
+          # Docs/config-only PRs skip cargo fmt/clippy.
+          if test -f Cargo.toml && git diff --name-only origin/main HEAD | grep -Eqv '^(docs/|README[.]md$|CHANGELOG[.]md$|LICENSE$|NOTICE$|CLAP-GUIDE[.]md$|[.]forgejo/|[.]zed/|renovate[.]json$)'; then
+            cargo fmt --all -- --check
+            cargo clippy --workspace --all-targets -- -D warnings
+          fi
