@@ -206,15 +206,6 @@ dir = "%LOCALAPPDATA%\\Programs\\Common"
 "#
     );
 
-    let agal_toml = format!(
-        r#"# agal orientation for this plugin workspace
-# https://github.com/LX-Audiolabs/agal
-
-[project]
-name = "{name}"
-"#
-    );
-
     let gitignore = "/target\n*.clap\n*.vst3\n*.lv2\n.DS_Store\n".to_string();
 
     let main_slint = match spec.kind {
@@ -278,7 +269,6 @@ name = "{name}"
         ("Cargo.toml".to_string(), cargo_toml),
         ("build.rs".to_string(), build_rs),
         ("aura.toml".to_string(), aura_toml),
-        ("agal.toml".to_string(), agal_toml),
         (".gitignore".to_string(), gitignore),
         ("ui/main.slint".to_string(), main_slint),
         ("src/lib.rs".to_string(), lib_rs),
@@ -1316,15 +1306,15 @@ impl PluginLogic for {struct_name} {{
     )
 }
 
-/// Scaffold paths for `cargo aura add` (crate only — no root `aura.toml` / `agal.toml`).
+/// Scaffold paths for `cargo aura add` (crate only — no root `aura.toml`).
 ///
 /// Drops the empty `[workspace]` table from `files()`: `add` registers the crate
-/// as a workspace member of the catalog root, and a nested workspace root makes
-/// Cargo (and agal) refuse the whole tree (`multiple workspace roots`).
+/// as a workspace member of the catalog root. Nested workspace roots make Cargo
+/// refuse the whole tree (`multiple workspace roots`).
 pub fn plugin_crate_files(spec: &ScaffoldSpec) -> Vec<(String, String)> {
     files(spec)
         .into_iter()
-        .filter(|(p, _)| p != "aura.toml" && p != "agal.toml")
+        .filter(|(p, _)| p != "aura.toml")
         .map(|(p, c)| {
             if p == "Cargo.toml" {
                 (p, strip_standalone_workspace(&c))
@@ -1737,7 +1727,6 @@ mod tests {
                 "Cargo.toml",
                 "build.rs",
                 "aura.toml",
-                "agal.toml",
                 ".gitignore",
                 "ui/main.slint",
                 "src/lib.rs",
@@ -1852,7 +1841,6 @@ mod tests {
         let out = plugin_crate_files(&spec("extra", &[]));
         let paths: Vec<&str> = out.iter().map(|(p, _)| p.as_str()).collect();
         assert!(!paths.contains(&"aura.toml"));
-        assert!(!paths.contains(&"agal.toml"));
         assert!(paths.contains(&"src/lib.rs"));
         assert!(paths.contains(&"Cargo.toml"));
         let cargo = file(&out, "Cargo.toml");

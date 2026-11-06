@@ -7,6 +7,18 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ## [Unreleased]
 
+### Added
+
+- `append_midi_as_notes` / `notes_or_midi` — MIDI fallback → CLAP notes (CC 120/123 choke).
+- `note_split_points` — sample-accurate note walk for instrument `process`.
+- `Oscillator::from_host` / `Adsr::from_host` — saturating init for host sample rates.
+
+### Changed
+
+- `cargo aura new/init` no longer writes `agal.toml`.
+- Dropped `cargo aura mesh` and remaining agal hooks (doctor probe, README, gitignore).
+- `smoke-synth` uses the helpers and splits audio at note offsets.
+
 ## [0.14.1] - 2026-10-16
 
 ### Added

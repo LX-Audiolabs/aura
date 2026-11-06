@@ -11,7 +11,6 @@
 //!   cargo aura preview [-plug <name> | path] [--no-watch]
 //!   cargo aura watch [--clap|--vst3|--lv2] [--release] [-plug …] [--no-install]
 //!   cargo aura run [-plug <name> | path.clap] [aura-host-args…]
-//!   cargo aura mesh [agal-args…]
 //!   cargo aura doctor
 
 use std::env;
@@ -41,7 +40,6 @@ fn main() -> ExitCode {
         "install" => cmd_install(&args[1..]),
         "preview" => cmd_preview(&args[1..]),
         "watch" => cmd_watch(&args[1..]),
-        "mesh" => cmd_mesh(&args[1..]),
         "run" => cmd_run(&args[1..]),
         "preset" => cmd_preset(&args[1..]),
         "doctor" => cmd_doctor(),
@@ -68,7 +66,7 @@ Usage:
 Commands:
   new <name> [--vst3] [--lv2] [--kind <k>]
                           Scaffold a plugin project in ./<name>
-                          (Slint + derive + aura.toml + agal)
+                          (Slint + derive + aura.toml)
                           CLAP is always on; flags add VST3 / LV2 feature + export
                           kinds: effect (default) | effect-mono | analyzer | instrument | note-effect
   init [path] [--vst3] [--lv2] [--kind <k>]
@@ -95,7 +93,6 @@ Commands:
                           default format: --clap. --hot writes a proxy .clap
                           the host keeps mapped and a sibling .impl the watch
                           can replace (re-add instance to pick up new DSP)
-  mesh [agal-args…]       run `agal` (default: `agal .`) — orientation mesh
   run [-plug <name> | path.clap] [aura-host-args…]
                           launch aura-host dev host (load .clap, audio, MIDI, GUI)
                           -plug resolves installed CLAP artifact (same path as install)
@@ -170,14 +167,6 @@ fn cmd_doctor() -> ExitCode {
         println!("  ok  clap-validator on PATH");
     } else {
         println!("  --  clap-validator not on PATH (optional, recommended)");
-    }
-
-    // agal is orientation only (agal_optional rule) — probe for info, never
-    // a gate: builds/installs must work without it.
-    if which("agal").is_some() {
-        println!("  ok  agal on PATH (orientation mesh available)");
-    } else {
-        println!("  --  agal not on PATH (optional; orientation only, builds don't need it)");
     }
 
     println!("\nShip matrix (host install targets):");
@@ -281,7 +270,7 @@ fn print_scaffold_success(verb: &str, dest: &Path, cd: Option<&str>, formats: &[
         .join(" ");
 
     println!("{verb} {}", dest.display());
-    println!("  aura.toml  agal.toml  ui/main.slint  src/lib.rs");
+    println!("  aura.toml  ui/main.slint  src/lib.rs");
     println!();
     println!("next:");
     if let Some(dir) = cd {
@@ -1091,7 +1080,7 @@ fn visit_watch(dir: &Path, acc: &mut u64) {
 fn skip_watch_dir(name: &str) -> bool {
     matches!(
         name,
-        "target" | ".git" | "agal" | "node_modules" | ".idea" | ".vscode"
+        "target" | ".git" | "node_modules" | ".idea" | ".vscode"
     ) || name.starts_with("target-")
 }
 
@@ -1115,30 +1104,6 @@ fn mix(acc: &mut u64, bytes: &[u8]) {
     for &b in bytes {
         *acc ^= u64::from(b);
         *acc = acc.wrapping_mul(16_777_619);
-    }
-}
-
-/// `cargo aura mesh [args…]` — thin wrapper over `agal`. Default: `agal .`.
-fn cmd_mesh(args: &[String]) -> ExitCode {
-    let Some(agal) = which("agal") else {
-        eprintln!("agal not on PATH — orientation mesh skipped");
-        eprintln!("install: https://github.com/LX-Audiolabs/agal");
-        eprintln!("builds do not need agal (agal_optional)");
-        return ExitCode::FAILURE;
-    };
-    let mut cmd = Command::new(agal);
-    if args.is_empty() {
-        cmd.arg(".");
-    } else {
-        cmd.args(args);
-    }
-    match cmd.status() {
-        Ok(s) if s.success() => ExitCode::SUCCESS,
-        Ok(s) => ExitCode::from(u8::try_from(s.code().unwrap_or(1)).unwrap_or(1)),
-        Err(e) => {
-            eprintln!("failed to run agal: {e}");
-            ExitCode::FAILURE
-        }
     }
 }
 

@@ -7,61 +7,11 @@
 //! cargo run -p cargo-aura -- install --clap --release -plug smoke-synth
 //! ```
 
-use std::fs::OpenOptions;
-use std::io::Write;
-use std::sync::atomic::{AtomicU32, Ordering};
-
 use aura::dsp::envelope::Adsr;
 use aura::dsp::oscillator::{Oscillator, Waveform};
 use aura::dsp::panning::{PanLaw, pan_mono};
 use aura::midi::midi_note_to_freq;
 use aura::prelude::*;
-
-static DEBUG_LEFT: AtomicU32 = AtomicU32::new(24);
-
-fn log_note_events(notes: &NoteBuffer, midi: &MidiBuffer, gain_mod_amount: f64, table_occ: usize) {
-    if DEBUG_LEFT.fetch_sub(1, Ordering::Relaxed) == 0 {
-        return;
-    }
-    let Some(local) = std::env::var_os("LOCALAPPDATA") else {
-        return;
-    };
-    let dir = std::path::PathBuf::from(local).join("AURA");
-    let _ = std::fs::create_dir_all(&dir);
-    if let Ok(mut f) = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(dir.join("smoke-synth.log"))
-    {
-        let mods: Vec<_> = notes
-            .iter()
-            .filter_map(|e| match e.kind {
-                NoteEventKind::ParamMod { param_id, amount } => Some(format!(
-                    "id{param_id} n{} k{} {amount:.4}",
-                    e.note_id, e.key
-                )),
-                NoteEventKind::ParamValue { param_id, plain } => Some(format!(
-                    "val{param_id} n{} k{} {plain:.4}",
-                    e.note_id, e.key
-                )),
-                _ => None,
-            })
-            .collect();
-        let ons: Vec<_> = notes
-            .iter()
-            .filter(|e| matches!(e.kind, NoteEventKind::On { .. }))
-            .map(|e| format!("n{}k{}", e.note_id, e.key))
-            .collect();
-        let _ = writeln!(
-            f,
-            "notes={} midi={} ons=[{}] mods=[{}] knob_mod={gain_mod_amount:.4} occ={table_occ}",
-            notes.len(),
-            midi.len(),
-            ons.join(","),
-            mods.join(","),
-        );
-    }
-}
 
 const ATTACK: f32 = 0.005;
 const DECAY: f32 = 0.05;
@@ -107,18 +57,18 @@ pub struct DspState {
     table: NoteVoiceTable,
     voices: Vec<VoiceDsp>,
     inbound: NoteBuffer,
+    splits: Vec<u32>,
+    chunk: NoteBuffer,
     sr: f32,
     was_playing: bool,
 }
 
 fn make_osc(wave: Waveform, freq: f32, sample_rate: f32) -> Oscillator {
-    Oscillator::new(wave, freq, sample_rate)
-        .unwrap_or_else(|_| Oscillator::new(wave, 440.0, 44_100.0).unwrap())
+    Oscillator::from_host(wave, freq, sample_rate)
 }
 
 fn make_env(sample_rate: f32) -> Adsr {
-    Adsr::with_sample_rate(ATTACK, DECAY, SUSTAIN, RELEASE, sample_rate)
-        .unwrap_or_else(|_| Adsr::new(ATTACK, DECAY, SUSTAIN, RELEASE).unwrap())
+    Adsr::from_host(ATTACK, DECAY, SUSTAIN, RELEASE, sample_rate)
 }
 
 fn make_voice_dsp(sr: f32) -> VoiceDsp {
@@ -167,10 +117,15 @@ impl PluginLogic for SmokeSynth {
         let sr = sample_rate as f32;
         let mut inbound = NoteBuffer::new();
         inbound.reserve(64);
+        let splits = Vec::with_capacity(16);
+        let mut chunk = NoteBuffer::new();
+        chunk.reserve(16);
         DspState {
             table: NoteVoiceTable::new(MAX_VOICES),
             voices: (0..MAX_VOICES).map(|_| make_voice_dsp(sr)).collect(),
             inbound,
+            splits,
+            chunk,
             sr,
             was_playing: false,
         }
@@ -200,89 +155,38 @@ impl PluginLogic for SmokeSynth {
         }
         state.was_playing = playing;
 
+        let n = buffer.num_samples();
+        #[allow(clippy::cast_possible_truncation)]
+        let frames = n as u32;
         if context.notes.is_empty() {
             state.inbound.clear();
-            midi_to_notes(&context.midi, &mut state.inbound);
-            let incoming = std::mem::take(&mut state.inbound);
-            ingest(state, &incoming);
-            state.inbound = incoming;
+            append_midi_as_notes(&mut state.inbound, &context.midi);
+            note_split_points_into(&mut state.splits, frames, &state.inbound);
         } else {
-            ingest(state, &context.notes);
+            note_split_points_into(&mut state.splits, frames, &context.notes);
         }
+        let splits = std::mem::take(&mut state.splits);
+        let inbound = std::mem::take(&mut state.inbound);
+        let use_midi = context.notes.is_empty();
 
-        if !context.notes.is_empty() || !context.midi.is_empty() {
-            log_note_events(
-                &context.notes,
-                &context.midi,
-                params.gain.mod_amount(),
-                state.table.occupied_count(),
-            );
-        }
-
-        let n = buffer.num_samples();
-        let outs = buffer.num_outputs();
-        let knob = params.gain.raw_target();
-        let sounding = state
-            .voices
-            .iter()
-            .filter(|v| v.env.is_active())
-            .count()
-            .max(1);
-        #[allow(clippy::cast_precision_loss)]
-        let stack_norm = 1.0 / sounding as f32;
-        for c in 0..outs {
+        for c in 0..buffer.num_outputs() {
             buffer.output(c).fill(0.0);
         }
 
-        for i in 0..MAX_VOICES {
-            let tv = state.table.voices()[i];
-            let vd = &mut state.voices[i];
-            if !tv.is_occupied() && !vd.env.is_active() {
-                continue;
-            }
-            if tv.is_occupied() {
-                retune(vd, tv.key, tv.tuning, state.sr);
-            }
-            let gain_plain = vd.gain_plain.unwrap_or(knob);
-            // Bitwig Voice Stack often sends PARAM_MOD in 0..1. |amount|>1
-            // is already dB (CLAP spec). Gain range is linear(-24, 24).
-            let mod_db = if vd.gain_mod.abs() <= 1.0 {
-                vd.gain_mod * 48.0
+        for window in splits.windows(2) {
+            let from = window[0];
+            let to = window[1];
+            if use_midi {
+                ingest_at(state, &inbound, from);
             } else {
-                vd.gain_mod
-            };
-            #[allow(clippy::cast_possible_truncation)]
-            let gain_db = (gain_plain + mod_db) as f32;
-            let vel = if tv.is_occupied() { tv.velocity } else { 1.0 };
-            let volume = if tv.is_occupied() { tv.volume } else { 1.0 };
-            let pressure = if tv.is_occupied() { tv.pressure } else { 1.0 };
-            let mix = if tv.is_occupied() {
-                tv.brightness.clamp(0.0, 1.0)
-            } else {
-                0.0
-            };
-            let lin = 10.0f32.powf(gain_db / 20.0)
-                * vel.clamp(0.0, 1.0)
-                * volume.clamp(0.0, 4.0)
-                * pressure.clamp(0.0, 1.0)
-                * stack_norm;
-            let pan_plain = vd.pan_plain.unwrap_or(params.pan.raw_target());
-            #[allow(clippy::cast_possible_truncation)]
-            let pan = (pan_plain + vd.pan_mod).clamp(-1.0, 1.0) as f32;
-
-            for s in 0..n {
-                let sine = vd.osc_sine.next_sample();
-                let saw = vd.osc_saw.next_sample();
-                let sample = (sine * (1.0 - mix) + saw * mix) * vd.env.next_value() * lin;
-                if outs >= 2 {
-                    let (l, r) = pan_mono(sample, pan, PanLaw::EqualPower);
-                    buffer.output(0)[s] += l;
-                    buffer.output(1)[s] += r;
-                } else {
-                    buffer.output(0)[s] += sample;
-                }
+                ingest_at(state, &context.notes, from);
             }
+            #[allow(clippy::cast_possible_truncation)]
+            render_range(state, params, buffer, from as usize, to as usize);
         }
+
+        state.splits = splits;
+        state.inbound = inbound;
 
         #[allow(clippy::cast_possible_truncation)]
         let end_at = n.saturating_sub(1) as u32;
@@ -293,38 +197,6 @@ impl PluginLogic for SmokeSynth {
         }
         state.table.flush_ends(&mut context.notes_out);
         ProcessStatus::Continue
-    }
-}
-
-fn midi_to_notes(midi: &MidiBuffer, dest: &mut NoteBuffer) {
-    for ev in midi.iter() {
-        let msg = ev.message;
-        if matches!(msg.status, aura::MidiStatus::ControlChange) && matches!(msg.data1, 120 | 123) {
-            dest.push(NoteEvent {
-                sample_offset: ev.sample_offset,
-                note_id: -1,
-                port_index: -1,
-                channel: -1,
-                key: -1,
-                kind: NoteEventKind::Choke,
-            });
-            continue;
-        }
-        let Some(note) = msg.note_number() else {
-            continue;
-        };
-        let key = i16::from(note);
-        let note_id = i32::from(note);
-        if msg.is_note_on() {
-            dest.push(NoteEvent::on(
-                ev.sample_offset,
-                note_id,
-                key,
-                f64::from(msg.data2) / 127.0,
-            ));
-        } else if msg.is_note_off() {
-            dest.push(NoteEvent::off(ev.sample_offset, note_id, key, 0.0));
-        }
     }
 }
 
@@ -412,6 +284,21 @@ fn ingest(state: &mut DspState, notes: &NoteBuffer) {
     }
 }
 
+fn ingest_at(state: &mut DspState, notes: &NoteBuffer, time: u32) {
+    state.chunk.clear();
+    for ev in notes.iter() {
+        if ev.sample_offset == time {
+            state.chunk.push(ev);
+        }
+    }
+    if state.chunk.is_empty() {
+        return;
+    }
+    let chunk = std::mem::take(&mut state.chunk);
+    ingest(state, &chunk);
+    state.chunk = chunk;
+}
+
 fn clap_unit(v: f64) -> f32 {
     #[allow(clippy::cast_possible_truncation)]
     if v > 1.0 {
@@ -436,6 +323,78 @@ fn retune(v: &mut VoiceDsp, key: i16, tuning_semis: f32, _sr: f32) {
     let hz = midi_note_to_freq(key) * 2.0f32.powf(tuning_semis / 12.0);
     let _ = v.osc_sine.set_frequency(hz);
     let _ = v.osc_saw.set_frequency(hz);
+}
+
+fn render_range(
+    state: &mut DspState,
+    params: &SynthParams,
+    buffer: &mut AudioBuffer<'_, f32>,
+    from: usize,
+    to: usize,
+) {
+    if from >= to {
+        return;
+    }
+    let outs = buffer.num_outputs();
+    let knob = params.gain.raw_target();
+    let sounding = state
+        .voices
+        .iter()
+        .filter(|v| v.env.is_active())
+        .count()
+        .max(1);
+    #[allow(clippy::cast_precision_loss)]
+    let stack_norm = 1.0 / sounding as f32;
+
+    for i in 0..MAX_VOICES {
+        let tv = state.table.voices()[i];
+        let vd = &mut state.voices[i];
+        if !tv.is_occupied() && !vd.env.is_active() {
+            continue;
+        }
+        if tv.is_occupied() {
+            retune(vd, tv.key, tv.tuning, state.sr);
+        }
+        let gain_plain = vd.gain_plain.unwrap_or(knob);
+        // Bitwig Voice Stack often sends PARAM_MOD in 0..1. |amount|>1
+        // is already dB (CLAP spec). Gain range is linear(-24, 24).
+        let mod_db = if vd.gain_mod.abs() <= 1.0 {
+            vd.gain_mod * 48.0
+        } else {
+            vd.gain_mod
+        };
+        #[allow(clippy::cast_possible_truncation)]
+        let gain_db = (gain_plain + mod_db) as f32;
+        let vel = if tv.is_occupied() { tv.velocity } else { 1.0 };
+        let volume = if tv.is_occupied() { tv.volume } else { 1.0 };
+        let pressure = if tv.is_occupied() { tv.pressure } else { 1.0 };
+        let mix = if tv.is_occupied() {
+            tv.brightness.clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let lin = 10.0f32.powf(gain_db / 20.0)
+            * vel.clamp(0.0, 1.0)
+            * volume.clamp(0.0, 4.0)
+            * pressure.clamp(0.0, 1.0)
+            * stack_norm;
+        let pan_plain = vd.pan_plain.unwrap_or(params.pan.raw_target());
+        #[allow(clippy::cast_possible_truncation)]
+        let pan = (pan_plain + vd.pan_mod).clamp(-1.0, 1.0) as f32;
+
+        for s in from..to {
+            let sine = vd.osc_sine.next_sample();
+            let saw = vd.osc_saw.next_sample();
+            let sample = (sine * (1.0 - mix) + saw * mix) * vd.env.next_value() * lin;
+            if outs >= 2 {
+                let (l, r) = pan_mono(sample, pan, PanLaw::EqualPower);
+                buffer.output(0)[s] += l;
+                buffer.output(1)[s] += r;
+            } else {
+                buffer.output(0)[s] += sample;
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -646,6 +605,37 @@ mod tests {
             peak_l < peak_r * 0.1,
             "right-panned voice should be quiet on left"
         );
+    }
+
+    fn render_block(
+        state: &mut DspState,
+        params: &SynthParams,
+        notes: NoteBuffer,
+        n: usize,
+        sample_rate: f64,
+    ) -> Vec<f32> {
+        let mut left = vec![1.0f32; n];
+        let mut right = vec![1.0f32; n];
+        let mut outputs = [&mut left[..], &mut right[..]];
+        let mut buffer = AudioBuffer::from_slices_checked(&[], &mut outputs, n);
+        let mut context = ProcessContext::new(sample_rate, n).with_notes(notes);
+        assert!(matches!(
+            SmokeSynth::process(state, params, &mut buffer, &mut context),
+            ProcessStatus::Continue | ProcessStatus::TailFinished
+        ));
+        left
+    }
+
+    #[test]
+    fn note_on_is_silent_before_sample_offset() {
+        let params = SynthParams::default();
+        let mut state = SmokeSynth::init(&params, 48_000.0);
+        let mut notes = NoteBuffer::new();
+        notes.push(NoteEvent::on(7, 1, 69, 1.0));
+        let left = render_block(&mut state, &params, notes, 32, 48_000.0);
+        assert!(left[..7].iter().all(|s| *s == 0.0));
+        assert!(left[7..].iter().any(|s| s.abs() > 1e-6));
+        assert!(left.iter().all(|s| s.is_finite()));
     }
 
     #[test]

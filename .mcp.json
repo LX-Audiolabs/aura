@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "agal": {
-      "command": "agal",
-      "args": ["serve"]
-    }
-  }
-}

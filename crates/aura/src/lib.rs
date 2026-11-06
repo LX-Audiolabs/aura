@@ -47,8 +47,9 @@ pub use aura_core::{
     NoteTarget, NoteVoice, NoteVoiceTable, ParamEvent, ParamEventQueue, PluginCategory,
     PluginContext, PluginInfo, PluginLogic, ProcessContext, ProcessMode, ProcessStatus,
     RawWindowHandle, Transport, Tuning, TuningEvent, TuningInfo, Ump, UmpBuffer, UmpEvent,
-    append_midi_as_ump, append_notes_as_midi, append_ump_as_midi, apply_factory_preset,
-    decode_state, encode_state, layout_at, load_preset_file,
+    append_midi_as_notes, append_midi_as_ump, append_notes_as_midi, append_ump_as_midi,
+    apply_factory_preset, decode_state, encode_state, layout_at, load_preset_file,
+    note_split_points, note_split_points_into, notes_or_midi,
 };
 
 // --- params surface ---
@@ -88,8 +89,9 @@ pub mod prelude {
         NoteExpression, NoteNameEntry, NoteTarget, NoteVoice, NoteVoiceTable, ParamEnum,
         ParamFlags, ParamInfo, ParamRange, ParamUnit, ParamValueKind, Params, PluginCategory,
         PluginContext, PluginInfo, PluginLogic, ProcessContext, ProcessMode, ProcessStatus,
-        RawWindowHandle, SmoothingStyle, Transport, Ump, UmpBuffer, decode_state, encode_state,
-        layout_at,
+        RawWindowHandle, SmoothingStyle, Transport, Ump, UmpBuffer, append_midi_as_notes,
+        decode_state, encode_state, layout_at, note_split_points, note_split_points_into,
+        notes_or_midi,
     };
     // FloatParamReadF64: same method names as F32 → E0034 if both in prelude.
     // Use `aura::FloatParamReadF64` explicitly.

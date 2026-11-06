@@ -14,13 +14,6 @@ examples/*/.cargo
 *.lv2
 /target-clap-check
 
-# agal generate (regenerate: `agal .`). Keep notes + skills tracked.
-/agal/*
-!/agal/skills/
-!/agal/skills/**
-!/agal/notes/
-!/agal/notes/**
-
 # Personal agent config — contains email, never commit.
 AGENTS.md
 

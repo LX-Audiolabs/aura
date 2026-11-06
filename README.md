@@ -3,13 +3,12 @@
 [![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.92-orange.svg)](rust-toolchain.toml)
 [![Slint](https://img.shields.io/badge/UI-Slint-2379F4.svg)](https://slint.dev)
-[![agal](https://img.shields.io/badge/powered%20by-agal-00ADD8.svg)](https://github.com/LX-Audiolabs/agal)
 
 **Audio Unified Rust Architecture**  
 *(DE-Gag: **AU**dio **RA**hmenwerk)*
 
 CLAP-first plugin framework for **LX Audiolabs**.  
-Runtime + formats + build + CLI live here. Agent orientation: **[agal](https://github.com/LX-Audiolabs/agal)**.
+Runtime + formats + build + CLI live here.
 
 | | |
 |--|--|
@@ -109,9 +108,6 @@ cargo aura doctor
 
 # 6) Optional: clap-validator on the installed .clap
 clap-validator validate path/to/my-plugin.clap
-
-# 7) Optional: regenerate the agal orientation mesh
-cargo aura mesh
 ```
 
 ### In-repo smoke examples
@@ -156,7 +152,6 @@ cargo aura preview [path] [--component N] [--no-watch]
 cargo aura run [-plug <name> | path.clap] […]        # aura-host: load .clap, audio, MIDI, GUI
 cargo aura preset list  [-plug <name> | path.clap]   # factory presets (discovery)
 cargo aura preset pull  [-plug <name> | path.clap] --key <K> --out <file>
-cargo aura mesh [agal-args…]                         # run agal orientation mesh
 cargo aura doctor                                    # toolchain / AURA_PATH / clap-validator
 ```
 
@@ -179,8 +174,8 @@ cargo clippy --workspace --all-targets
 1. **Slint + baseview only** — renderer is a backend choice (FemtoVG / Skia / software); toolkit is not.
 2. **CLAP first, thin formats** — one plugin logic API; VST3/LV2 only on the ship matrix; no format-shaped core.
 3. **Framework layout** — `crates/` · `examples/` · `tools/` (product catalogs keep their own plugins outside AURA).
-4. **One CLI:** **`cargo aura`** — `new`, `init`, `add`, `add-ui`, `build`, `install`, `watch`, `preview`, `run`, `preset`, `mesh`, `doctor`
-5. **KISS for humans and agents** — `aura.toml`, boring paths; orientation in **agal**.
+4. **One CLI:** **`cargo aura`** — `new`, `init`, `add`, `add-ui`, `build`, `install`, `watch`, `preview`, `run`, `preset`, `doctor`
+5. **KISS for humans and agents** — `aura.toml`, boring paths.
 
 ---
 
@@ -204,7 +199,7 @@ cargo clippy --workspace --all-targets
 | `aura-hot` | CLAP hot-reload proxy (`cargo aura watch --hot`) |
 | `aura-host` | Standalone dev host — load `.clap`, MIDI in, params, plugin GUI (CLI + Slint shell) |
 | `lx-aura-test` (`aura_test`) | State round-trip + process smokes (`[dev-dependencies]`) |
-| `cargo-aura` | Scaffold, build, install, watch, doctor, preview, run, mesh |
+| `cargo-aura` | Scaffold, build, install, watch, doctor, preview, run |
 | `aura-preview` | Slint UI preview (`cargo aura preview`) |
 
 > Cross-plugin shared-memory IPC (spectrum/relay + CV) moved **out of AURA** — it now lives in the product catalog as **`lx-shm`** (`lx-audiolabs-dev`).

@@ -717,7 +717,7 @@ pub const DEFAULT_TAP_CAPACITY: usize = 4096;
 /// `process()` call; the UI/editor thread [`drain`](Self::drain)s them
 /// once per frame. Both sides use plain atomics only - no locks, no
 /// allocation on the producer side - so `push` is safe to call from a
-/// realtime audio callback (`agal/skills/00-core/audio-thread-boundary.md`).
+/// realtime audio callback.
 ///
 /// Declare with `#[skip]` like any other DSP↔UI shared field the
 /// derive default-initializes:
