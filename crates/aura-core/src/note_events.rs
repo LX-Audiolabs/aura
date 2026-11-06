@@ -349,6 +349,32 @@ pub fn notes_or_midi<'a>(
     scratch
 }
 
+/// Sorted unique split points in `0..=frames` (always includes `0` and `frames`).
+///
+/// Interior points are note `sample_offset`s with `0 < t < frames`. An event at
+/// `frames` belongs to the next block and is not a split.
+pub fn note_split_points_into(out: &mut Vec<u32>, frames: u32, notes: &NoteBuffer) {
+    out.clear();
+    out.push(0);
+    out.push(frames);
+    for ev in notes.iter() {
+        let t = ev.sample_offset;
+        if t > 0 && t < frames {
+            out.push(t);
+        }
+    }
+    out.sort_unstable();
+    out.dedup();
+}
+
+/// Allocating wrapper around [`note_split_points_into`].
+#[must_use]
+pub fn note_split_points(frames: u32, notes: &NoteBuffer) -> Vec<u32> {
+    let mut out = Vec::new();
+    note_split_points_into(&mut out, frames, notes);
+    out
+}
+
 /// Mono `PARAM_MOD` (`note_id < 0`) → timed params. Per-note → [`NoteBuffer`].
 pub fn route_param_mod(
     timed: &mut Vec<TimedParamEvent>,
@@ -578,5 +604,22 @@ mod tests {
         assert_eq!(ev.key, 64);
         assert_eq!(ev.sample_offset, 4);
         assert_eq!(ev.channel, 2);
+    }
+
+    #[test]
+    fn note_split_points_empty_is_block_bounds() {
+        let notes = NoteBuffer::new();
+        assert_eq!(note_split_points(32, &notes), vec![0, 32]);
+    }
+
+    #[test]
+    fn note_split_points_inserts_interior_offsets() {
+        let mut notes = NoteBuffer::new();
+        notes.push(NoteEvent::on(7, 1, 69, 1.0));
+        notes.push(NoteEvent::off(7, 1, 69, 0.0));
+        notes.push(NoteEvent::off(32, 1, 69, 0.0));
+        notes.push(NoteEvent::on(40, 2, 60, 1.0));
+        notes.push(NoteEvent::on(0, 3, 61, 1.0));
+        assert_eq!(note_split_points(32, &notes), vec![0, 7, 32]);
     }
 }
