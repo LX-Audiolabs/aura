@@ -35,7 +35,7 @@ pub use host_fence::{host_callback, host_callback_with};
 pub use info::{MidiDialect, PluginCategory, PluginInfo};
 pub use note_events::{
     NOTE_UNSPECIFIED, NoteBuffer, NoteEvent, NoteEventKind, NoteExpression, NoteTarget,
-    append_notes_as_midi, route_param_mod, route_param_value,
+    append_midi_as_notes, append_notes_as_midi, notes_or_midi, route_param_mod, route_param_value,
 };
 pub use note_voices::{NoteVoice, NoteVoiceTable};
 pub use plugin::{NoteNameEntry, PluginLogic};

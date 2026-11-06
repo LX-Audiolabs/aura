@@ -284,6 +284,71 @@ pub fn append_notes_as_midi(midi: &mut crate::MidiBuffer, notes: &NoteBuffer) {
     }
 }
 
+/// Append Note-On/Off and All-Sound/Notes-Off (CC 120/123) from `midi` as CLAP notes.
+///
+/// Does not clear `notes`. Other MIDI messages are skipped. Note-On with
+/// velocity 0 follows [`crate::MidiMessage::is_note_off`].
+pub fn append_midi_as_notes(notes: &mut NoteBuffer, midi: &crate::MidiBuffer) {
+    for ev in midi.iter() {
+        let msg = ev.message;
+        if matches!(msg.status, crate::MidiStatus::ControlChange) && matches!(msg.data1, 120 | 123)
+        {
+            notes.push(NoteEvent {
+                sample_offset: ev.sample_offset,
+                note_id: NOTE_UNSPECIFIED,
+                port_index: -1,
+                channel: -1,
+                key: -1,
+                kind: NoteEventKind::Choke,
+            });
+            continue;
+        }
+        let Some(note) = msg.note_number() else {
+            continue;
+        };
+        let key = i16::from(note);
+        let note_id = i32::from(note);
+        let channel = i16::from(msg.channel);
+        if msg.is_note_on() {
+            notes.push(NoteEvent {
+                sample_offset: ev.sample_offset,
+                note_id,
+                port_index: 0,
+                channel,
+                key,
+                kind: NoteEventKind::On {
+                    velocity: f64::from(msg.data2) / 127.0,
+                },
+            });
+        } else if msg.is_note_off() {
+            notes.push(NoteEvent {
+                sample_offset: ev.sample_offset,
+                note_id,
+                port_index: 0,
+                channel,
+                key,
+                kind: NoteEventKind::Off { velocity: 0.0 },
+            });
+        }
+    }
+}
+
+/// Prefer CLAP notes when the host sent any; otherwise fill `scratch` from MIDI.
+///
+/// When `notes` is non-empty, `scratch` is left untouched.
+pub fn notes_or_midi<'a>(
+    notes: &'a NoteBuffer,
+    midi: &crate::MidiBuffer,
+    scratch: &'a mut NoteBuffer,
+) -> &'a NoteBuffer {
+    if !notes.is_empty() {
+        return notes;
+    }
+    scratch.clear();
+    append_midi_as_notes(scratch, midi);
+    scratch
+}
+
 /// Mono `PARAM_MOD` (`note_id < 0`) → timed params. Per-note → [`NoteBuffer`].
 pub fn route_param_mod(
     timed: &mut Vec<TimedParamEvent>,
@@ -462,5 +527,56 @@ mod tests {
         notes.push(end);
         append_notes_as_midi(&mut midi, &notes);
         assert_eq!(midi.len(), 1);
+    }
+
+    #[test]
+    fn append_midi_as_notes_maps_on_off_and_all_notes_off() {
+        let mut midi = crate::MidiBuffer::new();
+        midi.push(3, crate::MidiMessage::note_on(0, 69, 100));
+        midi.push(9, crate::MidiMessage::note_off(0, 69, 0));
+        midi.push(11, crate::MidiMessage::raw(0xB0, 123, 0));
+        midi.push(12, crate::MidiMessage::raw(0xB0, 1, 64));
+        let mut notes = NoteBuffer::new();
+        append_midi_as_notes(&mut notes, &midi);
+        assert_eq!(notes.len(), 3);
+        assert_eq!(
+            notes.iter().next().unwrap(),
+            NoteEvent::on(3, 69, 69, 100.0 / 127.0)
+        );
+        let off = notes.iter().nth(1).unwrap();
+        assert!(matches!(off.kind, NoteEventKind::Off { .. }));
+        assert_eq!(off.sample_offset, 9);
+        let choke = notes.iter().nth(2).unwrap();
+        assert_eq!(choke.kind, NoteEventKind::Choke);
+        assert_eq!(choke.note_id, NOTE_UNSPECIFIED);
+        assert_eq!(choke.key, -1);
+    }
+
+    #[test]
+    fn notes_or_midi_prefers_clap_notes() {
+        let mut clap = NoteBuffer::new();
+        clap.push(NoteEvent::on(0, 1, 60, 1.0));
+        let mut midi = crate::MidiBuffer::new();
+        midi.push(0, crate::MidiMessage::note_on(0, 69, 100));
+        let mut scratch = NoteBuffer::new();
+        let got = notes_or_midi(&clap, &midi, &mut scratch);
+        assert_eq!(got.len(), 1);
+        assert_eq!(got.iter().next().unwrap().key, 60);
+        assert!(scratch.is_empty());
+    }
+
+    #[test]
+    fn notes_or_midi_falls_back_to_midi() {
+        let clap = NoteBuffer::new();
+        let mut midi = crate::MidiBuffer::new();
+        midi.push(4, crate::MidiMessage::note_on(2, 64, 90));
+        let mut scratch = NoteBuffer::new();
+        scratch.push(NoteEvent::on(99, 1, 1, 1.0));
+        let got = notes_or_midi(&clap, &midi, &mut scratch);
+        assert_eq!(got.len(), 1);
+        let ev = got.iter().next().unwrap();
+        assert_eq!(ev.key, 64);
+        assert_eq!(ev.sample_offset, 4);
+        assert_eq!(ev.channel, 2);
     }
 }
