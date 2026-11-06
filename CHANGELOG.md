@@ -16,6 +16,7 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 ### Changed
 
 - `cargo aura new/init` no longer writes `agal.toml`.
+- Dropped `cargo aura mesh` and remaining agal hooks (doctor probe, README, gitignore).
 - `smoke-synth` uses the helpers and splits audio at note offsets.
 
 ## [0.14.1] - 2026-10-16
