@@ -127,6 +127,36 @@ impl Adsr {
         })
     }
 
+    /// Host sample-rate constructor. Clamps times / sustain / `sample_rate`
+    /// so plugin `init` does not have to unwrap [`Self::with_sample_rate`].
+    #[must_use]
+    pub fn from_host(
+        attack: f32,
+        decay: f32,
+        sustain: f32,
+        release: f32,
+        sample_rate: f32,
+    ) -> Self {
+        let sr = if sample_rate.is_finite() && sample_rate > 0.0 {
+            sample_rate
+        } else {
+            44_100.0
+        };
+        let finite_or_zero = |t: f32| {
+            if t.is_finite() { t.max(0.0) } else { 0.0 }
+        };
+        let attack = finite_or_zero(attack);
+        let decay = finite_or_zero(decay);
+        let release = finite_or_zero(release);
+        let sustain = if sustain.is_finite() {
+            sustain.clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        Self::with_sample_rate(attack, decay, sustain, release, sr)
+            .expect("from_host clamps into valid range")
+    }
+
     /// Returns the current envelope state.
     #[inline]
     #[must_use]
@@ -766,6 +796,14 @@ impl CatmullRomEnvelope {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn from_host_clamps_times_sustain_and_sr() {
+        let env = Adsr::from_host(-1.0, 0.2, 1.5, f32::NAN, 0.0);
+        assert!(env.attack_time >= 0.0);
+        assert_eq!(env.sustain_level, 1.0);
+        assert_eq!(env.release_time, 0.0);
+    }
 
     #[test]
     fn test_ar_attack_then_release() {

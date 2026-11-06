@@ -128,6 +128,24 @@ impl Oscillator {
         })
     }
 
+    /// Host sample-rate constructor. Clamps invalid `sample_rate` / `frequency`
+    /// so plugin `init` does not have to unwrap [`Self::new`].
+    #[must_use]
+    pub fn from_host(waveform: Waveform, frequency: f32, sample_rate: f32) -> Self {
+        let sr = if sample_rate.is_finite() && sample_rate > 0.0 {
+            sample_rate
+        } else {
+            44_100.0
+        };
+        let nyquist = sr * 0.5;
+        let hz = if frequency.is_finite() {
+            frequency.clamp(1e-3, (nyquist - 1e-3).max(1e-3))
+        } else {
+            1e-3
+        };
+        Self::new(waveform, hz, sr).expect("from_host clamps into valid range")
+    }
+
     /// Phase increment per sample.
     #[inline]
     #[must_use]
@@ -399,5 +417,22 @@ mod tests {
         let mut osc = Oscillator::new(Waveform::WhiteNoise, 0.1, 44100.0).unwrap();
         let s = osc.next_sample();
         assert!(s.is_finite());
+    }
+
+    #[test]
+    fn from_host_matches_new_on_valid_input() {
+        let a = Oscillator::from_host(Waveform::Saw, 440.0, 48_000.0);
+        let b = Oscillator::new(Waveform::Saw, 440.0, 48_000.0).unwrap();
+        assert_eq!(a.frequency(), b.frequency());
+        assert_eq!(a.sample_rate(), b.sample_rate());
+    }
+
+    #[test]
+    fn from_host_clamps_bad_sr_and_nyquist() {
+        let a = Oscillator::from_host(Waveform::Sine, 440.0, 0.0);
+        assert!(a.sample_rate() > 0.0);
+        let mut osc = Oscillator::from_host(Waveform::Sine, 30_000.0, 44_100.0);
+        assert!(osc.next_sample().is_finite());
+        assert!(osc.frequency() < 22_050.0);
     }
 }
