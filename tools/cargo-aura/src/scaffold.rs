@@ -206,15 +206,6 @@ dir = "%LOCALAPPDATA%\\Programs\\Common"
 "#
     );
 
-    let agal_toml = format!(
-        r#"# agal orientation for this plugin workspace
-# https://github.com/LX-Audiolabs/agal
-
-[project]
-name = "{name}"
-"#
-    );
-
     let gitignore = "/target\n*.clap\n*.vst3\n*.lv2\n.DS_Store\n".to_string();
 
     let main_slint = match spec.kind {
@@ -278,7 +269,6 @@ name = "{name}"
         ("Cargo.toml".to_string(), cargo_toml),
         ("build.rs".to_string(), build_rs),
         ("aura.toml".to_string(), aura_toml),
-        ("agal.toml".to_string(), agal_toml),
         (".gitignore".to_string(), gitignore),
         ("ui/main.slint".to_string(), main_slint),
         ("src/lib.rs".to_string(), lib_rs),
@@ -1737,7 +1727,6 @@ mod tests {
                 "Cargo.toml",
                 "build.rs",
                 "aura.toml",
-                "agal.toml",
                 ".gitignore",
                 "ui/main.slint",
                 "src/lib.rs",

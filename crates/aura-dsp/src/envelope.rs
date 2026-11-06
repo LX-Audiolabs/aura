@@ -129,6 +129,11 @@ impl Adsr {
 
     /// Host sample-rate constructor. Clamps times / sustain / `sample_rate`
     /// so plugin `init` does not have to unwrap [`Self::with_sample_rate`].
+    ///
+    /// # Panics
+    ///
+    /// Only if clamping failed to satisfy [`Self::with_sample_rate`] — that is a
+    /// programming error in this constructor, not a caller input.
     #[must_use]
     pub fn from_host(
         attack: f32,

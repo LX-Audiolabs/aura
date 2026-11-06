@@ -130,6 +130,11 @@ impl Oscillator {
 
     /// Host sample-rate constructor. Clamps invalid `sample_rate` / `frequency`
     /// so plugin `init` does not have to unwrap [`Self::new`].
+    ///
+    /// # Panics
+    ///
+    /// Only if clamping failed to satisfy [`Self::new`] — that is a programming
+    /// error in this constructor, not a caller input.
     #[must_use]
     pub fn from_host(waveform: Waveform, frequency: f32, sample_rate: f32) -> Self {
         let sr = if sample_rate.is_finite() && sample_rate > 0.0 {
