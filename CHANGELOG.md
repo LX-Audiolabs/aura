@@ -12,7 +12,7 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 - `aura_dsp::tempo::{hz_from_tempo, phase_from_beats}` — BPM/division math for
   synced LFO/seq clocks (non-finite → 0 Hz / phase 0).
 - `Lfo::{phase, set_phase, reset_phase}` — retrigger without rebuild; `set_frequency(0)`
-  documented as stopped clock.
+  documented as stopped clock; non-finite `set_phase` ignored (no NaN poison).
 
 ## [0.14.3] - 2026-11-07
 

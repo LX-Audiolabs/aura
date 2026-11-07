@@ -188,7 +188,7 @@ Helmira M3 slice order (product, not this repo):
 - [x] P0 tempo/beat helpers + tests
 - [x] P0 `Lfo::{reset_phase,set_phase,phase}` + tests
 - [ ] P1 `ModRouteTable` (or equivalent) + tests; docs vs legacy `ModMatrix`
-- [ ] CHANGELOG Unreleased lines on each land
+- [x] CHANGELOG Unreleased lines on each land
 - [ ] Helmira path-dep lock picks up version; no host fork
 
 ---

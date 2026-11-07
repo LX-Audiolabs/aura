@@ -235,8 +235,13 @@ impl Lfo {
     }
 
     /// Set the phase; wraps with `rem_euclid(1.0)`. Does not reset S&H RNG.
+    ///
+    /// Non-finite values are ignored (phase unchanged) so a bad transport/mod
+    /// value cannot NaN-poison the LFO forever.
     pub fn set_phase(&mut self, phase: f32) {
-        self.phase = phase.rem_euclid(1.0);
+        if phase.is_finite() {
+            self.phase = phase.rem_euclid(1.0);
+        }
     }
 
     /// Set the phase to `0.0`. Does not reset S&H RNG (`sh_value` / `rng_state` unchanged).
@@ -519,6 +524,18 @@ mod tests {
     }
 
     #[test]
+    fn lfo_set_phase_non_finite_leaves_phase() {
+        let mut lfo = Lfo::new(LfoShape::Sine, 1.0, 48_000.0).unwrap();
+        lfo.set_frequency(0.0).unwrap();
+        lfo.set_phase(0.4);
+        for bad in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            lfo.set_phase(bad);
+            assert_eq!(lfo.phase(), 0.4, "bad={bad:?}");
+            assert!(lfo.next_value().is_finite());
+        }
+    }
+
+    #[test]
     fn lfo_frequency_zero_holds_phase() {
         let mut lfo = Lfo::new(LfoShape::Sine, 5.0, 48_000.0).unwrap();
         lfo.set_phase(0.3);
@@ -534,24 +551,14 @@ mod tests {
     #[test]
     fn lfo_set_phase_does_not_reset_sh_rng() {
         let mut lfo = Lfo::new(LfoShape::SampleAndHold, 1.0, 48_000.0).unwrap();
-        // Force one known sample by reading current held value path
-        let before = lfo.next_value();
-        let rng_before_phase = lfo.phase();
-        lfo.set_phase(0.5);
-        // Same S&H held value until natural wrap: sample at new phase still SH shape
-        let after = {
-            // peek by generating without waiting a full period: still S&H raw
-            lfo.next_value()
-        };
-        assert!(before.is_finite() && after.is_finite());
-        let _ = rng_before_phase;
-        // Documented contract: set_phase does not re-roll sh_value.
-        // Compare internal continuity via many zero-freq reads after set_phase:
         lfo.set_frequency(0.0).unwrap();
         lfo.set_phase(0.1);
         let a = lfo.next_value();
         lfo.set_phase(0.9);
         let b = lfo.next_value();
-        assert_eq!(a, b, "S&H value must not change on phase-only set when freq=0");
+        assert_eq!(
+            a, b,
+            "S&H value must not change on phase-only set when freq=0"
+        );
     }
 }
