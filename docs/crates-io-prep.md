@@ -14,7 +14,8 @@ Related: [`refinement-backlog.md`](./refinement-backlog.md),
 
 - 0.13.0 — `lx-aura-test` published
 - 0.14.0 — renderer features (`backend-femtovg-gl` / `wgpu`)
-- 0.14.1 — Slint 1.18.1 + alias/docs (this cut)
+- 0.14.1 — Slint 1.18.1 + alias/docs
+- 0.14.2 — instrument process helpers + agal cleanup (this cut)
 
 ---
 
