@@ -174,6 +174,44 @@ impl Oscillator {
         }
     }
 
+    /// Sample waveform at `phase + offset_cycles` without advancing state.
+    ///
+    /// Does **not**:
+    /// - advance [`Self::phase`]
+    /// - mutate `triangle_sum` (stateless triangle shape, not the leaky integrator)
+    /// - consume the noise RNG (noise waveforms return `0.0`)
+    ///
+    /// `PolyBLEP` uses lookup phase `t = (phase + offset).rem_euclid(1)` with
+    /// this oscillator's [`Self::phase_increment`] as `dt`. Non-finite
+    /// `offset_cycles` is treated as `0.0`. Pulse uses this oscillator's
+    /// pulse width.
+    ///
+    /// Lookup is not a substitute for [`Self::next_sample`]: callers typically
+    /// take a modulated peek, then advance with `next_sample`.
+    #[inline]
+    #[must_use]
+    pub fn sample_offset(&self, offset_cycles: f32) -> f32 {
+        let offset = if offset_cycles.is_finite() {
+            offset_cycles
+        } else {
+            0.0
+        };
+        let t = (self.phase + offset).rem_euclid(1.0);
+        let dt = self.phase_increment();
+        match self.waveform {
+            Waveform::Pulse => self.pulse_at(t, dt),
+            other => stateless_waveform_sample(other, t, dt),
+        }
+    }
+
+    /// Band-limited pulse at phase `t` using this oscillator's pulse width.
+    #[inline]
+    fn pulse_at(&self, t: f32, dt: f32) -> f32 {
+        let pw = self.pulse_width.clamp(0.01, 0.99);
+        let naive = if t < pw { 1.0 } else { -1.0 };
+        naive + polyblep(t, dt) - polyblep((t + (1.0 - pw)) % 1.0, dt)
+    }
+
     /// Generate the next sample.
     #[inline]
     #[must_use]
@@ -203,11 +241,7 @@ impl Oscillator {
                 self.triangle_sum.clamp(-1.0, 1.0)
             }
 
-            Waveform::Pulse => {
-                let pw = self.pulse_width.clamp(0.01, 0.99);
-                let naive = if t < pw { 1.0 } else { -1.0 };
-                naive + polyblep(t, dt) - polyblep((t + (1.0 - pw)) % 1.0, dt)
-            }
+            Waveform::Pulse => self.pulse_at(t, dt),
 
             Waveform::WhiteNoise | Waveform::PinkNoise | Waveform::BrownNoise => {
                 // Lazy init: reconstruct noise_gen after deserialization
@@ -439,5 +473,139 @@ mod tests {
         let mut osc = Oscillator::from_host(Waveform::Sine, 30_000.0, 44_100.0);
         assert!(osc.next_sample().is_finite());
         assert!(osc.frequency() < 22_050.0);
+    }
+
+    #[test]
+    fn sample_offset_sine_zero_matches_next_without_advance() {
+        let mut osc = Oscillator::from_host(Waveform::Sine, 440.0, 48_000.0);
+        osc.set_phase(0.37);
+        let phase_before = osc.phase();
+        let peek = osc.sample_offset(0.0);
+        assert_eq!(osc.phase(), phase_before);
+        let advanced = osc.next_sample();
+        assert!((peek - advanced).abs() < f32::EPSILON);
+        assert_ne!(osc.phase(), phase_before);
+    }
+
+    #[test]
+    fn sample_offset_does_not_perturb_phase_sequence() {
+        let mut with_lookup = Oscillator::from_host(Waveform::Saw, 220.0, 48_000.0);
+        with_lookup.set_phase(0.12);
+        let mut dry = with_lookup.clone();
+
+        let phase_before = with_lookup.phase();
+        let _ = with_lookup.sample_offset(0.33);
+        assert_eq!(with_lookup.phase(), phase_before);
+
+        let a = with_lookup.next_sample();
+        let b = dry.next_sample();
+        assert!((a - b).abs() < f32::EPSILON);
+        assert!((with_lookup.phase() - dry.phase()).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn sample_offset_saw_square_offset_changes_sample_keeps_phase() {
+        for wf in [Waveform::Saw, Waveform::Square] {
+            let mut osc = Oscillator::from_host(wf, 330.0, 48_000.0);
+            // 0.4 vs 0.4+0.25 crosses square half-cycle and moves saw amplitude.
+            osc.set_phase(0.4);
+            let phase = osc.phase();
+            let at0 = osc.sample_offset(0.0);
+            let at_quarter = osc.sample_offset(0.25);
+            assert_eq!(osc.phase(), phase);
+            assert!(
+                (at0 - at_quarter).abs() > 1e-3,
+                "{wf:?}: offset must change sample ({at0} vs {at_quarter})"
+            );
+        }
+    }
+
+    #[test]
+    fn sample_offset_triangle_lookups_leave_integrator_path_intact() {
+        let mut with_lookup = Oscillator::from_host(Waveform::Triangle, 110.0, 48_000.0);
+        with_lookup.set_phase(0.4);
+        // Warm the leaky integrator a bit so state is non-trivial.
+        for _ in 0..32 {
+            let _ = with_lookup.next_sample();
+        }
+        let mut dry = with_lookup.clone();
+
+        let peek_a = with_lookup.sample_offset(0.1);
+        let peek_b = with_lookup.sample_offset(0.7);
+        assert!(peek_a.is_finite() && peek_b.is_finite());
+        let a = with_lookup.next_sample();
+        let b = dry.next_sample();
+        assert!(
+            (a - b).abs() < f32::EPSILON,
+            "triangle lookup must not touch triangle_sum ({a} vs {b})"
+        );
+        assert!((with_lookup.phase() - dry.phase()).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn sample_offset_non_finite_is_finite_and_keeps_phase() {
+        let mut osc = Oscillator::from_host(Waveform::Sine, 440.0, 48_000.0);
+        osc.set_phase(0.55);
+        let phase = osc.phase();
+        for bad in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            let s = osc.sample_offset(bad);
+            assert!(s.is_finite(), "offset {bad:?} must yield finite sample");
+            assert_eq!(osc.phase(), phase);
+        }
+    }
+
+    #[test]
+    fn sample_offset_from_host_set_phase_roundtrip() {
+        let mut osc = Oscillator::from_host(Waveform::Pulse, 100.0, 44_100.0);
+        osc.set_phase(0.82);
+        assert!((osc.phase() - 0.82).abs() < 1e-6);
+        let s = osc.sample_offset(0.0);
+        assert!(s.is_finite());
+        assert!((osc.phase() - 0.82).abs() < 1e-6);
+    }
+
+    #[test]
+    fn sample_offset_noise_is_silent_without_rng_consume() {
+        let mut osc = Oscillator::from_host(Waveform::WhiteNoise, 0.1, 48_000.0);
+        let peek = osc.sample_offset(0.0);
+        assert_eq!(peek, 0.0);
+        let a = osc.next_sample();
+        let mut other = Oscillator::from_host(Waveform::WhiteNoise, 0.1, 48_000.0);
+        let b = other.next_sample();
+        assert!((a - b).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn sample_offset_negative_wraps_like_positive_equivalent() {
+        let mut osc = Oscillator::from_host(Waveform::Saw, 440.0, 48_000.0);
+        osc.set_phase(0.4);
+        let phase = osc.phase();
+        let neg = osc.sample_offset(-0.25);
+        let pos = osc.sample_offset(0.75);
+        assert_eq!(osc.phase(), phase);
+        assert!((neg - pos).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn sample_offset_pulse_uses_oscillator_pulse_width() {
+        let mut narrow = Oscillator::from_host(Waveform::Pulse, 220.0, 48_000.0);
+        narrow.set_pulse_width(0.25);
+        // 0.35 is high at 50% duty, low at 25% duty.
+        narrow.set_phase(0.35);
+        let mut dry = narrow.clone();
+        let mut fifty = Oscillator::from_host(Waveform::Pulse, 220.0, 48_000.0);
+        fifty.set_pulse_width(0.5);
+        fifty.set_phase(0.35);
+
+        let phase = narrow.phase();
+        let peek = narrow.sample_offset(0.0);
+        assert_eq!(narrow.phase(), phase);
+        let advanced = dry.next_sample();
+        assert!((peek - advanced).abs() < f32::EPSILON);
+        let fifty_peek = fifty.sample_offset(0.0);
+        assert!(
+            (peek - fifty_peek).abs() > 1e-3,
+            "25% pulse must differ from 50% at t=0.35 ({peek} vs {fifty_peek})"
+        );
     }
 }

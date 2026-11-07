@@ -7,6 +7,13 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ## [Unreleased]
 
+## [0.14.3] - 2026-11-07
+
+### Added
+
+- `Oscillator::sample_offset` — waveform lookup at `phase + offset` without
+  advancing phase, triangle integrator, or noise RNG (PM / hard-sync read).
+
 ## [0.14.2] - 2026-11-06
 
 ### Added
