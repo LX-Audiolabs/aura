@@ -13,9 +13,10 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
   synced LFO/seq clocks (non-finite → 0 Hz / phase 0).
 - `Lfo::{phase, set_phase, reset_phase}` — retrigger without rebuild; `set_frequency(0)`
   documented as stopped clock; non-finite `set_phase` ignored (no NaN poison).
-- `ModRouteTable` / `ModRoute` — fixed-N RT mod routes by u16 id (legacy `ModMatrix` docs).
-- `blend_svf_outputs` — normalized LP/BP/HP mix from `SvfOutput`.
-- `unison_voice_pan_gains` — pure per-voice pan from index/spread.
+- `ModRouteTable` / `ModRoute` — fixed-N RT mod routes by u16 id (legacy `ModMatrix` docs);
+  non-finite depth/src skipped in `accumulate`; NaN depth → 0 on `new`.
+- `blend_svf_outputs` — normalized LP/BP/HP mix from `SvfOutput` (non-finite → 0).
+- `unison_voice_pan_gains` — pure per-voice pan from index/spread (index clamped).
 - `SmoothRandom` — one-pole smoothed white noise mod source.
 
 ## [0.14.3] - 2026-11-07

@@ -64,7 +64,12 @@ pub fn unison_voice_pan_gains(
     if num_voices <= 1 {
         return pan_gains(0.0, law);
     }
-    let spread = if spread.is_finite() { spread.clamp(0.0, 1.0) } else { 0.0 };
+    let spread = if spread.is_finite() {
+        spread.clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let index = index.min(num_voices - 1);
     let t = index as f32 / (num_voices - 1) as f32;
     let pan = (t * 2.0 - 1.0) * spread;
     pan_gains(pan, law)
@@ -175,5 +180,14 @@ mod tests {
     fn unison_non_finite_spread_center() {
         let g = unison_voice_pan_gains(0, 4, f32::NAN, PanLaw::EqualPower);
         assert!((g.left - g.right).abs() < 0.01);
+    }
+
+    #[test]
+    fn unison_index_past_end_clamps_to_last() {
+        let n = 4;
+        let last = unison_voice_pan_gains(n - 1, n, 1.0, PanLaw::Linear);
+        let oob = unison_voice_pan_gains(100, n, 1.0, PanLaw::Linear);
+        assert!((last.left - oob.left).abs() < 1e-6);
+        assert!((last.right - oob.right).abs() < 1e-6);
     }
 }

@@ -21,12 +21,17 @@ pub struct ModRoute {
 
 impl ModRoute {
     /// Create an enabled route; `depth` is clamped to `[-1.0, 1.0]`.
+    /// Non-finite depth becomes `0.0` (NaN must not enter the table via `new`).
     #[must_use]
     pub fn new(src: u16, dst: u16, depth: f32) -> Self {
         Self {
             src,
             dst,
-            depth: depth.clamp(-1.0, 1.0),
+            depth: if depth.is_finite() {
+                depth.clamp(-1.0, 1.0)
+            } else {
+                0.0
+            },
             enabled: true,
         }
     }
@@ -96,13 +101,14 @@ impl<const N: usize> ModRouteTable<N> {
     /// Zero `out`, then for each enabled route with in-range `src`/`dst`:
     /// `out[dst] += src_values[src] * depth`.
     ///
-    /// Disabled routes and out-of-range ids are skipped (never panic).
+    /// Disabled routes, out-of-range ids, and non-finite `depth` / source
+    /// samples are skipped (never panic; no NaN poison into `out`).
     pub fn accumulate(&self, src_values: &[f32], out: &mut [f32]) {
         for o in out.iter_mut() {
             *o = 0.0;
         }
         for route in &self.routes[..self.len] {
-            if !route.enabled {
+            if !route.enabled || !route.depth.is_finite() {
                 continue;
             }
             let src = route.src as usize;
@@ -110,7 +116,11 @@ impl<const N: usize> ModRouteTable<N> {
             if src >= src_values.len() || dst >= out.len() {
                 continue;
             }
-            out[dst] += src_values[src] * route.depth;
+            let s = src_values[src];
+            if !s.is_finite() {
+                continue;
+            }
+            out[dst] += s * route.depth;
         }
     }
 }
@@ -195,6 +205,8 @@ mod tests {
     fn depth_clamped_on_new() {
         assert!((ModRoute::new(0, 0, 2.0).depth - 1.0).abs() < f32::EPSILON);
         assert!((ModRoute::new(0, 0, -2.0).depth - (-1.0)).abs() < f32::EPSILON);
+        assert_eq!(ModRoute::new(0, 0, f32::NAN).depth, 0.0);
+        assert_eq!(ModRoute::new(0, 0, f32::INFINITY).depth, 0.0);
     }
 
     #[test]
@@ -206,5 +218,36 @@ mod tests {
         t.accumulate(&src, &mut out);
         assert!((out[0] - 0.5).abs() < 1e-6);
         assert_eq!(out[1], 0.0);
+    }
+
+    #[test]
+    fn accumulate_skips_non_finite_depth_and_src() {
+        let mut t = ModRouteTable::<4>::new();
+        assert!(t.add(ModRoute::new(0, 0, 1.0)));
+        t.route_mut(0).unwrap().depth = f32::NAN;
+        assert!(t.add(ModRoute::new(1, 0, 1.0)));
+        let src = [0.5_f32, f32::NAN];
+        let mut out = [9.0_f32];
+        t.accumulate(&src, &mut out);
+        assert_eq!(out[0], 0.0);
+    }
+
+    #[test]
+    fn serde_roundtrip_and_too_long_err() {
+        let mut t = ModRouteTable::<4>::new();
+        assert!(t.add(ModRoute::new(1, 2, 0.5)));
+        assert!(t.add(ModRoute::new(3, 4, -0.25)));
+        let json = serde_json::to_string(&t).unwrap();
+        let back: ModRouteTable<4> = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.len(), 2);
+        assert_eq!(back.routes()[0].src, 1);
+        assert_eq!(back.routes()[0].dst, 2);
+        assert!((back.routes()[0].depth - 0.5).abs() < f32::EPSILON);
+        assert_eq!(back.routes()[1].src, 3);
+        assert!((back.routes()[1].depth - (-0.25)).abs() < f32::EPSILON);
+
+        let too_long = vec![ModRoute::new(0, 0, 0.1); 3];
+        let bad = serde_json::to_string(&too_long).unwrap();
+        assert!(serde_json::from_str::<ModRouteTable<2>>(&bad).is_err());
     }
 }

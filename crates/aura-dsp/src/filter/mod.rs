@@ -295,12 +295,15 @@ pub struct SvfOutput {
 }
 
 /// Weighted blend of SVF LP/BP/HP. Weights may be any finite value; negative
-/// weights are clamped to 0. If the sum of usable weights is 0, or any weight
-/// is non-finite, returns `0.0`.
+/// weights are clamped to 0. If the sum of usable weights is 0, any weight is
+/// non-finite, or any used sample field is non-finite, returns `0.0`.
 #[inline]
 #[must_use]
 pub fn blend_svf_outputs(out: &SvfOutput, low: f32, band: f32, high: f32) -> f32 {
     if !low.is_finite() || !band.is_finite() || !high.is_finite() {
+        return 0.0;
+    }
+    if !out.low_pass.is_finite() || !out.band_pass.is_finite() || !out.high_pass.is_finite() {
         return 0.0;
     }
     let l = low.max(0.0);
@@ -545,21 +548,47 @@ mod tests {
 
     #[test]
     fn blend_svf_pure_low() {
-        let o = SvfOutput { low_pass: 0.5, high_pass: 0.1, band_pass: 0.2, notch: 0.0 };
+        let o = SvfOutput {
+            low_pass: 0.5,
+            high_pass: 0.1,
+            band_pass: 0.2,
+            notch: 0.0,
+        };
         assert!((blend_svf_outputs(&o, 1.0, 0.0, 0.0) - 0.5).abs() < 1e-6);
     }
 
     #[test]
     fn blend_svf_equal_weights_average() {
-        let o = SvfOutput { low_pass: 1.0, high_pass: 3.0, band_pass: 5.0, notch: 0.0 };
+        let o = SvfOutput {
+            low_pass: 1.0,
+            high_pass: 3.0,
+            band_pass: 5.0,
+            notch: 0.0,
+        };
         let v = blend_svf_outputs(&o, 1.0, 1.0, 1.0);
         assert!((v - 3.0).abs() < 1e-6, "got {v}"); // (1+5+3)/3
     }
 
     #[test]
     fn blend_svf_bad_weights_zero() {
-        let o = SvfOutput { low_pass: 1.0, high_pass: 1.0, band_pass: 1.0, notch: 0.0 };
+        let o = SvfOutput {
+            low_pass: 1.0,
+            high_pass: 1.0,
+            band_pass: 1.0,
+            notch: 0.0,
+        };
         assert_eq!(blend_svf_outputs(&o, 0.0, 0.0, 0.0), 0.0);
         assert_eq!(blend_svf_outputs(&o, f32::NAN, 1.0, 0.0), 0.0);
+    }
+
+    #[test]
+    fn blend_svf_non_finite_sample_zero() {
+        let o = SvfOutput {
+            low_pass: f32::NAN,
+            high_pass: 1.0,
+            band_pass: 1.0,
+            notch: 0.0,
+        };
+        assert_eq!(blend_svf_outputs(&o, 1.0, 0.0, 0.0), 0.0);
     }
 }
