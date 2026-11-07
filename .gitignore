@@ -13,6 +13,7 @@ examples/*/.cargo
 *.vst3
 *.lv2
 /target-clap-check
+/.worktrees/
 
 # Personal agent config — contains email, never commit.
 AGENTS.md
