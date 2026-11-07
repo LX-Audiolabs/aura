@@ -534,6 +534,22 @@ pub struct EnvelopeSegment {
 }
 
 /// Multi-stage envelope with arbitrary segments.
+///
+/// # Delay-before-attack recipe
+///
+/// Model a silent pre-attack delay by making the first segment hold `0.0` for
+/// the delay duration, then ramp to `1.0` for the attack:
+///
+/// ```text
+/// [
+///     EnvelopeSegment { target: 0.0, duration: delay_secs },
+///     EnvelopeSegment { target: 1.0, duration: attack_secs },
+///     EnvelopeSegment { target: 0.0, duration: release_secs },
+/// ]
+/// ```
+///
+/// The first segment keeps the output at `0.0` for `delay_secs` while the
+/// envelope runs, so no separate delay-stage type is required.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MultiStageEnvelope {
     /// The segments of the envelope.
