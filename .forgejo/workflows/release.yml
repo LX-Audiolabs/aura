@@ -1,0 +1,75 @@
+name: release
+
+# Tag push (v*) → build cargo-aura → attach binary to a Forgejo release.
+#
+# Self-hosted runner only has the `self-hosted` label (that is what ci.yml
+# uses). The old .github/workflows/release.yml used ubuntu-latest /
+# windows-latest / macos-latest, which never matched a runner here and left
+# every run stuck in "waiting" — so no GitHub-hosted labels in this file.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: self-hosted
+    timeout-minutes: 60
+    env:
+      CARGO_BUILD_JOBS: "2"
+      # Forgejo instance base URL (same value ci.yml uses).
+      FORGEJO_URL: http://192.168.129.29:3000
+    steps:
+      - name: Checkout tag
+        env:
+          CI_TOKEN: ${{ forgejo.token }}
+        run: |
+          set -euo pipefail
+          git init
+          git remote add origin "$FORGEJO_URL/${{ forgejo.repository }}.git"
+          auth=$(printf 'oauth2:%s' "$CI_TOKEN" | base64 -w0)
+          git -c "http.extraheader=Authorization: Basic $auth" fetch --depth 1 origin "${{ forgejo.ref }}"
+          git checkout --force "${{ forgejo.sha }}"
+          test "$(git rev-parse HEAD)" = "${{ forgejo.sha }}"
+
+      - name: Build cargo-aura
+        run: cargo build --release -p cargo-aura
+
+      - name: Package binary
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp target/release/cargo-aura dist/cargo-aura
+          tar czf dist/cargo-aura-linux-x86_64.tar.gz -C dist cargo-aura
+          rm dist/cargo-aura
+          ls -lh dist
+
+      - name: Publish release
+        env:
+          CI_TOKEN: ${{ forgejo.token }}
+        run: |
+          set -euo pipefail
+          api="$FORGEJO_URL/api/v1"
+          repo="${{ forgejo.repository }}"
+          ref="${{ forgejo.ref }}"
+          tag="${ref#refs/tags/}"
+          asset="cargo-aura-linux-x86_64.tar.gz"
+
+          # Reuse an existing release for this tag (idempotent re-run).
+          resp=$(curl -sS -H "Authorization: token $CI_TOKEN" "$api/repos/$repo/releases/tags/$tag")
+          if ! printf '%s' "$resp" | grep -q '"id":'; then
+            resp=$(curl -sS -X POST \
+              -H "Authorization: token $CI_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{\"tag_name\":\"$tag\",\"name\":\"$tag\",\"draft\":false,\"prerelease\":false}" \
+              "$api/repos/$repo/releases")
+          fi
+          release_id=$(printf '%s' "$resp" | grep -o '"id":[0-9][0-9]*' | head -n1 | cut -d: -f2)
+          test -n "$release_id"
+          printf 'release_id=%s tag=%s\n' "$release_id" "$tag"
+
+          curl -sS -X POST \
+            -H "Authorization: token $CI_TOKEN" \
+            -F "attachment=@dist/$asset" \
+            "$api/repos/$repo/releases/$release_id/assets?name=$asset"
