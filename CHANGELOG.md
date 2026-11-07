@@ -9,8 +9,6 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ## [0.14.2] - 2026-11-06
 
-Internal patch (not published to crates.io).
-
 ### Added
 
 - `append_midi_as_notes` / `notes_or_midi` — MIDI fallback → CLAP notes (CC 120/123 choke).
