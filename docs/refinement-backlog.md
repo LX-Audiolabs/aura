@@ -17,6 +17,7 @@ Canonical elsewhere (do not duplicate specs here):
 | Cross-cutting open | `agal/notes/_workspace.md` |
 | Local scratch | `docs/optimisation-todo.md` (gitignored) |
 | SemVer | `docs/versioning.md` |
+| Helmira-driven DSP/mod gaps (M3+) | [`docs/helmira-driven-gaps.md`](./helmira-driven-gaps.md) |
 
 ---
 
