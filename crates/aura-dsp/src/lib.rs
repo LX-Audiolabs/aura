@@ -116,6 +116,7 @@ pub mod filter;
 /// LX product-grade FX (from `lx-dsp`): TDF-II biquad, mastering, meters, …
 pub mod fx;
 pub mod mod_matrix;
+pub mod mod_route_table;
 pub mod modulation;
 pub mod noise;
 pub mod oscillator;

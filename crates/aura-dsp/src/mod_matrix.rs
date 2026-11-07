@@ -4,6 +4,10 @@
 //! modulation sources (LFOs, envelopes, MIDI CCs) are mapped to
 //! synthesis destinations (pitch, filter, amplitude, etc.) with
 //! configurable depth.
+//!
+//! This closed-enum matrix is a **legacy example** surface. New products
+//! should use [`crate::mod_route_table::ModRouteTable`] for arbitrary `u16`
+//! ids and fixed preallocated capacity.
 
 use serde::{Deserialize, Serialize};
 
