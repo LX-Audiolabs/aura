@@ -122,6 +122,7 @@ pub mod oscillator;
 pub mod panning;
 pub mod reverb;
 pub mod smoothing;
+pub mod tempo;
 pub mod tuning;
 pub mod voice;
 pub mod wavetable;
