@@ -181,9 +181,17 @@ impl Lfo {
 
     /// Set the LFO frequency.
     ///
+    /// Freerun Hz useful musical range is roughly **0.01-20 Hz** for classic
+    /// modulation; the API accepts any finite `>= 0` (no clamp beyond existing
+    /// validation).
+    ///
+    /// `set_frequency(0.0)` is valid and stops the clock: phase no longer
+    /// advances and [`Lfo::next_value`] remains finite, holding the waveform at
+    /// the current phase.
+    ///
     /// # Errors
     ///
-    /// Returns error if frequency is invalid.
+    /// Returns error if frequency is negative or non-finite.
     pub fn set_frequency(&mut self, freq: f32) -> Result<()> {
         if freq < 0.0 || !freq.is_finite() {
             return Err(crate::DspError::InvalidParameter {
@@ -217,6 +225,23 @@ impl Lfo {
     #[must_use]
     pub fn mode(&self) -> LfoMode {
         self.mode
+    }
+
+    /// Returns the current phase in `[0, 1)`.
+    #[inline]
+    #[must_use]
+    pub fn phase(&self) -> f32 {
+        self.phase
+    }
+
+    /// Set the phase; wraps with `rem_euclid(1.0)`. Does not reset S&H RNG.
+    pub fn set_phase(&mut self, phase: f32) {
+        self.phase = phase.rem_euclid(1.0);
+    }
+
+    /// Set the phase to `0.0`. Does not reset S&H RNG (`sh_value` / `rng_state` unchanged).
+    pub fn reset_phase(&mut self) {
+        self.phase = 0.0;
     }
 }
 
@@ -455,5 +480,78 @@ mod tests {
         let json = serde_json::to_string(&fm).unwrap();
         let back: FmModulator = serde_json::from_str(&json).unwrap();
         assert!((fm.mod_index - back.mod_index).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn lfo_set_phase_snaps_and_next_continues_at_freq() {
+        let sr = 48_000.0;
+        let freq = 10.0;
+        let mut a = Lfo::new(LfoShape::SawUp, freq, sr).unwrap();
+        a.set_phase(0.25);
+        assert!((a.phase() - 0.25).abs() < 1e-6);
+        let v0 = a.next_value();
+        // SawUp bipolar at t: 2t-1 at 0.25 before advance = -0.5 * depth
+        assert!((v0 - (-0.5)).abs() < 1e-5, "got {v0}");
+
+        let mut b = Lfo::new(LfoShape::SawUp, freq, sr).unwrap();
+        b.set_phase(0.25);
+        let _ = b.next_value();
+        let p1 = b.phase();
+        let expected_dt = freq / sr;
+        assert!((p1 - (0.25 + expected_dt)).abs() < 1e-6, "got {p1}");
+    }
+
+    #[test]
+    fn lfo_reset_phase_to_zero() {
+        let mut lfo = Lfo::new(LfoShape::Sine, 1.0, 48_000.0).unwrap();
+        lfo.set_phase(0.7);
+        lfo.reset_phase();
+        assert_eq!(lfo.phase(), 0.0);
+    }
+
+    #[test]
+    fn lfo_set_phase_wraps() {
+        let mut lfo = Lfo::new(LfoShape::Sine, 1.0, 48_000.0).unwrap();
+        lfo.set_phase(1.25);
+        assert!((lfo.phase() - 0.25).abs() < 1e-6);
+        lfo.set_phase(-0.25);
+        assert!((lfo.phase() - 0.75).abs() < 1e-6);
+    }
+
+    #[test]
+    fn lfo_frequency_zero_holds_phase() {
+        let mut lfo = Lfo::new(LfoShape::Sine, 5.0, 48_000.0).unwrap();
+        lfo.set_phase(0.3);
+        lfo.set_frequency(0.0).unwrap();
+        let p0 = lfo.phase();
+        for _ in 0..128 {
+            let v = lfo.next_value();
+            assert!(v.is_finite());
+        }
+        assert_eq!(lfo.phase(), p0);
+    }
+
+    #[test]
+    fn lfo_set_phase_does_not_reset_sh_rng() {
+        let mut lfo = Lfo::new(LfoShape::SampleAndHold, 1.0, 48_000.0).unwrap();
+        // Force one known sample by reading current held value path
+        let before = lfo.next_value();
+        let rng_before_phase = lfo.phase();
+        lfo.set_phase(0.5);
+        // Same S&H held value until natural wrap: sample at new phase still SH shape
+        let after = {
+            // peek by generating without waiting a full period: still S&H raw
+            lfo.next_value()
+        };
+        assert!(before.is_finite() && after.is_finite());
+        let _ = rng_before_phase;
+        // Documented contract: set_phase does not re-roll sh_value.
+        // Compare internal continuity via many zero-freq reads after set_phase:
+        lfo.set_frequency(0.0).unwrap();
+        lfo.set_phase(0.1);
+        let a = lfo.next_value();
+        lfo.set_phase(0.9);
+        let b = lfo.next_value();
+        assert_eq!(a, b, "S&H value must not change on phase-only set when freq=0");
     }
 }
