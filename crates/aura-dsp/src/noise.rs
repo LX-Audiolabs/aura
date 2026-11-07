@@ -164,6 +164,52 @@ pub fn white_noise_sample(seed: &mut u32) -> f32 {
     crate::dsp_util::xorshift32_signed_f32(seed)
 }
 
+/// White noise through a one-pole lowpass — poly "smooth random" style source.
+///
+/// Not LFO S&H; product picks rate via `smoothing` (`0` = raw white, `~1` =
+/// very slow).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SmoothRandom {
+    rng_state: u32,
+    y: f32,
+    coeff: f32,
+}
+
+impl SmoothRandom {
+    /// `seed` 0 → treated as 1. `smoothing` clamped to `[0, 0.999]` if finite,
+    /// else 0.
+    #[must_use]
+    pub fn new(seed: u32, smoothing: f32) -> Self {
+        Self {
+            rng_state: if seed == 0 { 1 } else { seed },
+            y: 0.0,
+            coeff: Self::clamp_smoothing(smoothing),
+        }
+    }
+
+    /// Set the smoothing coefficient (same clamp rules as [`SmoothRandom::new`]).
+    pub fn set_smoothing(&mut self, smoothing: f32) {
+        self.coeff = Self::clamp_smoothing(smoothing);
+    }
+
+    fn clamp_smoothing(smoothing: f32) -> f32 {
+        if smoothing.is_finite() {
+            smoothing.clamp(0.0, 0.999)
+        } else {
+            0.0
+        }
+    }
+
+    /// Next sample roughly in `[-1, 1]` (smoothed; not hard-clipped). Always finite.
+    #[inline]
+    #[must_use]
+    pub fn next_sample(&mut self) -> f32 {
+        let white = crate::dsp_util::xorshift32_signed_f32(&mut self.rng_state);
+        self.y = self.coeff * self.y + (1.0 - self.coeff) * white;
+        self.y
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -218,5 +264,46 @@ mod tests {
         let json = serde_json::to_string(&ngen).unwrap();
         let back: NoiseGenerator = serde_json::from_str(&json).unwrap();
         assert_eq!(ngen.noise_type(), back.noise_type());
+    }
+
+    #[test]
+    fn smooth_random_finite_and_varies() {
+        let mut r = SmoothRandom::new(1, 0.0);
+        let mut prev = r.next_sample();
+        let mut changed = false;
+        for _ in 0..64 {
+            let v = r.next_sample();
+            assert!(v.is_finite());
+            if (v - prev).abs() > 1e-6 {
+                changed = true;
+            }
+            prev = v;
+        }
+        assert!(changed);
+    }
+
+    #[test]
+    fn smooth_random_high_smoothing_moves_slowly() {
+        let mut raw = SmoothRandom::new(42, 0.0);
+        let mut slow = SmoothRandom::new(42, 0.99);
+        let mut raw_jump = 0.0f32;
+        let mut slow_jump = 0.0f32;
+        let mut pr = raw.next_sample();
+        let mut ps = slow.next_sample();
+        for _ in 0..32 {
+            let nr = raw.next_sample();
+            let ns = slow.next_sample();
+            raw_jump += (nr - pr).abs();
+            slow_jump += (ns - ps).abs();
+            pr = nr;
+            ps = ns;
+        }
+        assert!(slow_jump < raw_jump, "slow={slow_jump} raw={raw_jump}");
+    }
+
+    #[test]
+    fn smooth_random_non_finite_smoothing_ok() {
+        let mut r = SmoothRandom::new(7, f32::NAN);
+        assert!(r.next_sample().is_finite());
     }
 }
