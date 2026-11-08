@@ -6,15 +6,19 @@
 
 use serde::{Deserialize, Serialize};
 
-/// A single modulation route: `src` → `dst` with a signed `depth`.
+/// A single modulation route: `src` → `dst` with a signed normalized amount
+/// and a destination range scale in product-defined units.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct ModRoute {
     /// Source id (product-defined).
     pub src: u16,
     /// Destination id (product-defined).
     pub dst: u16,
-    /// Modulation depth in `[-1.0, 1.0]`.
+    /// Normalized modulation amount in `[-1.0, 1.0]` when constructed.
     pub depth: f32,
+    /// Destination range scale in product-defined units; defaults to `1.0`.
+    #[serde(default = "default_route_scale")]
+    pub scale: f32,
     /// Whether this route contributes.
     pub enabled: bool,
 }
@@ -24,6 +28,13 @@ impl ModRoute {
     /// Non-finite depth becomes `0.0` (NaN must not enter the table via `new`).
     #[must_use]
     pub fn new(src: u16, dst: u16, depth: f32) -> Self {
+        Self::new_scaled(src, dst, depth, 1.0)
+    }
+
+    /// Create an enabled route with a destination range `scale`.
+    /// `depth` is clamped to `[-1.0, 1.0]`; non-finite inputs become `0.0`.
+    #[must_use]
+    pub fn new_scaled(src: u16, dst: u16, depth: f32, scale: f32) -> Self {
         Self {
             src,
             dst,
@@ -32,9 +43,14 @@ impl ModRoute {
             } else {
                 0.0
             },
+            scale: if scale.is_finite() { scale } else { 0.0 },
             enabled: true,
         }
     }
+}
+
+fn default_route_scale() -> f32 {
+    1.0
 }
 
 /// Fixed-capacity table of [`ModRoute`]s. `N` preallocated slots; `add` fails
@@ -54,6 +70,7 @@ impl<const N: usize> ModRouteTable<N> {
                 src: 0,
                 dst: 0,
                 depth: 0.0,
+                scale: 1.0,
                 enabled: false,
             }; N],
             len: 0,
@@ -99,16 +116,16 @@ impl<const N: usize> ModRouteTable<N> {
     }
 
     /// Zero `out`, then for each enabled route with in-range `src`/`dst`:
-    /// `out[dst] += src_values[src] * depth`.
+    /// `out[dst] += src_values[src] * depth * scale`.
     ///
-    /// Disabled routes, out-of-range ids, and non-finite `depth` / source
+    /// Disabled routes, out-of-range ids, and non-finite `depth` / `scale` / source
     /// samples are skipped (never panic; no NaN poison into `out`).
     pub fn accumulate(&self, src_values: &[f32], out: &mut [f32]) {
         for o in out.iter_mut() {
             *o = 0.0;
         }
         for route in &self.routes[..self.len] {
-            if !route.enabled || !route.depth.is_finite() {
+            if !route.enabled || !route.depth.is_finite() || !route.scale.is_finite() {
                 continue;
             }
             let src = route.src as usize;
@@ -120,7 +137,13 @@ impl<const N: usize> ModRouteTable<N> {
             if !s.is_finite() {
                 continue;
             }
-            out[dst] += s * route.depth;
+            let contribution = s * route.depth * route.scale;
+            if contribution.is_finite() {
+                let sum = out[dst] + contribution;
+                if sum.is_finite() {
+                    out[dst] = sum;
+                }
+            }
         }
     }
 }
@@ -203,10 +226,54 @@ mod tests {
 
     #[test]
     fn depth_clamped_on_new() {
+        assert_eq!(ModRoute::new(0, 0, 0.5).scale, 1.0);
         assert!((ModRoute::new(0, 0, 2.0).depth - 1.0).abs() < f32::EPSILON);
         assert!((ModRoute::new(0, 0, -2.0).depth - (-1.0)).abs() < f32::EPSILON);
         assert_eq!(ModRoute::new(0, 0, f32::NAN).depth, 0.0);
         assert_eq!(ModRoute::new(0, 0, f32::INFINITY).depth, 0.0);
+    }
+
+    #[test]
+    fn scaled_route_preserves_product_units_and_normalizes_invalid_inputs() {
+        let route = ModRoute::new_scaled(0, 0, 2.0, 12.0);
+        assert_eq!(route.depth, 1.0);
+        assert_eq!(route.scale, 12.0);
+        assert!(route.enabled);
+        assert_eq!(ModRoute::new_scaled(0, 0, f32::NAN, 8.0).depth, 0.0);
+        assert_eq!(ModRoute::new_scaled(0, 0, 1.0, f32::NAN).scale, 0.0);
+        assert_eq!(ModRoute::new_scaled(0, 0, 1.0, f32::INFINITY).scale, 0.0);
+    }
+
+    #[test]
+    fn accumulate_applies_scale_and_skips_invalid_mutated_scale() {
+        let mut table = ModRouteTable::<3>::new();
+        assert!(table.add(ModRoute::new_scaled(0, 0, 1.0, 12.0)));
+        assert!(table.add(ModRoute::new_scaled(1, 1, 0.5, 8.0)));
+        assert!(table.add(ModRoute::new_scaled(0, 0, 1.0, 20.0)));
+        table.route_mut(2).unwrap().scale = f32::NAN;
+        let mut out = [9.0; 2];
+        table.accumulate(&[1.0, 0.5], &mut out);
+        assert_eq!(out, [12.0, 2.0]);
+    }
+
+    #[test]
+    fn accumulate_keeps_output_finite_when_products_overflow() {
+        let mut table = ModRouteTable::<3>::new();
+        assert!(table.add(ModRoute::new_scaled(0, 0, 1.0, 2.0)));
+        assert!(table.add(ModRoute::new(1, 0, 1.0)));
+        assert!(table.add(ModRoute::new(2, 0, 1.0)));
+        let mut out = [0.0];
+        table.accumulate(&[f32::MAX, f32::MAX, f32::MAX], &mut out);
+        assert_eq!(out, [f32::MAX]);
+    }
+
+    #[test]
+    fn serde_preserves_scale_and_defaults_old_routes_to_identity() {
+        let route = ModRoute::new_scaled(1, 2, 0.5, 12.0);
+        let json = serde_json::to_string(&route).unwrap();
+        assert_eq!(serde_json::from_str::<ModRoute>(&json).unwrap(), route);
+        let old = r#"{"src":1,"dst":2,"depth":0.5,"enabled":true}"#;
+        assert_eq!(serde_json::from_str::<ModRoute>(old).unwrap().scale, 1.0);
     }
 
     #[test]
