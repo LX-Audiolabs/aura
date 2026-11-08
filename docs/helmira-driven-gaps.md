@@ -1,6 +1,7 @@
-# AURA gaps driven by Helmira (Milestone 3+)
+# AURA gaps driven by Helmira (Milestone 3-4+)
 
-Stand: 2026-11-07 · AURA workspace **0.14.3** · product: sibling `../Helmira`
+Stand: **2026-11-09** · AURA workspace **0.14.3** + **Unreleased** · product: sibling `../Helmira`
+Helmira `main` @ `996c863` (M3 complete, 3f step-seq merged). Next product = **M4 filter/FX**.
 
 Evidence-based backlog. Helmira is the product; AURA only gets primitives that
 are generic, RT-safe, and measured. No silent host/export/editor fork. No “just
@@ -234,62 +235,281 @@ Path-dep picks API. `new_scaled(..., amount, 12.0)` for pitch. Drop ±1 st short
 Only if measured Helm amp/mod/filter envelopes need silent delay stage beyond
 `Ahdsr` hold. Prefer documenting `MultiStageEnvelope` recipe over new type.
 
-#### 7. SVF multi-out blend + drive (M4)
+#### 7. SVF multi-out blend + drive (M4) — **partially done**
 
-Helm driven 12/24 dB SVF low/band/high blend + shelf path. AURA has
-`StateVariableFilter` — compare impulse/A/B; extend only on fail. No “copy
-mopo SVF” dump.
+`blend_svf_outputs` shipped (normalized). Drive + 12/24 + shelf + Helm weight
+law: see **M4 sections 11-14**. Still: compare impulse/A/B; extend only on fail.
+No "copy mopo SVF" dump.
 
-#### 8. Unison stereo spread helper (product extra, post-M3)
+#### 8. Unison stereo spread helper — **done** (`unison_voice_pan_gains`)
 
-Pure fn or thin helper: per-voice pan gain from index/sign. **Not** baking
-spread into Helm-compat unison defaults. Helmira wants this later as **feature
-beyond Helm**, default off.
+Product may wire later as **feature beyond Helm**, default off. No further AURA
+work unless API gap appears.
 
-#### 9. `RandomSource` / smooth random
+#### 9. `RandomSource` / smooth random — **done** (`SmoothRandom`)
 
-Helm poly random ≠ LFO S&H only. Prototype in Helmira; promote if second
-product wants same law.
+Helmira 3e uses it. Note-on discrete random stays product. Further RNG laws
+only if second product needs them.
 
-#### 10. Step sequencer / arp clock
+#### 10. Step sequencer / arp clock — **product-done for mod source**
 
-Stay **product-side** (Helmira / later Loom-family). AURA may later expose only
-shared clock/phasor (see P0 helpers). See also local note
-`docs/step-sequencer-arp-clap-timing.md` if still accurate.
+Helmira 3f = mono step **mod source** (local phasor). Stay product-side for
+note-out arp / pattern engines. Shared clock = existing tempo helpers only.
+See `docs/step-sequencer-arp-clap-timing.md`.
 
 ---
 
-## Suggested AURA work order
+## Suggested AURA work order (historical M3 — done)
 
 ```text
-A. Tempo/beat helpers + Lfo phase reset     → small 0.14.x patch
-B. (Helmira) N-slot route table local         → product learns N, src/dst ids
-C. Promote ModRouteTable into aura-dsp        → deprecate toy enums over time
-D. M4 filter A/B → SVF blend only if needed
-E. Optional spread helper / random when products ask
-```
-
-Helmira M3 slice order (product, not this repo):
-
-```text
-3a  mod + filter envs (Adsr)
-3b  poly LFO freerun → hard dest or N-slot v0
-3c  mono LFO + transport sync (needs A)
-3d  full N-slot routes + more destinations
-3e  random / step-seq (local)
-3f  cutoff stub → M4 filter
+A. Tempo/beat helpers + Lfo phase reset     → done
+B. (Helmira) N-slot route table local         → done → promoted
+C. Promote ModRouteTable into aura-dsp        → done
+D. M4 filter A/B → see M4 section below
+E. spread helper / SmoothRandom               → done
 ```
 
 ---
 
 ## Checklist (tick when merged)
 
+### M3 framework
 - [x] P0 tempo/beat helpers + tests
 - [x] P0 `Lfo::{reset_phase,set_phase,phase}` + tests
 - [x] P1 `ModRouteTable` (or equivalent) + tests; docs vs legacy `ModMatrix`
-- [ ] P1 route scale + serde compatibility (implemented on branch; tick after merge)
+- [ ] P1 route scale + serde compatibility (implemented on `feature/mod-route-scale`; tick after merge to main)
+- [x] P2 `blend_svf_outputs` + tests
+- [x] P2 `unison_voice_pan_gains` + tests
+- [x] P2 `SmoothRandom` + tests
 - [x] CHANGELOG Unreleased lines on each land
-- [ ] Helmira path-dep lock picks up version; no host fork
+- [ ] Helmira path-dep lock picks up next AURA cut (0.14.4+) when tagged; no host fork
+
+### M4 framework (evidence only)
+- [ ] section 11 SVF blend weight helper (only if 4a A/B fails normalize law)
+- [ ] section 12 multi-stage SVF helper (only if cascade repeats)
+- [ ] section 13 shared pre-filter drive (only if repeated)
+- [ ] section 14 `BandShelf` if Biquad gap proven in 4b
+- [ ] section 15 generic formant bank (only if x/y morph shared)
+- [ ] section 16 tempo stereo delay primitive (only if second product)
+- [ ] section 17 `DcBlocker` (cheap optional)
+- [ ] section 18 extra `DistortionType` (only after A/B)
+- [ ] section 19 stutter engine (default stay product)
+- [ ] section 20 reverb parity (default accept AURA reverb)
+
+---
+
+## M3 -> done in AURA (promote checklist)
+
+| Item | Status | Notes |
+| --- | --- | --- |
+| P0 tempo/beat helpers | **done** | `hz_from_tempo`, `phase_from_beats`; used by mono/poly LFO + step-seq; **reuse for M4 delay/stutter tempo** |
+| P0 `Lfo` phase API | **done** | `phase` / `set_phase` / `reset_phase` |
+| P1 `ModRouteTable` | **done** | product uses table; toy `ModMatrix` stays legacy |
+| P1 `ModRoute::scale` / `new_scaled` | **on branch** `feature/mod-route-scale` | tick when merged to AURA main |
+| P2 `blend_svf_outputs` | **done** | normalized LP/BP/HP; see M4 section 11 if Helm weight law differs |
+| P2 `unison_voice_pan_gains` | **done** | product extra spread still default-off later |
+| P2 `SmoothRandom` | **done** | Helmira 3e wired |
+| P2 step-seq / arp clock | **product-local** | Helmira 3f owns phasor; do **not** add AURA StepGenerator unless second product needs same law |
+
+Helmira M3 slice order (historical):
+
+```text
+3a  mod + filter envs (Adsr)
+3b  poly LFO freerun + note-on reset
+3c  mono LFO + transport sync
+3d  16 user route slots
+3e  random + SmoothRandom + Tier-A dests
+3f  step-seq mod source  -> MERGED
+```
+
+---
+
+## M4 -- filter + FX (new; evidence-first)
+
+Helmira roadmap Milestone 4: per-voice filter blends/shelves/formant/stutter, then
+global **Distortion -> Delay -> DC-Blocker -> Reverb -> Master**.
+
+**Product slice plan (Helmira STATUS):** 4a SVF core -> 4b drive/style/shelf ->
+4c formant -> 4d distortion -> 4e delay -> 4f reverb/DC/master.
+
+**Policy unchanged:** start on existing AURA primitives. Gap -> failing Helmira
+(or minimal AURA) test -> fix. No "copy mopo" dump. No Helm CLAP IDs / param
+names in public AURA API.
+
+### Already OK for M4 start (no AURA work before 4a)
+
+| Piece | Where | Helmira use |
+| --- | --- | --- |
+| `StateVariableFilter` + `SvfOutput` | `filter` | 4a multi-out SVF |
+| `blend_svf_outputs` | `filter` | 4a LP/BP/HP mix (normalized) |
+| `BiquadFilter` (`LowShelf`/`HighShelf`/`Peak`/...) | `filter` | 4b shelf path; 4c formant BP |
+| `MoogLadder` / predictive ladder | `filter` | **not** Helm main path; optional alt later |
+| `soft_clip_tanh` | `dsp_util` | 4b drive pre-filter |
+| `FormantFilter` / `FormantSynth` + `Vowel` morph | `synth/formant` | 4c start; may keep Helm x/y tables product-side |
+| `Distortion` Soft/Hard/WaveFold | `effects` | 4d bus |
+| `DelayLine` / `CombFilter` / `AllpassDelay` | `delay` | 4e delay; feedback already product-local != Comb |
+| Tempo helpers | `tempo` | 4e delay sync; stutter rate if built |
+| `Reverb` / `FdnReverb` / `RoomReverb` | reverb/acoustics | 4f; timbre != Helm comb OK |
+| `Adsr` | envelope | `fil_*` already in product; wire depth in 4a |
+
+### Do not put in AURA (stay product / out of scope)
+
+| Helm / Helmira thing | Why stay out |
+| --- | --- |
+| MIDI-note cutoff 28..127 + keytrack + `fil_env_depth` scaling | product pitch/MIDI policy |
+| Helm `filter_blend` 0..2 UI + style enum as framework enum | product params |
+| 15-voice unison / harmonize / digital waves 5-10 | already decided |
+| Step-seq note-out / arp patterns | Loom-family later; 3f is mod source only |
+| Stutter buffer engine | product-local (like step phasor) until second user |
+| Helm reverb comb tuning tables / distortion type names | A/B first; map onto existing types |
+| Bit-identical mopo SVF coefficients | forbidden forever |
+
+---
+
+### M4 candidate promotions (only after measured gap)
+
+#### 11. SVF blend weight law (4a A/B)
+
+**Have:** `blend_svf_outputs` -- clamps weights >=0, **sum-normalizes**.
+
+**Helm:** `filter_blend` 0..2 ->
+`lp=sqrt(clamp(1-b))`, `bp=sqrt(clamp(1-|b-1|))`, `hp=sqrt(clamp(b-1))`,
+applied as TPT **m0/m1/m2** mix **without** normalizing to unit sum; 12/24 dB
+styles; drive via `quickTanh`.
+
+**Start in product:** map blend -> three weights, call `blend_svf_outputs` **or**
+raw `lp*w_l+...` without normalize if that matches listening better.
+
+**Promote only if** A/B fails and a second product wants same law:
+
+```rust
+/// Pure weights for continuous LP<->BP<->HP blend in [0, 2]. No normalize.
+fn svf_pass_blend_weights(blend: f32) -> (f32, f32, f32);
+```
+
+**Non-goal:** replace `StateVariableFilter` with mopo clone; dual-stage baked
+type before product proves two cascaded `StateVariableFilter`s insufficient.
+
+#### 12. 12/24 dB cascade helper (4b)
+
+Helm 24 dB = two SVF stages, `tanh` between, resonance `sqrt` for cascade.
+
+**Start in product:** two `StateVariableFilter` + `soft_clip_tanh` mid.
+
+**Promote if** generic "driven multi-stage SVF" repeats (second synth): thin
+helper or `CascadedSvf { stages: 1|2 }` with explicit drive hook. Keep state
+external or document reset rules.
+
+#### 13. Filter input drive (4b)
+
+Helm scales input by drive then `quickTanh` (12 dB path).
+
+**Start:** `soft_clip_tanh(x, drive_lin)` in product (drive from dB param).
+
+**Promote if** many call sites want identical pre-filter saturator + non-finite
+guards; else leave `dsp_util`.
+
+#### 14. Band / multi shelf completeness (4b)
+
+**Have:** `FilterType::LowShelf`, `HighShelf`, `Peak`.
+
+**Helm shelves:** low / band / high shelf modes on filter style path.
+
+**Gap check:** if band-shelf (not peak) needed for preset parity and Biquad
+math is generic -> add `FilterType::BandShelf` + coeffs + tests.
+
+**No work until** 4b hits missing type in product compile/test.
+
+#### 15. Formant bank morph beyond vowels (4c)
+
+**Have:** `FormantFilter`, `FormantSynth::morph(vowel_a, vowel_b, t)`.
+
+**Helm:** `FormantManager` = N parallel gained band-passes; **x/y** pad morph
+across a 2D table (not only AEOIU).
+
+**Start:** product owns x/y -> formant freq/gain/Q tables; can still use
+`BiquadFilter` BP or `FormantFilter::new`.
+
+**Promote if** generic `FormantBank<const N>` + `set_formant(i, f, q, gain)` +
+optional bilinear morph becomes shared (vocoder-adjacent products).
+
+#### 16. Stereo tempo delay primitive (4e)
+
+**Have:** `DelayLine`, tempo hz helpers; no opinionated ping-pong/sync delay FX.
+
+**Helm:** delay time freerun exp secs **or** tempo division; feedback +/-; dry/wet;
+on switch.
+
+**Start:** product wrapper (mirror mono LFO sync mapping).
+
+**Promote if** second product needs same: e.g. `TempoDelay` with
+`set_time_samples` / `set_time_beats`, stereo ping-pong flag, feedback clamp,
+RT-safe resize policy (**max len at init only**).
+
+#### 17. DC blocker (4f)
+
+**Have:** HP biquad / butterworth helpers in `fx`; no tiny named `DcBlocker`.
+
+**Helm:** dedicated DC filter before master.
+
+**Start:** 1-pole HP (~5-20 Hz) or biquad HP in product.
+
+**Promote:** `DcBlocker::new(sample_rate)` / `process_sample` -- trivial, high
+reuse; good small additive API even without second product if 4f wants clean
+shared tests. Optional P3.
+
+#### 18. Distortion type set (4d)
+
+**Have:** SoftClip / HardClip / WaveFold.
+
+**Helm:** four product types (names/curves differ).
+
+**Start:** map best-effort onto existing three + dB->lin drive + mix.
+
+**Promote:** new `DistortionType` variant **only** when A/B shows missing curve
+and algorithm is generic (document transfer curve in test).
+
+#### 19. Stutter granulator (optional late M4 / later)
+
+Helm mono stutter: circular buffer, stutter period, resample countdown, edge
+softness.
+
+**Stay product-local** (memory size policy is product/host). AURA only if Loom
+or second instrument needs same engine -- then fixed max-seconds at `new`, no
+audio-thread alloc.
+
+#### 20. Reverb algorithm parity (4f)
+
+**Have:** several reverbs. Helm = comb + allpass tuning tables.
+
+**Action:** use AURA reverb; accept timbre delta. Port Helm tables **into
+Helmira** only if listening demands; promote generic comb/AP network builder
+only with clean API + tests, not raw table dump.
+
+---
+
+### Suggested AURA work order (M4 era)
+
+```text
+0. Merge feature/mod-route-scale -> tick checklist; cut 0.14.4 when ready
+1. Helmira 4a on current SVF + blend          -> no AURA PR
+2. After 4a A/B: optional section 11 weights  -> small pure fn
+3. Helmira 4b cascade/drive/shelf in product  -> 12-14 only if stuck
+4. 4c formant tables product                  -> 15 only if shared morph needed
+5. 4d-4f on existing FX                       -> 16-18 after evidence
+6. Optional section 17 DcBlocker anytime (cheap win)
+```
+
+Helmira M4 slice order (product, not this repo):
+
+```text
+4a  SVF on/cutoff/res/keytrack/fil_env_depth/blend + route dest 2 live
+4b  drive + 12/24 dB style + shelf
+4c  formant
+4d  distortion bus
+4e  delay tempo/sync
+4f  reverb + DC + master path
+```
 
 ---
 
@@ -300,5 +520,8 @@ Helmira M3 slice order (product, not this repo):
 - Helm factory wavetable dump “just in case”
 - VST3/LV2 work driven only by Helmira (CLAP-first product)
 
-Source of requirements: Helmira session 2026-11-07 after oscillator chain 1a–1f
-(PR path) + `sample_offset` 0.14.3; Helm pin analysis `abdedd527e6e1cf86636f0f1e8a3e75b06ed166a`.
+Source of requirements: Helmira sessions 2026-11-07..2026-11-09 (M2 osc chain,
+M3 mod matrix/LFO/random/step-seq through PR #14 @ `996c863`); AURA path-dep
+0.14.3 + Unreleased (`sample_offset`, tempo, Lfo phase, ModRouteTable, blend,
+SmoothRandom, pan gains). Helm pin `abdedd527e6e1cf86636f0f1e8a3e75b06ed166a`
+(`mopo/state_variable_filter`, formant_manager, stutter, delay, reverb, distortion).
