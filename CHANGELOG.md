@@ -15,6 +15,8 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
   documented as stopped clock; non-finite `set_phase` ignored (no NaN poison).
 - `ModRouteTable` / `ModRoute` — fixed-N RT mod routes by u16 id (legacy `ModMatrix` docs);
   non-finite depth/src skipped in `accumulate`; NaN depth → 0 on `new`.
+- `ModRoute::scale` / `ModRoute::new_scaled` — route amount times destination range;
+  old serialized routes default to scale 1.0.
 - `blend_svf_outputs` — normalized LP/BP/HP mix from `SvfOutput` (non-finite → 0).
 - `unison_voice_pan_gains` — pure per-voice pan from index/spread (index clamped).
 - `SmoothRandom` — one-pole smoothed white noise mod source.
