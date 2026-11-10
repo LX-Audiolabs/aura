@@ -524,6 +524,7 @@ Helmira M4 slice order (product, not this repo):
 | **Korg MS-20** character | Missing | New `aura-dsp` filter candidate when slice starts |
 | **Steiner-Parker** | Missing | New `aura-dsp` filter candidate |
 | **Oberheim SEM** multimode character | Partial overlap with SVF blend | Decide: dedicated type vs document “use SVF blend”; if distinct timbre needed → new primitive |
+| **Polivoks** (Formanta) | Missing | Aggressive Soviet LP/BP character — new `aura-dsp` candidate |
 
 **Policy:** implement specialty filters in **`aura-dsp` first** (generic, RT-safe, unit-tested). Helmira only adds CLAP params + UI. No remap of Helmira IDs 142–149. Product-local only if a model stays Helm-odd after A/B, then promote.
 
