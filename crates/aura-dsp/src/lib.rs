@@ -105,6 +105,7 @@
 
 /// Portable analysis: FFT/SNAP maths, spectrum, meter blocks (no vault/MD/*Shared).
 pub mod analysis;
+pub mod dc_blocker;
 pub mod delay;
 pub mod dsp_util;
 pub mod dynamics;

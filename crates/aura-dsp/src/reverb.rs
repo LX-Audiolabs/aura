@@ -43,6 +43,17 @@ impl DampedComb {
         self.delay.write(input + self.filter_state * self.feedback);
         delayed
     }
+
+    #[inline]
+    fn set_feedback(&mut self, feedback: f32) {
+        self.feedback = feedback;
+    }
+
+    #[inline]
+    fn set_damping(&mut self, damping: f32) {
+        self.damp1 = damping;
+        self.damp2 = 1.0 - damping;
+    }
 }
 
 /// Simple allpass for reverb diffusion.
@@ -179,6 +190,36 @@ impl Reverb {
         })
     }
 
+    /// RT-safe update of comb feedback from decay in `[0, 1]` (clamped to `0..0.99`).
+    ///
+    /// Non-finite values are ignored (previous feedback kept). Does not allocate or
+    /// resize delay lines — safe to call from the audio thread when params move.
+    #[inline]
+    pub fn set_decay(&mut self, decay: f32) {
+        if !decay.is_finite() {
+            return;
+        }
+        let feedback = decay.clamp(0.0, 0.99);
+        for comb in self.combs_l.iter_mut().chain(self.combs_r.iter_mut()) {
+            comb.set_feedback(feedback);
+        }
+    }
+
+    /// RT-safe update of comb high-frequency damping in `[0, 1]`.
+    ///
+    /// `0.0` = bright, `1.0` = dark (same mapping as [`Reverb::new`]). Non-finite
+    /// values are ignored. Does not allocate or resize delay lines.
+    #[inline]
+    pub fn set_damping(&mut self, damping: f32) {
+        if !damping.is_finite() {
+            return;
+        }
+        let damp = damping.clamp(0.0, 1.0);
+        for comb in self.combs_l.iter_mut().chain(self.combs_r.iter_mut()) {
+            comb.set_damping(damp);
+        }
+    }
+
     /// Process a mono input and return stereo output (left, right).
     #[inline]
     #[must_use]
@@ -299,5 +340,65 @@ mod tests {
         let json = serde_json::to_string(&rev).unwrap();
         let back: Reverb = serde_json::from_str(&json).unwrap();
         assert!((rev.mix - back.mix).abs() < f32::EPSILON);
+    }
+
+    fn tail_energy(rev: &mut Reverb, samples: usize) -> f32 {
+        let mut e = 0.0f32;
+        for _ in 0..samples {
+            let (l, r) = rev.process_sample(0.0);
+            e += l * l + r * r;
+        }
+        e
+    }
+
+    #[test]
+    fn set_decay_changes_tail_energy() {
+        let mut high = Reverb::new(0.5, 0.2, 0.0, 1.0, 44100.0).unwrap();
+        let mut low = Reverb::new(0.5, 0.2, 0.0, 1.0, 44100.0).unwrap();
+        high.set_decay(0.95);
+        low.set_decay(0.1);
+        let _ = high.process_sample(1.0);
+        let _ = low.process_sample(1.0);
+        // Skip pre-delay/comb fill; compare sustained tail.
+        let e_high = tail_energy(&mut high, 8_000);
+        let e_low = tail_energy(&mut low, 8_000);
+        assert!(
+            e_high > e_low * 2.0,
+            "higher decay must keep more tail energy: high={e_high} low={e_low}"
+        );
+    }
+
+    #[test]
+    fn set_damping_keeps_output_finite() {
+        let mut rev = Reverb::new(0.8, 0.3, 0.0, 1.0, 44100.0).unwrap();
+        rev.set_damping(0.0);
+        rev.set_damping(1.0);
+        rev.set_damping(f32::NAN);
+        rev.set_damping(f32::INFINITY);
+        let _ = rev.process_sample(1.0);
+        for _ in 0..2_000 {
+            let (l, r) = rev.process_sample(0.0);
+            assert!(
+                l.is_finite() && r.is_finite(),
+                "damping extremes must stay finite"
+            );
+        }
+    }
+
+    #[test]
+    fn set_decay_nan_is_noop() {
+        let mut a = Reverb::new(0.8, 0.2, 0.0, 1.0, 44100.0).unwrap();
+        let mut b = Reverb::new(0.8, 0.2, 0.0, 1.0, 44100.0).unwrap();
+        a.set_decay(0.8);
+        b.set_decay(0.8);
+        b.set_decay(f32::NAN);
+        let _ = a.process_sample(1.0);
+        let _ = b.process_sample(1.0);
+        let ea = tail_energy(&mut a, 4_000);
+        let eb = tail_energy(&mut b, 4_000);
+        assert!(
+            (ea - eb).abs() <= ea * 1e-5 + 1e-12,
+            "NaN decay must not change tail vs previous finite setting: a={ea} b={eb}"
+        );
     }
 }
