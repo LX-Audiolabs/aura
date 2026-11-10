@@ -121,10 +121,10 @@ audio-rate per-route oversampling, Helm `ValueSwitch` graph.
 generic core into AURA when the table shape stabilizes — copy types up, don’t
 redesign twice.
 
-#### 5. Secondary scale / bipolar depth (with route table v2) — implemented
+#### 5. Secondary scale / bipolar depth (with route table v2) — done
 
-**Status:** implemented 2026-11-08 on `feature/mod-route-scale`; merge pending.
-Local duplicate plan (gitignored `docs/` tree may hide it):
+**Status:** done 2026-11-08; merged to `main` (PR #18 + docs follow-up).
+Local plan (gitignored `docs/` tree may hide it):
 `docs/planning/2026-11-08-mod-route-scale.md`. **This section is the tracked source of truth.**
 
 Helm `amount * modulation_scale`. Helmira 3b evidence: poly LFO → pitch via
@@ -277,7 +277,7 @@ E. spread helper / SmoothRandom               → done
 - [x] P0 tempo/beat helpers + tests
 - [x] P0 `Lfo::{reset_phase,set_phase,phase}` + tests
 - [x] P1 `ModRouteTable` (or equivalent) + tests; docs vs legacy `ModMatrix`
-- [ ] P1 route scale + serde compatibility (implemented on `feature/mod-route-scale`; tick after merge to main)
+- [x] P1 route scale + serde compatibility
 - [x] P2 `blend_svf_outputs` + tests
 - [x] P2 `unison_voice_pan_gains` + tests
 - [x] P2 `SmoothRandom` + tests
@@ -305,7 +305,7 @@ E. spread helper / SmoothRandom               → done
 | P0 tempo/beat helpers | **done** | `hz_from_tempo`, `phase_from_beats`; used by mono/poly LFO + step-seq; **reuse for M4 delay/stutter tempo** |
 | P0 `Lfo` phase API | **done** | `phase` / `set_phase` / `reset_phase` |
 | P1 `ModRouteTable` | **done** | product uses table; toy `ModMatrix` stays legacy |
-| P1 `ModRoute::scale` / `new_scaled` | **on branch** `feature/mod-route-scale` | tick when merged to AURA main |
+| P1 `ModRoute::scale` / `new_scaled` | **done** | `new_scaled` + serde default scale 1.0; PR #18 |
 | P2 `blend_svf_outputs` | **done** | normalized LP/BP/HP; see M4 section 11 if Helm weight law differs |
 | P2 `unison_voice_pan_gains` | **done** | product extra spread still default-off later |
 | P2 `SmoothRandom` | **done** | Helmira 3e wired |
@@ -491,7 +491,7 @@ only with clean API + tests, not raw table dump.
 ### Suggested AURA work order (M4 era)
 
 ```text
-0. Merge feature/mod-route-scale -> tick checklist; cut 0.14.4 when ready
+0. ~~Merge feature/mod-route-scale~~ done; cut 0.14.4 when ready
 1. Helmira 4a on current SVF + blend          -> no AURA PR
 2. After 4a A/B: optional section 11 weights  -> small pure fn
 3. Helmira 4b cascade/drive/shelf in product  -> 12-14 only if stuck
