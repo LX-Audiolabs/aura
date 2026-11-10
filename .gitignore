@@ -19,10 +19,5 @@ examples/*/.cargo
 AGENTS.md
 
 # Internal planning notes — local only if you keep copies.
-docs/*
-
-# fastembed embedding model cache (carnet) — large binaries, never commit.
-.fastembed_cache/
 docs/
-.claude/
 # .forgejo/workflows/
