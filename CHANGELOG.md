@@ -9,6 +9,8 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ### Added
 
+- `Reverb::set_decay` / `set_damping` — RT-safe live comb feedback/HF damp
+  (non-finite no-op; no delay realloc).
 - `aura_dsp::tempo::{hz_from_tempo, phase_from_beats}` — BPM/division math for
   synced LFO/seq clocks (non-finite → 0 Hz / phase 0).
 - `Lfo::{phase, set_phase, reset_phase}` — retrigger without rebuild; `set_frequency(0)`
