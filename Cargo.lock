@@ -225,7 +225,7 @@ dependencies = [
  "ndk-context",
  "ndk-sys",
  "num_enum",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -556,7 +556,7 @@ dependencies = [
 
 [[package]]
 name = "aura-host"
-version = "0.14.3"
+version = "0.14.4"
 dependencies = [
  "clap-sys",
  "cpal",
@@ -571,14 +571,14 @@ dependencies = [
 
 [[package]]
 name = "aura-hot"
-version = "0.14.3"
+version = "0.14.4"
 dependencies = [
  "clap-sys",
 ]
 
 [[package]]
 name = "aura-preview"
-version = "0.14.3"
+version = "0.14.4"
 dependencies = [
  "image",
  "lx-aura-build",
@@ -608,7 +608,7 @@ dependencies = [
  "num-traits",
  "pastey 0.1.1",
  "rayon",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "v_frame",
  "y4m",
 ]
@@ -644,9 +644,9 @@ checksum = "ac07cdecf99051d9a5238b80f35af32cdeba5b336e55d957b318b50137e18da5"
 
 [[package]]
 name = "baseview"
-version = "0.3.4"
+version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf732d87e8d8ac8c1960e6c360006e914467aae53e1c385c8c087e54a9f80292"
+checksum = "398beed857a4f7300a2b0c35d968768a5bfdb3264c12c166d478f9d728c6db5c"
 dependencies = [
  "block2 0.6.2",
  "bytemuck",
@@ -654,6 +654,7 @@ dependencies = [
  "dispatch2",
  "dpi",
  "keyboard-types 0.8.3",
+ "libloading 0.8.9",
  "objc2 0.6.4",
  "objc2-app-kit 0.3.2",
  "objc2-core-foundation",
@@ -887,7 +888,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-aura"
-version = "0.14.3"
+version = "0.14.4"
 
 [[package]]
 name = "cast"
@@ -1540,9 +1541,9 @@ checksum = "edf234dd1594d6dd434a8fb8cada51ddbbc593e40e4a01556a0b31c62da2775b"
 
 [[package]]
 name = "ebur128"
-version = "0.1.10"
+version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e227cc62d64d6fe01abbef48134b9c1f17d470cef1e7a56337ad05b1f81df7f9"
+checksum = "a4cc730f4c2c61221890fbec2ccc3dd645e93a5e83d67c4ccd3552d90f513149"
 dependencies = [
  "bitflags 1.3.2",
  "dasp_frame",
@@ -1616,7 +1617,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2166,7 +2167,7 @@ checksum = "4eb85310dd2ba75608d343569c00f3517d4a0fee7bc043b2f607a3a640267608"
 dependencies = [
  "hisab",
  "serde",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tracing",
 ]
 
@@ -2180,7 +2181,7 @@ dependencies = [
  "hashbrown 0.16.1",
  "log",
  "presser",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "windows",
 ]
 
@@ -2281,7 +2282,7 @@ checksum = "7c0eb4099c6646aad6dc16023ea2bf492fa8ff8c42d142f1fdc531a3edf8a699"
 dependencies = [
  "glam",
  "serde",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tracing",
 ]
 
@@ -3022,7 +3023,7 @@ dependencies = [
  "jni-sys 0.4.1",
  "log",
  "simd_cesu8",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "walkdir",
  "windows-link",
 ]
@@ -3366,7 +3367,7 @@ checksum = "9dd0f9e7de3649dcec348de51cbf611ab88688b97c0ce038f8c07b996b2a8e30"
 
 [[package]]
 name = "lx-aura"
-version = "0.14.3"
+version = "0.14.4"
 dependencies = [
  "lx-aura-clap",
  "lx-aura-core",
@@ -3380,7 +3381,7 @@ dependencies = [
 
 [[package]]
 name = "lx-aura-baseview"
-version = "0.14.3"
+version = "0.14.4"
 dependencies = [
  "baseview",
  "copypasta",
@@ -3395,7 +3396,7 @@ dependencies = [
 
 [[package]]
 name = "lx-aura-build"
-version = "0.14.3"
+version = "0.14.4"
 dependencies = [
  "slint-build",
  "slint-interpreter",
@@ -3404,7 +3405,7 @@ dependencies = [
 
 [[package]]
 name = "lx-aura-clap"
-version = "0.14.3"
+version = "0.14.4"
 dependencies = [
  "clap-sys",
  "lx-aura-core",
@@ -3413,7 +3414,7 @@ dependencies = [
 
 [[package]]
 name = "lx-aura-core"
-version = "0.14.3"
+version = "0.14.4"
 dependencies = [
  "lx-aura-midi",
  "lx-aura-params",
@@ -3421,7 +3422,7 @@ dependencies = [
 
 [[package]]
 name = "lx-aura-derive"
-version = "0.14.3"
+version = "0.14.4"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3430,7 +3431,7 @@ dependencies = [
 
 [[package]]
 name = "lx-aura-dsp"
-version = "0.14.3"
+version = "0.14.4"
 dependencies = [
  "atomic_float",
  "criterion",
@@ -3442,14 +3443,14 @@ dependencies = [
  "serde",
  "serde_json",
  "smallvec",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tracing",
  "tracing-subscriber",
 ]
 
 [[package]]
 name = "lx-aura-editor"
-version = "0.14.3"
+version = "0.14.4"
 dependencies = [
  "baseview",
  "i-slint-common",
@@ -3464,7 +3465,7 @@ dependencies = [
 
 [[package]]
 name = "lx-aura-lv2"
-version = "0.14.3"
+version = "0.14.4"
 dependencies = [
  "lv2-sys",
  "lx-aura-core",
@@ -3473,18 +3474,18 @@ dependencies = [
 
 [[package]]
 name = "lx-aura-midi"
-version = "0.14.3"
+version = "0.14.4"
 
 [[package]]
 name = "lx-aura-params"
-version = "0.14.3"
+version = "0.14.4"
 dependencies = [
  "bitflags 2.13.2",
 ]
 
 [[package]]
 name = "lx-aura-test"
-version = "0.14.3"
+version = "0.14.4"
 dependencies = [
  "lx-aura-core",
  "lx-aura-params",
@@ -3492,7 +3493,7 @@ dependencies = [
 
 [[package]]
 name = "lx-aura-vst3"
-version = "0.14.3"
+version = "0.14.4"
 dependencies = [
  "lx-aura-core",
  "lx-aura-params",
@@ -3516,7 +3517,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7755f08423275157ad1680aaecc9ccb7e0cc633da3240fea2d1522935cc15c72"
 dependencies = [
  "lyon_path",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -3662,8 +3663,8 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "once_cell",
  "png",
- "thiserror 2.0.20",
- "windows-sys 0.61.2",
+ "thiserror 2.0.21",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -3688,7 +3689,7 @@ dependencies = [
  "once_cell",
  "rustc-hash 1.1.0",
  "spirv",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "unicode-ident",
 ]
 
@@ -3701,7 +3702,7 @@ dependencies = [
  "hashbrown 0.17.1",
  "indexmap",
  "rustc-hash 1.1.0",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -3825,7 +3826,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -4348,7 +4349,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
@@ -4908,7 +4909,7 @@ dependencies = [
  "rand",
  "rand_chacha",
  "simd_helpers",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "v_frame",
  "wasm-bindgen",
 ]
@@ -4987,9 +4988,9 @@ dependencies = [
 
 [[package]]
 name = "realfft"
-version = "3.5.0"
+version = "3.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f821338fddb99d089116342c46e9f1fbf3828dba077674613e734e01d6ea8677"
+checksum = "538895ccf2006b473aafbe8d72770e21038961ab67aae34f3c577485fc703a7d"
 dependencies = [
  "rustfft",
 ]
@@ -5175,7 +5176,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5188,7 +5189,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5558,7 +5559,7 @@ dependencies = [
  "log",
  "memmap2",
  "rustix 1.1.4",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "wayland-backend",
  "wayland-client",
  "wayland-csd-frame",
@@ -5584,14 +5585,14 @@ dependencies = [
 
 [[package]]
 name = "smoke-aux"
-version = "0.14.3"
+version = "0.14.4"
 dependencies = [
  "lx-aura",
 ]
 
 [[package]]
 name = "smoke-gain"
-version = "0.14.3"
+version = "0.14.4"
 dependencies = [
  "lx-aura",
  "lx-aura-build",
@@ -5601,21 +5602,21 @@ dependencies = [
 
 [[package]]
 name = "smoke-midi-fx"
-version = "0.14.3"
+version = "0.14.4"
 dependencies = [
  "lx-aura",
 ]
 
 [[package]]
 name = "smoke-sidechain"
-version = "0.14.3"
+version = "0.14.4"
 dependencies = [
  "lx-aura",
 ]
 
 [[package]]
 name = "smoke-synth"
-version = "0.14.3"
+version = "0.14.4"
 dependencies = [
  "lx-aura",
 ]
@@ -5863,10 +5864,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.4",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5895,11 +5896,11 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "2.0.20"
+version = "2.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec86235f5fcc2a73650310756d2ac5b138a5780bbbdfae3eeccec992c435ba4f"
+checksum = "09e52cb86a36cede5cb101bf8908837b3e4c6e5e59fe7fd85c23fb56200d189e"
 dependencies = [
- "thiserror-impl 2.0.20",
+ "thiserror-impl 2.0.21",
 ]
 
 [[package]]
@@ -5915,9 +5916,9 @@ dependencies = [
 
 [[package]]
 name = "thiserror-impl"
-version = "2.0.20"
+version = "2.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc04cd3e1236dd4a98afca4569f2deb3f120e5422a4023be2cb683f8486292af"
+checksum = "fe5197923287db20a58125f0bc85c062f7f2c892de97b18c356f9efb14b28524"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6218,7 +6219,7 @@ checksum = "f2f6fb2847f6742cd76af783a2a2c49e9375d0a111c7bef6f71cd9e738c72d6e"
 dependencies = [
  "memoffset",
  "tempfile",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -6705,7 +6706,7 @@ dependencies = [
  "raw-window-handle",
  "rustc-hash 1.1.0",
  "smallvec",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "wgpu-core-deps-apple",
  "wgpu-core-deps-emscripten",
  "wgpu-core-deps-wasm",
@@ -6797,7 +6798,7 @@ dependencies = [
  "renderdoc-sys",
  "smallvec",
  "static_assertions",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "wasm-bindgen",
  "wayland-sys",
  "web-sys",
@@ -6856,7 +6857,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -6989,15 +6990,6 @@ name = "windows-sys"
 version = "0.52.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "282be5f36a8ce781fad8c8ae18fa3f9beff57ec1b52cb3de0789201425d9a33d"
-dependencies = [
- "windows-targets 0.52.6",
-]
-
-[[package]]
-name = "windows-sys"
-version = "0.59.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b"
 dependencies = [
  "windows-targets 0.52.6",
 ]
@@ -7349,7 +7341,7 @@ dependencies = [
  "log",
  "os_pipe",
  "rustix 1.1.4",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tree_magic_mini",
  "wayland-backend",
  "wayland-client",
