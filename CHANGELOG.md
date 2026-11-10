@@ -7,6 +7,8 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ## [Unreleased]
 
+## [0.14.4] - 2026-11-10
+
 ### Added
 
 - `Reverb::set_decay` / `set_damping` — RT-safe live comb feedback/HF damp
@@ -23,6 +25,15 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 - `blend_svf_outputs` — normalized LP/BP/HP mix from `SvfOutput` (non-finite → 0).
 - `unison_voice_pan_gains` — pure per-voice pan from index/spread (index clamped).
 - `SmoothRandom` — one-pole smoothed white noise mod source.
+
+### Changed
+
+- `baseview` `=0.3.4` → `=0.3.7` (Win32 VST3 first-load DPI hang fix, parent-resize
+  after show). Stay on 0.3.x — 0.4.x draw/poll redesign is a separate migration.
+- Dependency refresh within existing ranges: `realfft`, `ebur128`, `thiserror`,
+  `criterion`, `copypasta`, `pollster`; example `softbuffer` 0.4.2 → 0.4.8.
+- Docs: Oberheim SEM closed as product recipe (`soft_clip_tanh` → SVF → multimode
+  blend); no dedicated SEM type.
 
 ## [0.14.3] - 2026-11-07
 

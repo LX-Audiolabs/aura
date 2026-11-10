@@ -29,7 +29,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.14.3"
+version = "0.14.4"
 edition = "2024"
 license = "GPL-3.0-or-later"
 rust-version = "1.92"
@@ -41,24 +41,24 @@ readme = "README.md"
 
 [workspace.dependencies]
 # --- AURA crates (version required for future `cargo package` / publish) ---
-lx-aura = { path = "crates/aura", version = "0.14.3" }
-lx-aura-params = { path = "crates/aura-params", version = "0.14.3" }
-lx-aura-derive = { path = "crates/aura-derive", version = "0.14.3" }
-lx-aura-core = { path = "crates/aura-core", version = "0.14.3" }
-lx-aura-clap = { path = "crates/aura-clap", version = "0.14.3" }
-lx-aura-vst3 = { path = "crates/aura-vst3", version = "0.14.3" }
-lx-aura-lv2 = { path = "crates/aura-lv2", version = "0.14.3" }
-lx-aura-baseview = { path = "crates/aura-baseview", version = "0.14.3", default-features = false }
-lx-aura-editor = { path = "crates/aura-editor", version = "0.14.3", default-features = false }
-lx-aura-dsp = { path = "crates/aura-dsp", version = "0.14.3" }
-lx-aura-midi = { path = "crates/aura-midi", version = "0.14.3" }
-lx-aura-build = { path = "crates/aura-build", version = "0.14.3" }
-lx-aura-test = { path = "crates/aura-test", version = "0.14.3" }
+lx-aura = { path = "crates/aura", version = "0.14.4" }
+lx-aura-params = { path = "crates/aura-params", version = "0.14.4" }
+lx-aura-derive = { path = "crates/aura-derive", version = "0.14.4" }
+lx-aura-core = { path = "crates/aura-core", version = "0.14.4" }
+lx-aura-clap = { path = "crates/aura-clap", version = "0.14.4" }
+lx-aura-vst3 = { path = "crates/aura-vst3", version = "0.14.4" }
+lx-aura-lv2 = { path = "crates/aura-lv2", version = "0.14.4" }
+lx-aura-baseview = { path = "crates/aura-baseview", version = "0.14.4", default-features = false }
+lx-aura-editor = { path = "crates/aura-editor", version = "0.14.4", default-features = false }
+lx-aura-dsp = { path = "crates/aura-dsp", version = "0.14.4" }
+lx-aura-midi = { path = "crates/aura-midi", version = "0.14.4" }
+lx-aura-build = { path = "crates/aura-build", version = "0.14.4" }
+lx-aura-test = { path = "crates/aura-test", version = "0.14.4" }
 
 # --- Slint + windowing (pinned with aura-baseview) ---
-# 0.3.1 had Linux --release dbg! breakage; 0.3.2 removes it + Win32 destroy/X11 fixes.
-# WGL path unchanged vs 0.3.0. Master has vsync deprecation (#322) not yet released.
-baseview = "=0.3.4"
+# Stay on 0.3.x for now. 0.4.x is a breaking draw/poll redesign (own PR).
+# 0.3.7: Win32 VST3 first-load DPI hang fix + parent-resize timing.
+baseview = "=0.3.7"
 slint = { version = "=1.18.1", default-features = false, features = [
     "std",
     "raw-window-handle-06",
