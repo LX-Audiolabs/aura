@@ -514,6 +514,24 @@ Helmira M4 slice order (product, not this repo):
 
 ---
 
+## Future — Helmira filter-type expansion (flag, not scheduled)
+
+**Product ask (2026-11-10):** after Helm-parity SVF UI/layout settles, Helmira wants a **filter type menu** beyond current style 12/24/shelf:
+
+| Type | AURA status | Notes |
+| --- | --- | --- |
+| **Moog Ladder** | **Already in `aura-dsp`** (`filter::MoogLadder`, also `PredictiveLadder`) | Helmira does **not** wire it yet — product param/UI slice later (IDs ≥ 185). Prefer existing primitive over a second ladder. |
+| **Korg MS-20** character | Missing | New `aura-dsp` filter candidate when slice starts |
+| **Steiner-Parker** | Missing | New `aura-dsp` filter candidate |
+| **Oberheim SEM** multimode character | Partial overlap with SVF blend | Decide: dedicated type vs document “use SVF blend”; if distinct timbre needed → new primitive |
+
+**Policy:** implement specialty filters in **`aura-dsp` first** (generic, RT-safe, unit-tested). Helmira only adds CLAP params + UI. No remap of Helmira IDs 142–149. Product-local only if a model stays Helm-odd after A/B, then promote.
+
+Helmira mirror note (gitignored there): `docs/superpowers/specs/future-filter-types-note.md`.  
+Roadmap overlap: [`dsp-synth-roadmap.md`](./dsp-synth-roadmap.md) Stage 1 (Moog already listed; add MS-20 / Steiner / SEM there).
+
+---
+
 ## Out of scope forever (unless new product brief)
 
 - Bit-identical Helm DSP
