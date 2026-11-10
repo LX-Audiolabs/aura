@@ -292,7 +292,7 @@ E. spread helper / SmoothRandom               → done
 - [ ] section 14 `BandShelf` if Biquad gap proven in 4b
 - [ ] section 15 generic formant bank (only if x/y morph shared)
 - [ ] section 16 tempo stereo delay primitive (only if second product)
-- [ ] section 17 `DcBlocker` (cheap optional)
+- [x] section 17 `DcBlocker` (implemented in `aura-dsp`; `R` default 0.995)
 - [ ] section 18 extra `DistortionType` (only after A/B)
 - [ ] section 19 stutter engine (default stay product)
 - [ ] section 20 reverb parity (default accept AURA reverb)
@@ -449,15 +449,15 @@ RT-safe resize policy (**max len at init only**).
 
 #### 17. DC blocker (4f)
 
-**Have:** HP biquad / butterworth helpers in `fx`; no tiny named `DcBlocker`.
+**Have:** HP biquad / butterworth helpers in `fx`; `aura_dsp::dc_blocker::DcBlocker`.
 
 **Helm:** dedicated DC filter before master.
 
 **Start:** 1-pole HP (~5-20 Hz) or biquad HP in product.
 
-**Promote:** `DcBlocker::new(sample_rate)` / `process_sample` -- trivial, high
-reuse; good small additive API even without second product if 4f wants clean
-shared tests. Optional P3.
+**Done:** `DcBlocker::new()` / `with_r(r)` / `process(x)` with default
+`R = 0.995`, non-finite input mapped to zero, and denormal flushing. Product
+may retain exact-zero snap for dry-silence policy.
 
 #### 18. Distortion type set (4d)
 
