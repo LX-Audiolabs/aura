@@ -529,11 +529,11 @@ Helmira M4 slice order (product, not this repo):
 **SEM / “Oberheim” path (closed):** Helmira filter-type menu entry maps to existing primitives only:
 
 ```text
-x  --[ soft_clip_tanh(drive) ]-->  StateVariableFilter  -->  blend_svf_outputs(lp, bp, hp)  -->  y
-         pre-filter tanh                 Cytomic/Simper TPT              continuous multimode
+x  --[ soft_clip_tanh(drive) ]-->  StateVariableFilter  -->  multimode blend  -->  y
+         pre-filter tanh                 Cytomic/Simper TPT
 ```
 
-Drive controls tanh input gain (`dsp_util::soft_clip_tanh`); gain 1 still applies tanh and is not a bypass. 24 dB remains product cascade of two SVFs (§12), not SEM.
+**Blend:** Helmira live path uses product `mix_svf_helm` / `svf_pass_blend_weights` (Helm sqrt law, no unit-sum normalize). AURA `blend_svf_outputs` is the sum-normalize helper — optional alternate, not a drop-in swap for the live path (§11). Drive = tanh input gain (`dsp_util::soft_clip_tanh`); gain 1 still applies tanh (not a bypass). 24 dB remains product cascade of two SVFs (§12), not SEM.
 
 **Policy:** implement specialty filters in **`aura-dsp` first** (generic, RT-safe, unit-tested). Helmira only adds CLAP params + UI. No remap of Helmira IDs 142–149. Product-local only if a model stays Helm-odd after A/B, then promote. Papers/schematics → own impl; third-party synth code = reference-only.
 
