@@ -18,6 +18,7 @@ Canonical elsewhere (do not duplicate specs here):
 | Local scratch | `docs/optimisation-todo.md` (gitignored) |
 | SemVer | `docs/versioning.md` |
 | Helmira-driven DSP/mod gaps (M3+) | [`docs/helmira-driven-gaps.md`](./helmira-driven-gaps.md) |
+| Framework improvement roll-up | [`docs/framework-improvements.md`](./framework-improvements.md) |
 
 ---
 

@@ -11,6 +11,7 @@ in case” API.
 5–10, PD/VPS synth, Arp/Step-Seq product UI, Helmira CLAP param IDs.
 
 Related: [`refinement-backlog.md`](./refinement-backlog.md),
+[`framework-improvements.md`](./framework-improvements.md) (priority roll-up),
 [`dsp-synth-roadmap.md`](./dsp-synth-roadmap.md),
 [`versioning.md`](./versioning.md). Helmira local roadmap (gitignored there):
 `docs/planning/helmira-roadmap.md` M3.
