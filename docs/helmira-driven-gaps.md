@@ -521,15 +521,24 @@ Helmira M4 slice order (product, not this repo):
 | Type | AURA status | Notes |
 | --- | --- | --- |
 | **Moog Ladder** | **Already in `aura-dsp`** (`filter::MoogLadder`, also `PredictiveLadder`) | Helmira does **not** wire it yet — product param/UI slice later (IDs ≥ 185). Prefer existing primitive over a second ladder. |
-| **Korg MS-20** character | Missing | New `aura-dsp` filter candidate when slice starts |
-| **Steiner-Parker** | Missing | New `aura-dsp` filter candidate |
-| **Oberheim SEM** multimode character | Partial overlap with SVF blend | Decide: dedicated type vs document “use SVF blend”; if distinct timbre needed → new primitive |
-| **Polivoks** (Formanta) | Missing | Aggressive Soviet LP/BP character — new `aura-dsp` candidate |
+| **Korg MS-20** character | Missing | New `aura-dsp` filter candidate when slice starts (K35-ish 2× one-pole + NL feedback — not a ladder) |
+| **Steiner-Parker** | Missing | New `aura-dsp` filter candidate (Sallen-Key, 3 inputs LP/BP/HP, +feedback) |
+| **Oberheim SEM** multimode | **No dedicated type** | **Fixed product recipe:** pre-filter `soft_clip_tanh` → `StateVariableFilter` → multimode blend. No dedicated or in-loop nonlinear SEM type. |
+| **Polivoks** (Formanta) | Missing | New `aura-dsp` candidate (SVF-family with in-loop OTA/slew — not post-tanh on linear SVF) |
 
-**Policy:** implement specialty filters in **`aura-dsp` first** (generic, RT-safe, unit-tested). Helmira only adds CLAP params + UI. No remap of Helmira IDs 142–149. Product-local only if a model stays Helm-odd after A/B, then promote.
+**SEM / “Oberheim” path (closed):** Helmira filter-type menu entry maps to existing primitives only:
+
+```text
+x  --[ soft_clip_tanh(drive) ]-->  StateVariableFilter  -->  blend_svf_outputs(lp, bp, hp)  -->  y
+         optional pre-drive              Cytomic/Simper TPT              continuous multimode
+```
+
+Drive is the optional character knob (`dsp_util::soft_clip_tanh`); omit when drive=0/unity. 24 dB remains product cascade of two SVFs (§12), not SEM.
+
+**Policy:** implement specialty filters in **`aura-dsp` first** (generic, RT-safe, unit-tested). Helmira only adds CLAP params + UI. No remap of Helmira IDs 142–149. Product-local only if a model stays Helm-odd after A/B, then promote. Papers/schematics → own impl; third-party synth code = reference-only.
 
 Helmira mirror note (gitignored there): `docs/superpowers/specs/future-filter-types-note.md`.  
-Roadmap overlap: [`dsp-synth-roadmap.md`](./dsp-synth-roadmap.md) Stage 1 (Moog already listed; add MS-20 / Steiner / SEM there).
+Roadmap overlap: [`dsp-synth-roadmap.md`](./dsp-synth-roadmap.md) Stage 1 (Moog already listed; add MS-20 / Steiner / Polivoks there — **not** SEM).
 
 ---
 
