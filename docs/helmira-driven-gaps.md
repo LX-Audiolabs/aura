@@ -521,10 +521,10 @@ Helmira M4 slice order (product, not this repo):
 | Type | AURA status | Notes |
 | --- | --- | --- |
 | **Moog Ladder** | **Already in `aura-dsp`** (`filter::MoogLadder`, also `PredictiveLadder`) | Helmira does **not** wire it yet — product param/UI slice later (IDs ≥ 185). Prefer existing primitive over a second ladder. |
-| **Korg MS-20** character | Missing | New `aura-dsp` filter candidate when slice starts (K35-ish 2× one-pole + NL feedback — not a ladder) |
-| **Steiner-Parker** | Missing | New `aura-dsp` filter candidate (Sallen-Key, 3 inputs LP/BP/HP, +feedback) |
+| **Korg MS-20** character | **AURA primitive done** (`filter::Ms20Filter`) | Helmira menu later (IDs ≥ 185); K35-ish 2× one-pole + NL feedback — not a ladder |
+| **Steiner-Parker** | **AURA primitive done** (`filter::SteinerParkerFilter`) | Helmira menu later (IDs ≥ 185); Sallen-Key, 3 inputs LP/BP/HP, +feedback |
 | **Oberheim SEM** multimode | **No dedicated type** | **Fixed product recipe:** `soft_clip_tanh` → `StateVariableFilter` → multimode blend. No dedicated or in-loop nonlinear SEM type. |
-| **Polivoks** (Formanta) | Missing | New `aura-dsp` candidate (SVF-family with in-loop OTA/slew — not post-tanh on linear SVF) |
+| **Polivoks** (Formanta) | **AURA primitive done** (`filter::PolivoksFilter`) | Helmira menu later (IDs ≥ 185); SVF-family with in-loop OTA/slew — not post-tanh on linear SVF |
 
 **SEM / “Oberheim” path (closed):** Helmira filter-type menu entry maps to existing primitives only:
 

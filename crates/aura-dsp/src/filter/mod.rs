@@ -1,17 +1,26 @@
-//! Biquad, state-variable, and ladder filters.
+//! Biquad, state-variable, ladder, and specialty filters.
 //!
 //! - Audio EQ Cookbook biquads (Robert Bristow-Johnson)
 //! - Cytomic/Simper SVF (simultaneous LP/HP/BP/Notch)
 //! - [`MoogLadder`] — classic discrete Moog (fundsp port)
 //! - [`PredictiveLadder`] — ZDF linear-prediction ladder (`InfiniteDSP`)
+//! - [`Ms20Filter`] — K35 two-pole low-pass / high-pass
+//! - [`SteinerParkerFilter`] — three-feed Sallen-Key filter
+//! - [`PolivoksFilter`] — nonlinear TPT SVF-family filter
 //!
-//! One Moog model only — no parallel RK4 / Huovilainen copies.
+//! SEM remains a recipe using existing primitives; no dedicated SEM type.
 
 pub mod moog;
+pub mod ms20;
+pub mod polivoks;
 pub mod predictive;
+pub mod steiner;
 
 pub use moog::MoogLadder;
+pub use ms20::{Ms20Filter, Ms20Mode, Ms20Revision};
+pub use polivoks::PolivoksFilter;
 pub use predictive::PredictiveLadder;
+pub use steiner::{SteinerMode, SteinerParkerFilter};
 
 use serde::{Deserialize, Serialize};
 use tracing::debug;
