@@ -7,11 +7,13 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ## [Unreleased]
 
+## [0.14.5] - 2026-11-11
+
 ### Fixed
 
-- CLAP render mode and GUI extension presence now use atomics across callbacks;
-  parameter flush applies events without allocating, and destroy clears plugin
-  data before teardown so re-entry is safe.
+- CLAP render mode stored as atomic CLAP render constants; GUI extension presence
+  via `has_editor` flag; `params.flush` applies mono param events without
+  allocating; destroy nulls `plugin_data` before drop so re-entry is safe.
 
 ## [0.14.4] - 2026-11-10
 
@@ -495,7 +497,8 @@ this release records what `main` contains after the multi-format + UI pass.
 - Still open for “Basis fertig”: VST3/LV2 real-host smoke; optional LV2 UI; product cutover later
 - Crates not published to crates.io (`publish = false`)
 
-[Unreleased]: https://github.com/LX-Audiolabs/aura/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/LX-Audiolabs/aura/compare/v0.14.5...HEAD
+[0.14.5]: https://github.com/LX-Audiolabs/aura/compare/v0.14.4...v0.14.5
 [0.14.0]: https://github.com/LX-Audiolabs/aura/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/LX-Audiolabs/aura/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/LX-Audiolabs/aura/compare/v0.11.0...v0.12.0
