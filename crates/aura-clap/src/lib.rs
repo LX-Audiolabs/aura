@@ -364,13 +364,14 @@ pub(crate) struct Instance<L: PluginLogic> {
 
 fn encode_process_mode(mode: ProcessMode) -> u8 {
     match mode {
-        ProcessMode::Offline => 2,
-        ProcessMode::Realtime | ProcessMode::Buffered => 0,
+        ProcessMode::Offline => CLAP_RENDER_OFFLINE as u8,
+        // CLAP has no Buffered; same storage as realtime.
+        ProcessMode::Realtime | ProcessMode::Buffered => CLAP_RENDER_REALTIME as u8,
     }
 }
 
 fn decode_process_mode(mode: u8) -> ProcessMode {
-    if mode == 2 {
+    if mode == CLAP_RENDER_OFFLINE as u8 {
         ProcessMode::Offline
     } else {
         ProcessMode::Realtime
@@ -1609,7 +1610,6 @@ unsafe extern "C" fn render_set<L: PluginLogic>(
         }),
         Ordering::Relaxed,
     );
-    let _ = CLAP_RENDER_REALTIME; // silence unused when matched via `_`
     true
 }
 
@@ -2945,6 +2945,16 @@ mod clap_minifix_tests {
 
     #[test]
     fn clap_render_mode_round_trip() {
+        use clap_sys::ext::render::{CLAP_RENDER_OFFLINE, CLAP_RENDER_REALTIME};
+
+        assert_eq!(
+            encode_process_mode(ProcessMode::Realtime),
+            CLAP_RENDER_REALTIME as u8
+        );
+        assert_eq!(
+            encode_process_mode(ProcessMode::Offline),
+            CLAP_RENDER_OFFLINE as u8
+        );
         assert_eq!(
             decode_process_mode(encode_process_mode(ProcessMode::Realtime)),
             ProcessMode::Realtime
