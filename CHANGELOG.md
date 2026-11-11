@@ -7,6 +7,12 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ## [Unreleased]
 
+### Fixed
+
+- CLAP render mode and GUI extension presence now use atomics across callbacks;
+  parameter flush applies events without allocating, and destroy clears plugin
+  data before teardown so re-entry is safe.
+
 ## [0.14.4] - 2026-11-10
 
 ### Added

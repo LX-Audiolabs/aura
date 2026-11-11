@@ -28,7 +28,7 @@
 
 use std::ffi::{CStr, CString, c_char, c_void};
 use std::ptr;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
 
 use aura_core::editor::{Editor, EditorBridge, PluginContext, RawWindowHandle};
@@ -236,7 +236,8 @@ unsafe extern "C" fn factory_create_plugin<L: PluginLogic>(
         latency_cache: AtomicU32::new(0),
         latency_dirty: AtomicBool::new(false),
         tail_cache: AtomicU32::new(0),
-        process_mode: ProcessMode::Realtime,
+        process_mode: AtomicU8::new(encode_process_mode(ProcessMode::Realtime)),
+        has_editor: AtomicBool::new(false),
         scratch: ProcessScratch::new(),
         tuning_state,
         tuning_pool_changed: AtomicBool::new(false),
@@ -349,13 +350,38 @@ pub(crate) struct Instance<L: PluginLogic> {
     /// Last tail length reported to the host.
     tail_cache: AtomicU32,
     /// Host render mode (`clap.render`) → `ProcessContext.process_mode`.
-    process_mode: ProcessMode,
+    /// Atomic: `render_set` is main-thread and can overlap `process`.
+    process_mode: AtomicU8,
+    /// Set in `plugin_init`; `get_extension` reads this instead of the editor cell.
+    has_editor: AtomicBool,
     /// Audio-thread scratch — reserved in `activate`, reused every `process`.
     scratch: ProcessScratch,
     /// CLAP `clap.tuning/2` host state (event space + active tuning ids).
     tuning_state: Arc<tuning::TuningState>,
     /// Set by the host's `clap.tuning` `changed()` callback; consumed in process.
     tuning_pool_changed: AtomicBool,
+}
+
+fn encode_process_mode(mode: ProcessMode) -> u8 {
+    match mode {
+        ProcessMode::Offline => 2,
+        ProcessMode::Realtime | ProcessMode::Buffered => 0,
+    }
+}
+
+fn decode_process_mode(mode: u8) -> ProcessMode {
+    if mode == 2 {
+        ProcessMode::Offline
+    } else {
+        ProcessMode::Realtime
+    }
+}
+
+unsafe fn take_plugin_data(plugin: *mut clap_plugin) -> *mut c_void {
+    if plugin.is_null() {
+        return ptr::null_mut();
+    }
+    unsafe { std::mem::replace(&mut (*plugin).plugin_data, ptr::null_mut()) }
 }
 
 /// Pre-sized process working set. Heap growth here is a Bitwig-crash class bug
@@ -540,6 +566,8 @@ unsafe extern "C" fn plugin_init<L: PluginLogic>(plugin: *const clap_plugin) -> 
     };
     // GUI factory runs on the main thread; gui.create only checks presence.
     inst.editor = L::editor(Arc::clone(&inst.params));
+    inst.has_editor
+        .store(inst.editor.is_some(), Ordering::Relaxed);
     true
 }
 
@@ -549,10 +577,13 @@ unsafe extern "C" fn plugin_destroy<L: PluginLogic>(plugin: *const clap_plugin) 
     }
     // Drop (editor teardown, GPU) must not unwind across the C ABI.
     host_callback("CLAP", "destroy", || {
-        let plugin = unsafe { Box::from_raw(plugin.cast_mut()) };
-        if !plugin.plugin_data.is_null() {
-            drop(unsafe { Box::from_raw(plugin.plugin_data as *mut Instance<L>) });
+        let data = unsafe { take_plugin_data(plugin.cast_mut()) };
+        if data.is_null() {
+            return;
         }
+        let plugin = unsafe { Box::from_raw(plugin.cast_mut()) };
+        drop(unsafe { Box::from_raw(data as *mut Instance<L>) });
+        drop(plugin);
     });
 }
 
@@ -684,7 +715,7 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
         };
 
         let layout = inst.selected_layout();
-        let process_mode = inst.process_mode;
+        let process_mode = decode_process_mode(inst.process_mode.load(Ordering::Relaxed));
         let sample_rate = inst.sample_rate;
 
         let Some(state) = inst.state.as_mut() else {
@@ -1186,30 +1217,50 @@ unsafe fn collect_input_events(
     }
 }
 
-/// Apply all param events immediately (flush / no-audio path).
-unsafe fn apply_input_events(
-    params: &dyn Params,
-    in_events: *const clap_input_events,
-    midi: &mut MidiBuffer,
-) {
-    let mut timed = Vec::new();
-    let mut tuning_events = Vec::new();
-    let mut notes = NoteBuffer::new();
-    let mut ump = UmpBuffer::new();
-    unsafe {
-        collect_input_events(
-            in_events,
-            &mut timed,
-            &mut tuning_events,
-            0,
-            midi,
-            &mut notes,
-            &mut ump,
-        );
-    }
-    let _ = (tuning_events, notes, ump); // ponytail: flush has no process() to consume these
-    for ev in timed {
-        aura_core::apply_event(params, ev);
+/// Flush has no process block: apply only mono parameter events, without allocation.
+unsafe fn apply_param_events_immediate(params: &dyn Params, in_events: *const clap_input_events) {
+    let Some(events) = (unsafe { in_events.as_ref() }) else {
+        return;
+    };
+    let (Some(size), Some(get)) = (events.size, events.get) else {
+        return;
+    };
+    for index in 0..unsafe { size(events) } {
+        let Some(header) = (unsafe { get(events, index).as_ref() }) else {
+            continue;
+        };
+        if header.space_id != CLAP_CORE_EVENT_SPACE_ID {
+            continue;
+        }
+        match header.type_ {
+            CLAP_EVENT_PARAM_VALUE => {
+                let event = unsafe { &*(header as *const _ as *const clap_event_param_value) };
+                if event.note_id < 0 && event.key < 0 && event.channel < 0 {
+                    aura_core::apply_event(
+                        params,
+                        TimedParamEvent::Value {
+                            sample_offset: header.time,
+                            id: event.param_id,
+                            plain: event.value,
+                        },
+                    );
+                }
+            }
+            CLAP_EVENT_PARAM_MOD => {
+                let event = unsafe { &*(header as *const _ as *const clap_event_param_mod) };
+                if event.note_id < 0 && event.key < 0 && event.channel < 0 {
+                    aura_core::apply_event(
+                        params,
+                        TimedParamEvent::Mod {
+                            sample_offset: header.time,
+                            id: event.param_id,
+                            amount: event.amount,
+                        },
+                    );
+                }
+            }
+            _ => {}
+        }
     }
 }
 
@@ -1457,8 +1508,8 @@ unsafe extern "C" fn plugin_get_extension<L: PluginLogic>(
     }
     if id == CLAP_EXT_GUI {
         // No GUI extension when the plugin has no editor.
-        let has_editor =
-            unsafe { Instance::<L>::from_plugin(plugin) }.is_some_and(|inst| inst.editor.is_some());
+        let has_editor = unsafe { Instance::<L>::from_plugin(plugin) }
+            .is_some_and(|inst| inst.has_editor.load(Ordering::Relaxed));
         if has_editor {
             return gui_ext::<L>() as *const _ as *const c_void;
         }
@@ -1550,10 +1601,14 @@ unsafe extern "C" fn render_set<L: PluginLogic>(
     let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
         return false;
     };
-    inst.process_mode = match mode {
-        CLAP_RENDER_OFFLINE => ProcessMode::Offline,
-        _ => ProcessMode::Realtime, // CLAP_RENDER_REALTIME and unknown
-    };
+    inst.process_mode.store(
+        encode_process_mode(if mode == CLAP_RENDER_OFFLINE {
+            ProcessMode::Offline
+        } else {
+            ProcessMode::Realtime
+        }),
+        Ordering::Relaxed,
+    );
     let _ = CLAP_RENDER_REALTIME; // silence unused when matched via `_`
     true
 }
@@ -2093,11 +2148,7 @@ unsafe extern "C" fn params_flush<L: PluginLogic>(
     let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
         return;
     };
-    if !in_.is_null() {
-        // Flush is param-only; MIDI discarded (no process block).
-        let mut midi = MidiBuffer::new();
-        unsafe { apply_input_events(&*inst.params, in_, &mut midi) };
-    }
+    unsafe { apply_param_events_immediate(&*inst.params, in_) };
     unsafe { emit_param_events(&inst.param_events, out) };
 }
 
@@ -2881,5 +2932,44 @@ mod gui_scale_tests {
         let host_frame = scale_logical_to_physical(zoomed_w, zoomed_h, host);
         let child = scale_logical_to_physical(design.0, design.1, host * ui_zoom);
         assert_eq!(host_frame, child);
+    }
+}
+
+#[cfg(test)]
+mod clap_minifix_tests {
+    use super::{decode_process_mode, encode_process_mode, take_plugin_data};
+    use aura_core::ProcessMode;
+    use clap_sys::plugin::clap_plugin;
+    use std::ffi::c_void;
+    use std::ptr;
+
+    #[test]
+    fn clap_render_mode_round_trip() {
+        assert_eq!(
+            decode_process_mode(encode_process_mode(ProcessMode::Realtime)),
+            ProcessMode::Realtime
+        );
+        assert_eq!(
+            decode_process_mode(encode_process_mode(ProcessMode::Offline)),
+            ProcessMode::Offline
+        );
+        // CLAP has no Buffered; treat like realtime.
+        assert_eq!(
+            decode_process_mode(encode_process_mode(ProcessMode::Buffered)),
+            ProcessMode::Realtime
+        );
+        assert_eq!(decode_process_mode(99), ProcessMode::Realtime);
+    }
+
+    #[test]
+    fn take_plugin_data_nulls_and_is_idempotent() {
+        let mut plugin = unsafe { std::mem::zeroed::<clap_plugin>() };
+        plugin.plugin_data = ptr::dangling_mut::<c_void>();
+        unsafe {
+            assert!(!take_plugin_data(&mut plugin).is_null());
+            assert!(plugin.plugin_data.is_null());
+            assert!(take_plugin_data(&mut plugin).is_null());
+            assert!(take_plugin_data(ptr::null_mut()).is_null());
+        }
     }
 }
