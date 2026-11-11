@@ -24,6 +24,10 @@ pub struct PolivoksFilter {
 }
 
 impl PolivoksFilter {
+    /// Create a nonlinear TPT SVF with in-loop slew limiting.
+    ///
+    /// # Errors
+    /// Returns an error for invalid sample rate, cutoff, non-positive resonance, or drive.
     pub fn new(sample_rate: f32, cutoff: f32, resonance: f32, drive: f32) -> Result<Self> {
         if let Some(err) = error::validate_sample_rate(sample_rate) {
             return Err(err);
@@ -50,6 +54,10 @@ impl PolivoksFilter {
         Ok(filter)
     }
 
+    /// Update cutoff, resonance, and drive without changing integrator state.
+    ///
+    /// # Errors
+    /// Returns an error for invalid cutoff, non-positive resonance, or drive.
     pub fn set_params(&mut self, cutoff: f32, resonance: f32, drive: f32) -> Result<()> {
         if let Some(err) = error::validate_frequency(cutoff, self.sample_rate) {
             return Err(err);

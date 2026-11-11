@@ -7,6 +7,12 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ## [Unreleased]
 
+### Added
+
+- `filter::Ms20Filter` — 2-pole K35 (two TPT one-poles + nonlinear feedback; LP/HP; diode/OTA revisions).
+- `filter::SteinerParkerFilter` — 2-pole Sallen-Key with three inputs and a tanh Q path.
+- `filter::PolivoksFilter` — TPT SVF-family filter with in-loop slew and cutoff-scaled drive.
+
 ## [0.14.5] - 2026-11-11
 
 ### Fixed

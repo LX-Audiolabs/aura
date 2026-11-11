@@ -25,6 +25,10 @@ pub struct SteinerParkerFilter {
 }
 
 impl SteinerParkerFilter {
+    /// Create a three-feed Sallen-Key filter.
+    ///
+    /// # Errors
+    /// Returns an error for invalid sample rate, cutoff, or negative/non-finite resonance.
     pub fn new(sample_rate: f32, cutoff: f32, resonance: f32) -> Result<Self> {
         if let Some(err) = error::validate_sample_rate(sample_rate) {
             return Err(err);
@@ -43,6 +47,10 @@ impl SteinerParkerFilter {
         })
     }
 
+    /// Update cutoff and resonance without changing integrator state.
+    ///
+    /// # Errors
+    /// Returns an error for invalid cutoff or negative/non-finite resonance.
     pub fn set_params(&mut self, cutoff: f32, resonance: f32) -> Result<()> {
         if let Some(err) = error::validate_frequency(cutoff, self.sample_rate) {
             return Err(err);
