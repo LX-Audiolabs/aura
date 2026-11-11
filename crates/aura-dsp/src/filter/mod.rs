@@ -592,3 +592,7 @@ mod tests {
         assert_eq!(blend_svf_outputs(&o, 1.0, 0.0, 0.0), 0.0);
     }
 }
+
+pub mod ms20;
+
+pub use ms20::{Ms20Filter, Ms20Mode, Ms20Revision};
