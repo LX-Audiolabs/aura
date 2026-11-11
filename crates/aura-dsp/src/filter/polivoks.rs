@@ -85,13 +85,17 @@ impl PolivoksFilter {
         }
         let drive_eff =
             self.drive * (0.5 + 0.5 * (self.cutoff / (0.45 * self.sample_rate)).clamp(0.0, 1.0));
+        // In-loop OTA-ish sat on the integrator drive (not post-filter clip).
         let driven = (input * drive_eff).tanh();
-        let v3 = driven - self.ic2eq - self.k * self.ic1eq;
+        // Standard Cytomic/Simper TPT core (same shape as StateVariableFilter).
+        let v3 = driven - self.ic2eq;
         let v1 = self.a1 * self.ic1eq + self.a2 * v3;
         let v2 = self.ic2eq + self.a2 * self.ic1eq + self.a3 * v3;
+        // Spec: clamp integrator delta, then advance trapezoidal state.
+        // Unclamped TPT target is ic_new = 2*v - ic_old, i.e. delta = 2*(v - ic).
         let slew = (2.0 * PI * self.cutoff / self.sample_rate).max(1.0e-6);
-        let dv1 = (2.0 * v1 - self.ic1eq).clamp(-slew, slew);
-        let dv2 = (2.0 * v2 - self.ic2eq).clamp(-slew, slew);
+        let dv1 = (2.0 * (v1 - self.ic1eq)).clamp(-slew, slew);
+        let dv2 = (2.0 * (v2 - self.ic2eq)).clamp(-slew, slew);
         self.ic1eq = crate::flush_denormal(self.ic1eq + dv1);
         self.ic2eq = crate::flush_denormal(self.ic2eq + dv2);
         let high_pass = driven - self.k * v1 - v2;

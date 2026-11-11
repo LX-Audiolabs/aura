@@ -92,17 +92,22 @@ impl Ms20Filter {
         let lp1 = v1 + self.s1;
         self.s1 = crate::flush_denormal(lp1 + v1);
 
-        let stage2_input = if self.mode == Ms20Mode::HighPass {
-            input
-        } else {
-            lp1
-        };
-        let v2 = self.g * (stage2_input - self.s2) / (1.0 + self.g);
-        let lp2 = v2 + self.s2;
-        self.s2 = crate::flush_denormal(lp2 + v2);
+        // LP: cascade pole1 → pole2, out = lp2.
+        // HP: inject dry at second integrator lower node (Stinchcombe);
+        //     out = that stage's HP tap — not "input minus cascaded LP".
         let output = match self.mode {
-            Ms20Mode::LowPass => lp2,
-            Ms20Mode::HighPass => input - lp2,
+            Ms20Mode::LowPass => {
+                let v2 = self.g * (lp1 - self.s2) / (1.0 + self.g);
+                let lp2 = v2 + self.s2;
+                self.s2 = crate::flush_denormal(lp2 + v2);
+                lp2
+            }
+            Ms20Mode::HighPass => {
+                let v2 = self.g * (input - self.s2) / (1.0 + self.g);
+                let lp2 = v2 + self.s2;
+                self.s2 = crate::flush_denormal(lp2 + v2);
+                input - lp2
+            }
         };
         if output.is_finite() { output } else { 0.0 }
     }

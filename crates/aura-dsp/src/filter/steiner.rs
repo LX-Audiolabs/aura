@@ -1,7 +1,8 @@
 //! Three-feed Steiner-Parker Sallen-Key filter approximation.
 //!
-//! Original TPT implementation based on the documented two-integrator
-//! Sallen-Key topology; nonlinear resonance is confined to the Q feedback path.
+//! Shared second-order pole pair (bilinear, TPT-warped g). Each jack applies a
+//! different zero set into that resonator; one shared output node. Resonance
+//! softens damping through a tanh Q-path (positive-feedback character).
 
 use std::f32::consts::PI;
 
@@ -20,8 +21,16 @@ pub struct SteinerParkerFilter {
     cutoff: f32,
     resonance: f32,
     g: f32,
-    s1: f32,
-    s2: f32,
+    /// Shared output delays y[n-1], y[n-2] (DF1 recursive part).
+    y1: f32,
+    y2: f32,
+    /// Feed-forward input history (three jacks × two delays).
+    lp1: f32,
+    lp2: f32,
+    bp1: f32,
+    bp2: f32,
+    hp1: f32,
+    hp2: f32,
 }
 
 impl SteinerParkerFilter {
@@ -42,12 +51,18 @@ impl SteinerParkerFilter {
             cutoff,
             resonance: resonance.min(1.5),
             g: (PI * cutoff / sample_rate).tan(),
-            s1: 0.0,
-            s2: 0.0,
+            y1: 0.0,
+            y2: 0.0,
+            lp1: 0.0,
+            lp2: 0.0,
+            bp1: 0.0,
+            bp2: 0.0,
+            hp1: 0.0,
+            hp2: 0.0,
         })
     }
 
-    /// Update cutoff and resonance without changing integrator state.
+    /// Update cutoff and resonance without changing filter state.
     ///
     /// # Errors
     /// Returns an error for invalid cutoff or negative/non-finite resonance.
@@ -62,48 +77,81 @@ impl SteinerParkerFilter {
         Ok(())
     }
 
-    /// Mix three feeds into the Sallen-Key node; return its shared low-pass output.
+    /// Mix three feeds into the shared SK output node.
     pub fn process_sample(&mut self, lp: f32, bp: f32, hp: f32) -> f32 {
         if !lp.is_finite() || !bp.is_finite() || !hp.is_finite() {
             return 0.0;
         }
-        self.step(lp + bp * 0.5 + hp * 0.25).1
+        self.step(lp, bp, hp)
     }
 
+    /// Send `input` to one mode jack, zeros to the others; shared output.
     pub fn process_mode(&mut self, input: f32, mode: SteinerMode) -> f32 {
         if !input.is_finite() {
             return 0.0;
         }
-        let (lp, bp, hp) = match mode {
-            SteinerMode::LowPass => (input, 0.0, 0.0),
-            SteinerMode::BandPass => (0.0, input, 0.0),
-            SteinerMode::HighPass => (0.0, 0.0, input),
-        };
-        let mixed = lp + bp * 0.5 + hp * 0.25;
-        let (_, low, band, high) = self.step(mixed);
         match mode {
-            SteinerMode::LowPass => low,
-            SteinerMode::BandPass => band,
-            SteinerMode::HighPass => high,
+            SteinerMode::LowPass => self.step(input, 0.0, 0.0),
+            SteinerMode::BandPass => self.step(0.0, input, 0.0),
+            SteinerMode::HighPass => self.step(0.0, 0.0, input),
         }
     }
 
-    fn step(&mut self, input: f32) -> (f32, f32, f32, f32) {
-        let feedback = self.resonance * 0.5 * self.s2.tanh();
-        let v1 = self.g * (input - self.s1) / (1.0 + self.g);
-        let lp1 = v1 + self.s1;
-        self.s1 = crate::flush_denormal(lp1 + v1);
-        let v2 = self.g * (lp1 + feedback - self.s2) / (1.0 + self.g);
-        let lp2 = v2 + self.s2;
-        self.s2 = crate::flush_denormal(lp2 + v2);
-        let high = input - lp2;
-        let values = (lp1, lp2, lp1 - lp2, high);
-        if values.1.is_finite() && values.0.is_finite() {
-            values
-        } else {
+    /// Continuous idea (warped):
+    /// `Y = (ω² L + s ω B + s² H) / (s² + d ω s + ω²)`.
+    /// Digital monic DF1 with shared poles; numerators per jack.
+    fn step(&mut self, lp: f32, bp: f32, hp: f32) -> f32 {
+        let g = self.g;
+        let g2 = g * g;
+        // Linear damping: resonance 0 → d≈2 (gentle); 1.5 → d≈0.5 (peaky).
+        let d_lin = (2.0 - self.resonance).clamp(0.05, 2.0);
+        // Nonlinear Q path: soften damping with delayed output (bounded).
+        let soft = self.y1.tanh();
+        let d = (d_lin - 0.35 * self.resonance * soft).clamp(0.05, 2.0);
+
+        let inv = 1.0 / (1.0 + d * g + g2);
+        // Shared poles (monic a0 = 1 after scale):
+        let a1 = 2.0 * (g2 - 1.0) * inv;
+        let a2 = (1.0 - d * g + g2) * inv;
+        // Zero sets (scaled by inv into b*):
+        // LP ~ g² (1+z⁻¹)², BP ~ g (1 − z⁻²), HP ~ (1 − z⁻¹)²
+        let bl0 = g2 * inv;
+        let bl1 = 2.0 * g2 * inv;
+        let bl2 = g2 * inv;
+        let bb0 = g * inv;
+        let bb1 = 0.0;
+        let bb2 = -g * inv;
+        let bh0 = inv;
+        let bh1 = -2.0 * inv;
+        let bh2 = inv;
+
+        let mut y = bl0 * lp
+            + bl1 * self.lp1
+            + bl2 * self.lp2
+            + bb0 * bp
+            + bb1 * self.bp1
+            + bb2 * self.bp2
+            + bh0 * hp
+            + bh1 * self.hp1
+            + bh2 * self.hp2
+            - a1 * self.y1
+            - a2 * self.y2;
+
+        if !y.is_finite() {
             self.reset();
-            (0.0, 0.0, 0.0, 0.0)
+            return 0.0;
         }
+        y = crate::flush_denormal(y);
+
+        self.lp2 = self.lp1;
+        self.lp1 = lp;
+        self.bp2 = self.bp1;
+        self.bp1 = bp;
+        self.hp2 = self.hp1;
+        self.hp1 = hp;
+        self.y2 = self.y1;
+        self.y1 = y;
+        y
     }
 
     pub fn process_buffer_mode(&mut self, buffer: &mut [f32], mode: SteinerMode) {
@@ -113,8 +161,14 @@ impl SteinerParkerFilter {
     }
 
     pub fn reset(&mut self) {
-        self.s1 = 0.0;
-        self.s2 = 0.0;
+        self.y1 = 0.0;
+        self.y2 = 0.0;
+        self.lp1 = 0.0;
+        self.lp2 = 0.0;
+        self.bp1 = 0.0;
+        self.bp2 = 0.0;
+        self.hp1 = 0.0;
+        self.hp2 = 0.0;
     }
 
     pub fn cutoff(&self) -> f32 {
@@ -207,5 +261,18 @@ mod tests {
         let mut f = SteinerParkerFilter::new(44_100.0, 1_000.0, 0.3).unwrap();
         assert!(f.set_params(0.0, 0.3).is_err());
         assert!((f.cutoff() - 1_000.0).abs() < f32::EPSILON);
+    }
+    #[test]
+    fn steiner_process_mode_matches_process_sample_jack() {
+        let mut a = SteinerParkerFilter::new(44_100.0, 2_000.0, 0.4).unwrap();
+        let mut b = a.clone();
+        let mut max_diff = 0.0_f32;
+        for i in 0..256 {
+            let x = (std::f32::consts::TAU * 440.0 * i as f32 / 44_100.0).sin() * 0.5;
+            let ya = a.process_mode(x, SteinerMode::HighPass);
+            let yb = b.process_sample(0.0, 0.0, x);
+            max_diff = max_diff.max((ya - yb).abs());
+        }
+        assert!(max_diff < 1e-5, "mode vs jack max diff {max_diff}");
     }
 }
