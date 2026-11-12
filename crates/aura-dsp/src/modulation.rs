@@ -21,6 +21,20 @@ pub enum LfoShape {
     SawDown,
     /// Sample-and-hold (random step at each cycle).
     SampleAndHold,
+    /// Smoothly interpolated random values (Helm sample-and-glide).
+    SampleAndGlide,
+    /// Three-level stepped wave.
+    Step3,
+    /// Four-level stepped wave.
+    Step4,
+    /// Eight-level stepped wave.
+    Step8,
+    /// Three-point pyramid wave.
+    Pyramid3,
+    /// Five-point pyramid wave.
+    Pyramid5,
+    /// Nine-point pyramid wave.
+    Pyramid9,
 }
 
 /// LFO output mode.
@@ -41,6 +55,10 @@ fn default_sh_value() -> f32 {
 fn default_rng_state() -> u32 {
     // Must be non-zero or xorshift produces 0 forever
     42
+}
+
+fn default_glide_value() -> f32 {
+    0.0
 }
 
 /// Low-frequency oscillator for modulation.
@@ -66,6 +84,13 @@ pub struct Lfo {
     /// PRNG state for sample-and-hold.
     #[serde(skip, default = "default_rng_state")]
     rng_state: u32,
+    /// Previous and current random targets for sample-and-glide.
+    #[serde(skip, default = "default_glide_value")]
+    glide_from: f32,
+    #[serde(skip, default = "default_glide_value")]
+    glide_to: f32,
+    #[serde(skip, default = "default_rng_state")]
+    glide_rng_state: u32,
 }
 
 impl Lfo {
@@ -91,6 +116,11 @@ impl Lfo {
         rng ^= rng >> 17;
         rng ^= rng << 5;
         let initial_sh = (rng as f32 / u32::MAX as f32) * 2.0 - 1.0;
+        let mut glide_rng = rng;
+        glide_rng ^= glide_rng << 13;
+        glide_rng ^= glide_rng >> 17;
+        glide_rng ^= glide_rng << 5;
+        let initial_glide = (glide_rng as f32 / u32::MAX as f32) * 2.0 - 1.0;
 
         Ok(Self {
             shape,
@@ -101,6 +131,9 @@ impl Lfo {
             depth: 1.0,
             sh_value: initial_sh,
             rng_state: rng,
+            glide_from: initial_sh,
+            glide_to: initial_glide,
+            glide_rng_state: glide_rng,
         })
     }
 
@@ -136,11 +169,14 @@ impl Lfo {
         }
 
         // Update S&H on cycle wrap
-        if matches!(self.shape, LfoShape::SampleAndHold) && self.phase < prev_phase {
-            self.rng_state ^= self.rng_state << 13;
-            self.rng_state ^= self.rng_state >> 17;
-            self.rng_state ^= self.rng_state << 5;
-            self.sh_value = (self.rng_state as f32 / u32::MAX as f32) * 2.0 - 1.0;
+        if self.phase < prev_phase {
+            if matches!(self.shape, LfoShape::SampleAndHold) {
+                self.sh_value = self.next_random_value();
+            }
+            if matches!(self.shape, LfoShape::SampleAndGlide) {
+                self.glide_from = self.glide_to;
+                self.glide_to = self.next_glide_value();
+            }
         }
 
         let output = match self.mode {
@@ -149,6 +185,20 @@ impl Lfo {
         };
 
         output * self.depth
+    }
+
+    fn next_random_value(&mut self) -> f32 {
+        self.rng_state ^= self.rng_state << 13;
+        self.rng_state ^= self.rng_state >> 17;
+        self.rng_state ^= self.rng_state << 5;
+        (self.rng_state as f32 / u32::MAX as f32) * 2.0 - 1.0
+    }
+
+    fn next_glide_value(&mut self) -> f32 {
+        self.glide_rng_state ^= self.glide_rng_state << 13;
+        self.glide_rng_state ^= self.glide_rng_state >> 17;
+        self.glide_rng_state ^= self.glide_rng_state << 5;
+        (self.glide_rng_state as f32 / u32::MAX as f32) * 2.0 - 1.0
     }
 
     /// Compute the raw bipolar sample for the current phase.
@@ -176,6 +226,16 @@ impl Lfo {
             LfoShape::SawUp => 2.0 * t - 1.0,
             LfoShape::SawDown => 1.0 - 2.0 * t,
             LfoShape::SampleAndHold => self.sh_value,
+            LfoShape::SampleAndGlide => {
+                let amount = (1.0 - (std::f32::consts::PI * t).cos()) * 0.5;
+                self.glide_from + (self.glide_to - self.glide_from) * amount
+            }
+            LfoShape::Step3 => step_lfo(t, 3),
+            LfoShape::Step4 => step_lfo(t, 4),
+            LfoShape::Step8 => step_lfo(t, 8),
+            LfoShape::Pyramid3 => pyramid_lfo(t, 3),
+            LfoShape::Pyramid5 => pyramid_lfo(t, 5),
+            LfoShape::Pyramid9 => pyramid_lfo(t, 9),
         }
     }
 
@@ -248,6 +308,22 @@ impl Lfo {
     pub fn reset_phase(&mut self) {
         self.phase = 0.0;
     }
+}
+
+fn step_lfo(phase: f32, count: usize) -> f32 {
+    let section = (phase * count as f32).floor() as usize;
+    2.0 * section as f32 / (count - 1) as f32 - 1.0
+}
+
+fn pyramid_lfo(phase: f32, count: usize) -> f32 {
+    let squares = count - 1;
+    (0..squares)
+        .map(|i| {
+            let t = (phase + 0.75 + i as f32 / (2.0 * squares as f32)).rem_euclid(1.0);
+            if t < 0.5 { 1.0 } else { -1.0 }
+        })
+        .sum::<f32>()
+        / squares as f32
 }
 
 /// Trait for modulation sources.
@@ -402,6 +478,19 @@ mod tests {
     use super::*;
 
     #[test]
+    fn sample_and_glide_uses_cosine_interpolation() {
+        let mut lfo = Lfo::new(LfoShape::SampleAndGlide, 1.0, 48_000.0).unwrap();
+        lfo.glide_from = -0.8;
+        lfo.glide_to = 0.6;
+        lfo.set_phase(0.0);
+        assert!((lfo.raw_sample() + 0.8).abs() < 1e-6);
+        lfo.set_phase(0.5);
+        assert!((lfo.raw_sample() + 0.1).abs() < 1e-6);
+        lfo.set_phase(0.999);
+        assert!((lfo.raw_sample() - 0.6).abs() < 1e-3);
+    }
+
+    #[test]
     fn test_lfo_basic() {
         let mut lfo = Lfo::new(LfoShape::Sine, 5.0, 44100.0).unwrap();
         let val = lfo.next_value();
@@ -430,6 +519,13 @@ mod tests {
             LfoShape::SawUp,
             LfoShape::SawDown,
             LfoShape::SampleAndHold,
+            LfoShape::SampleAndGlide,
+            LfoShape::Step3,
+            LfoShape::Step4,
+            LfoShape::Step8,
+            LfoShape::Pyramid3,
+            LfoShape::Pyramid5,
+            LfoShape::Pyramid9,
         ];
         for shape in &shapes {
             let mut lfo = Lfo::new(*shape, 5.0, 44100.0).unwrap();
