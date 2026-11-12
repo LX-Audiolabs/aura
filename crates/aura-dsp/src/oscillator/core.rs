@@ -14,6 +14,8 @@ pub enum Waveform {
     Sine,
     /// Band-limited sawtooth wave (`PolyBLEP`).
     Saw,
+    /// Band-limited falling sawtooth wave (`-Saw`).
+    SawDown,
     /// Band-limited square wave (`PolyBLEP`).
     Square,
     /// Triangle wave (integrated square).
@@ -26,6 +28,18 @@ pub enum Waveform {
     PinkNoise,
     /// Brown noise (integrated white).
     BrownNoise,
+    /// Three-level stepped waveform.
+    Step3,
+    /// Four-level stepped waveform.
+    Step4,
+    /// Eight-level stepped waveform.
+    Step8,
+    /// Three-point pyramid waveform.
+    Pyramid3,
+    /// Five-point pyramid waveform.
+    Pyramid5,
+    /// Nine-point pyramid waveform.
+    Pyramid9,
 }
 
 /// 4-point `PolyBLEP` correction for anti-aliased discontinuities.
@@ -200,6 +214,7 @@ impl Oscillator {
         let dt = self.phase_increment();
         match self.waveform {
             Waveform::Pulse => self.pulse_at(t, dt),
+
             other => stateless_waveform_sample(other, t, dt),
         }
     }
@@ -227,6 +242,11 @@ impl Oscillator {
                 naive - polyblep(t, dt)
             }
 
+            Waveform::SawDown => {
+                let naive = 1.0 - 2.0 * t;
+                naive + polyblep(t, dt)
+            }
+
             Waveform::Square => {
                 let naive = if t < 0.5 { 1.0 } else { -1.0 };
                 naive + polyblep(t, dt) - polyblep((t + 0.5) % 1.0, dt)
@@ -242,6 +262,13 @@ impl Oscillator {
             }
 
             Waveform::Pulse => self.pulse_at(t, dt),
+
+            Waveform::Step3
+            | Waveform::Step4
+            | Waveform::Step8
+            | Waveform::Pyramid3
+            | Waveform::Pyramid5
+            | Waveform::Pyramid9 => stateless_waveform_sample(self.waveform, t, dt),
 
             Waveform::WhiteNoise | Waveform::PinkNoise | Waveform::BrownNoise => {
                 // Lazy init: reconstruct noise_gen after deserialization
@@ -363,6 +390,10 @@ pub(super) fn stateless_waveform_sample(waveform: Waveform, t: f32, dt: f32) -> 
             let naive = 2.0 * t - 1.0;
             naive - polyblep(t, dt)
         }
+        Waveform::SawDown => {
+            let naive = 1.0 - 2.0 * t;
+            naive + polyblep(t, dt)
+        }
         Waveform::Square => {
             let naive = if t < 0.5 { 1.0 } else { -1.0 };
             naive + polyblep(t, dt) - polyblep((t + 0.5) % 1.0, dt)
@@ -381,14 +412,102 @@ pub(super) fn stateless_waveform_sample(waveform: Waveform, t: f32, dt: f32) -> 
             let naive = if t < 0.5 { 1.0 } else { -1.0 };
             naive + polyblep(t, dt) - polyblep((t + 0.5) % 1.0, dt)
         }
+        Waveform::Step3
+        | Waveform::Step4
+        | Waveform::Step8
+        | Waveform::Pyramid3
+        | Waveform::Pyramid5
+        | Waveform::Pyramid9 => digital_waveform_sample(waveform, t, dt),
         // Noise waveforms don't make sense for unison detuning — produce silence
         Waveform::WhiteNoise | Waveform::PinkNoise | Waveform::BrownNoise => 0.0,
     }
 }
 
+#[inline]
+fn digital_waveform_sample(waveform: Waveform, t: f32, dt: f32) -> f32 {
+    let (step_count, pyramid_count) = match waveform {
+        Waveform::Step3 => (Some(3), None),
+        Waveform::Step4 => (Some(4), None),
+        Waveform::Step8 => (Some(8), None),
+        Waveform::Pyramid3 => (None, Some(3)),
+        Waveform::Pyramid5 => (None, Some(5)),
+        Waveform::Pyramid9 => (None, Some(9)),
+        _ => return 0.0,
+    };
+
+    if let Some(count) = step_count {
+        let section = (t * count as f32).floor() as usize;
+        let level = 2.0 * section as f32 / (count - 1) as f32 - 1.0;
+        let mut sample = level - polyblep(t, dt);
+        let jump = 1.0 / (count - 1) as f32;
+        for edge in 1..count {
+            let phase = (t - edge as f32 / count as f32).rem_euclid(1.0);
+            sample += jump * polyblep(phase, dt);
+        }
+        return sample;
+    }
+
+    let count = pyramid_count.unwrap_or(1);
+    let squares = count - 1;
+    (0..squares)
+        .map(|i| {
+            let phase = (t + 0.75 + i as f32 / (2.0 * squares as f32)).rem_euclid(1.0);
+            let naive = if phase < 0.5 { 1.0 } else { -1.0 };
+            naive + polyblep(phase, dt) - polyblep((phase + 0.5).rem_euclid(1.0), dt)
+        })
+        .sum::<f32>()
+        / squares as f32
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn saw_down_is_negative_of_rising_saw_at_lookup_phases() {
+        for phase in [0.25, 0.75] {
+            let mut up = Oscillator::new(Waveform::Saw, 440.0, 48_000.0).unwrap();
+            let mut down = Oscillator::new(Waveform::SawDown, 440.0, 48_000.0).unwrap();
+            up.set_phase(phase);
+            down.set_phase(phase);
+            assert!(up.sample_offset(0.0) * if phase < 0.5 { -1.0 } else { 1.0 } > 0.0);
+            assert!((up.sample_offset(0.0) + down.sample_offset(0.0)).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn helm_step_and_pyramid_shapes_match_phase_contract() {
+        let steps = [
+            (Waveform::Step3, 3),
+            (Waveform::Step4, 4),
+            (Waveform::Step8, 8),
+        ];
+        for (shape, count) in steps {
+            for level in 0..count {
+                let phase = (level as f32 + 0.5) / count as f32;
+                let expected = 2.0 * level as f32 / (count - 1) as f32 - 1.0;
+                assert!((stateless_waveform_sample(shape, phase, 0.0) - expected).abs() < 1e-6);
+            }
+        }
+
+        let pyramids = [
+            (Waveform::Pyramid3, 3),
+            (Waveform::Pyramid5, 5),
+            (Waveform::Pyramid9, 9),
+        ];
+        for (shape, count) in pyramids {
+            let phase = 0.173;
+            let squares = count - 1;
+            let expected = (0..squares)
+                .map(|i| {
+                    let t = (0.75 + phase + i as f32 / (2.0 * squares as f32)).rem_euclid(1.0);
+                    if t < 0.5 { 1.0 } else { -1.0 }
+                })
+                .sum::<f32>()
+                / squares as f32;
+            assert!((stateless_waveform_sample(shape, phase, 0.0) - expected).abs() < 1e-6);
+        }
+    }
 
     #[test]
     fn test_sine_range() {
