@@ -19,3 +19,7 @@ examples/*/.cargo
 !/agal/skills/**
 !/agal/notes/
 !/agal/notes/**
+
+# Internal planning notes — never publish.
+/docs/
+docs/
