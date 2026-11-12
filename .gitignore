@@ -24,6 +24,9 @@ examples/*/.cargo
 # Personal agent config — contains email, never commit.
 AGENTS.md
 
-# Internal planning notes — local only if you keep copies.
 docs/slint-ui-direction.md
 docs/dsp-synth-roadmap.md
+
+# Internal planning notes — never publish.
+/docs/
+docs/
