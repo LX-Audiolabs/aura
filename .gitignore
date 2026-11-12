@@ -18,6 +18,6 @@ examples/*/.cargo
 # Personal agent config — contains email, never commit.
 AGENTS.md
 
-# Internal planning notes — local only if you keep copies.
-docs/*
-/docs
+# Internal planning notes — never publish.
+/docs/
+docs/
