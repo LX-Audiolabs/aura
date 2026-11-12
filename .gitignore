@@ -20,5 +20,3 @@ AGENTS.md
 
 # Internal planning notes — local only if you keep copies.
 docs/*
-# .forgejo/workflows/
-docs/framework-improvements.md
