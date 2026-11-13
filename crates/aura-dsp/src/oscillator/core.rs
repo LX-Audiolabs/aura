@@ -101,8 +101,22 @@ pub struct Oscillator {
     triangle_sum: f32,
 }
 
+/// Default noise PRNG seed for [`Oscillator::new`] / [`Oscillator::from_host`]
+/// and post-serde lazy init. Kept at 42 so existing tests and callers stay
+/// bit-identical.
+const DEFAULT_NOISE_SEED: u32 = 42;
+
+fn noise_gen_for(waveform: Waveform, seed: u32) -> Option<noise::NoiseGenerator> {
+    match waveform {
+        Waveform::WhiteNoise => Some(noise::NoiseGenerator::new(noise::NoiseType::White, seed)),
+        Waveform::PinkNoise => Some(noise::NoiseGenerator::new(noise::NoiseType::Pink, seed)),
+        Waveform::BrownNoise => Some(noise::NoiseGenerator::new(noise::NoiseType::Brown, seed)),
+        _ => None,
+    }
+}
+
 impl Oscillator {
-    /// Create a new oscillator.
+    /// Create a new oscillator (noise waveforms use seed **42**).
     ///
     /// # Errors
     ///
@@ -110,6 +124,24 @@ impl Oscillator {
     /// Returns `DspError::InvalidFrequency` if frequency is out of range
     /// (does not apply to noise waveforms).
     pub fn new(waveform: Waveform, frequency: f32, sample_rate: f32) -> Result<Self> {
+        Self::new_with_seed(waveform, frequency, sample_rate, DEFAULT_NOISE_SEED)
+    }
+
+    /// Create a new oscillator with an explicit noise PRNG seed.
+    ///
+    /// Non-noise waveforms ignore `seed`. For white/pink/brown, `seed == 0` is
+    /// treated as `1` (same rule as [`crate::noise::NoiseGenerator::new`]).
+    /// Stack-only; no heap alloc beyond what `NoiseGenerator::new` already does.
+    ///
+    /// # Errors
+    ///
+    /// Same as [`Self::new`].
+    pub fn new_with_seed(
+        waveform: Waveform,
+        frequency: f32,
+        sample_rate: f32,
+        seed: u32,
+    ) -> Result<Self> {
         if let Some(e) = error::validate_sample_rate(sample_rate) {
             return Err(e);
         }
@@ -123,14 +155,12 @@ impl Oscillator {
             return Err(e);
         }
 
-        let noise_gen = match waveform {
-            Waveform::WhiteNoise => Some(noise::NoiseGenerator::new(noise::NoiseType::White, 42)),
-            Waveform::PinkNoise => Some(noise::NoiseGenerator::new(noise::NoiseType::Pink, 42)),
-            Waveform::BrownNoise => Some(noise::NoiseGenerator::new(noise::NoiseType::Brown, 42)),
-            _ => None,
-        };
+        let noise_gen = noise_gen_for(waveform, seed);
 
-        debug!(?waveform, frequency, sample_rate, "oscillator created");
+        debug!(
+            ?waveform,
+            frequency, sample_rate, seed, "oscillator created"
+        );
         Ok(Self {
             waveform,
             frequency,
@@ -143,7 +173,7 @@ impl Oscillator {
     }
 
     /// Host sample-rate constructor. Clamps invalid `sample_rate` / `frequency`
-    /// so plugin `init` does not have to unwrap [`Self::new`].
+    /// so plugin `init` does not have to unwrap [`Self::new`]. Noise seed **42**.
     ///
     /// # Panics
     ///
@@ -151,6 +181,26 @@ impl Oscillator {
     /// error in this constructor, not a caller input.
     #[must_use]
     pub fn from_host(waveform: Waveform, frequency: f32, sample_rate: f32) -> Self {
+        Self::from_host_with_seed(waveform, frequency, sample_rate, DEFAULT_NOISE_SEED)
+    }
+
+    /// Like [`Self::from_host`], but with an explicit noise PRNG seed.
+    ///
+    /// Same clamp policy as `from_host`. Non-noise waveforms ignore `seed`.
+    /// `seed == 0` → `1` for noise (see [`crate::noise::NoiseGenerator::new`]).
+    /// RT-safe after construction (stack state only).
+    ///
+    /// # Panics
+    ///
+    /// Only if clamping failed to satisfy [`Self::new_with_seed`] — programming
+    /// error in this constructor, not a caller input.
+    #[must_use]
+    pub fn from_host_with_seed(
+        waveform: Waveform,
+        frequency: f32,
+        sample_rate: f32,
+        seed: u32,
+    ) -> Self {
         let sr = if sample_rate.is_finite() && sample_rate > 0.0 {
             sample_rate
         } else {
@@ -162,7 +212,21 @@ impl Oscillator {
         } else {
             1e-3
         };
-        Self::new(waveform, hz, sr).expect("from_host clamps into valid range")
+        Self::new_with_seed(waveform, hz, sr, seed).expect("from_host clamps into valid range")
+    }
+
+    /// Rebuild the internal noise generator with `seed` (full state reset).
+    ///
+    /// White/pink/brown: replaces `noise_gen` via fresh `NoiseGenerator::new`
+    /// for the current waveform type (pink octaves / brown leak restart).
+    /// Non-noise: no-op (clears any stray `noise_gen`).
+    ///
+    /// RT-safe: stack-only, same as construction. `seed == 0` → `1`.
+    /// After serde, `noise_gen` is skipped — call this if a non-default seed is
+    /// required (lazy default rebuild uses seed 42).
+    #[inline]
+    pub fn reseed(&mut self, seed: u32) {
+        self.noise_gen = noise_gen_for(self.waveform, seed);
     }
 
     /// Phase increment per sample.
@@ -175,16 +239,7 @@ impl Oscillator {
     /// Ensure internal state is initialized (recovers after deserialization).
     fn ensure_initialized(&mut self) {
         if self.noise_gen.is_none() {
-            self.noise_gen = match self.waveform {
-                Waveform::WhiteNoise => {
-                    Some(noise::NoiseGenerator::new(noise::NoiseType::White, 42))
-                }
-                Waveform::PinkNoise => Some(noise::NoiseGenerator::new(noise::NoiseType::Pink, 42)),
-                Waveform::BrownNoise => {
-                    Some(noise::NoiseGenerator::new(noise::NoiseType::Brown, 42))
-                }
-                _ => None,
-            };
+            self.noise_gen = noise_gen_for(self.waveform, DEFAULT_NOISE_SEED);
         }
     }
 
@@ -726,5 +781,106 @@ mod tests {
             (peek - fifty_peek).abs() > 1e-3,
             "25% pulse must differ from 50% at t=0.35 ({peek} vs {fifty_peek})"
         );
+    }
+
+    fn collect_n(osc: &mut Oscillator, n: usize) -> Vec<f32> {
+        (0..n).map(|_| osc.next_sample()).collect()
+    }
+
+    #[test]
+    fn default_white_noise_streams_are_correlated() {
+        let mut a = Oscillator::from_host(Waveform::WhiteNoise, 0.1, 48_000.0);
+        let mut b = Oscillator::from_host(Waveform::WhiteNoise, 0.1, 48_000.0);
+        let sa = collect_n(&mut a, 64);
+        let sb = collect_n(&mut b, 64);
+        assert_eq!(sa, sb);
+    }
+
+    #[test]
+    fn different_seeds_decorrelate_white_noise() {
+        let mut a = Oscillator::from_host_with_seed(Waveform::WhiteNoise, 0.1, 48_000.0, 1);
+        let mut b = Oscillator::from_host_with_seed(Waveform::WhiteNoise, 0.1, 48_000.0, 2);
+        let sa = collect_n(&mut a, 64);
+        let sb = collect_n(&mut b, 64);
+        assert_ne!(sa, sb, "distinct seeds must produce distinct white streams");
+    }
+
+    #[test]
+    fn same_seed_reproduces_white_noise() {
+        let mut a = Oscillator::from_host_with_seed(Waveform::WhiteNoise, 0.1, 48_000.0, 99);
+        let mut b = Oscillator::from_host_with_seed(Waveform::WhiteNoise, 0.1, 48_000.0, 99);
+        assert_eq!(collect_n(&mut a, 64), collect_n(&mut b, 64));
+    }
+
+    #[test]
+    fn reseed_matches_fresh_generator_from_that_seed() {
+        let mut a = Oscillator::from_host_with_seed(Waveform::WhiteNoise, 0.1, 48_000.0, 1);
+        let _ = collect_n(&mut a, 32);
+        a.reseed(2);
+        let mut b = Oscillator::from_host_with_seed(Waveform::WhiteNoise, 0.1, 48_000.0, 2);
+        assert_eq!(collect_n(&mut a, 64), collect_n(&mut b, 64));
+    }
+
+    #[test]
+    fn non_noise_reseed_is_noop_and_finite() {
+        let mut osc = Oscillator::from_host(Waveform::Saw, 440.0, 48_000.0);
+        osc.reseed(99);
+        for _ in 0..64 {
+            assert!(osc.next_sample().is_finite());
+        }
+    }
+
+    #[test]
+    fn seed_zero_matches_noise_generator_seed_one() {
+        let mut via_zero = Oscillator::from_host_with_seed(Waveform::WhiteNoise, 0.1, 48_000.0, 0);
+        let mut via_one = Oscillator::from_host_with_seed(Waveform::WhiteNoise, 0.1, 48_000.0, 1);
+        assert_eq!(collect_n(&mut via_zero, 64), collect_n(&mut via_one, 64));
+
+        let mut ng0 = noise::NoiseGenerator::new(noise::NoiseType::White, 0);
+        let mut ng1 = noise::NoiseGenerator::new(noise::NoiseType::White, 1);
+        for _ in 0..64 {
+            assert!((ng0.next_sample() - ng1.next_sample()).abs() < f32::EPSILON);
+        }
+
+        let mut osc0 = Oscillator::from_host_with_seed(Waveform::WhiteNoise, 0.1, 48_000.0, 0);
+        let mut ng = noise::NoiseGenerator::new(noise::NoiseType::White, 0);
+        for _ in 0..64 {
+            assert!((osc0.next_sample() - ng.next_sample()).abs() < f32::EPSILON);
+        }
+    }
+
+    #[test]
+    fn pink_and_brown_respect_seed_and_reseed() {
+        for wf in [Waveform::PinkNoise, Waveform::BrownNoise] {
+            let mut same_a = Oscillator::from_host_with_seed(wf, 0.1, 48_000.0, 7);
+            let mut same_b = Oscillator::from_host_with_seed(wf, 0.1, 48_000.0, 7);
+            assert_eq!(collect_n(&mut same_a, 64), collect_n(&mut same_b, 64));
+
+            let mut warmed = Oscillator::from_host_with_seed(wf, 0.1, 48_000.0, 3);
+            let _ = collect_n(&mut warmed, 16);
+            warmed.reseed(11);
+            let mut fresh = Oscillator::from_host_with_seed(wf, 0.1, 48_000.0, 11);
+            assert_eq!(collect_n(&mut warmed, 64), collect_n(&mut fresh, 64));
+
+            let mut seed_one = Oscillator::from_host_with_seed(wf, 0.1, 48_000.0, 1);
+            let mut seed_two = Oscillator::from_host_with_seed(wf, 0.1, 48_000.0, 2);
+            assert_ne!(collect_n(&mut seed_one, 64), collect_n(&mut seed_two, 64));
+        }
+    }
+
+    #[test]
+    fn new_with_seed_matches_from_host_with_seed_on_valid_input() {
+        let a = Oscillator::new_with_seed(Waveform::WhiteNoise, 0.1, 48_000.0, 5).unwrap();
+        let b = Oscillator::from_host_with_seed(Waveform::WhiteNoise, 0.1, 48_000.0, 5);
+        let mut a = a;
+        let mut b = b;
+        assert_eq!(collect_n(&mut a, 32), collect_n(&mut b, 32));
+    }
+
+    #[test]
+    fn new_default_seed_matches_explicit_42() {
+        let mut a = Oscillator::new(Waveform::WhiteNoise, 0.1, 48_000.0).unwrap();
+        let mut b = Oscillator::new_with_seed(Waveform::WhiteNoise, 0.1, 48_000.0, 42).unwrap();
+        assert_eq!(collect_n(&mut a, 32), collect_n(&mut b, 32));
     }
 }

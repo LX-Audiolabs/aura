@@ -9,6 +9,8 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ### Added
 
+- `Oscillator::new_with_seed` / `from_host_with_seed` / `reseed` — RT-safe white/pink/brown
+  decorrelation (default seed 42 unchanged; `seed == 0` → `1`).
 - `Waveform::{SawDown,Step3,Step4,Step8,Pyramid3,Pyramid5,Pyramid9}` for Helm OSC parity; `Waveform::Saw` remains rising.
 - `LfoShape::{Step3,Step4,Step8,Pyramid3,Pyramid5,Pyramid9,SampleAndGlide}`; glide uses Helm's cosine interpolation. `SampleAndHold` remains unchanged.
 - `filter::Ms20Filter` — 2-pole K35 (two TPT one-poles + nonlinear feedback; LP/HP; diode/OTA revisions).
