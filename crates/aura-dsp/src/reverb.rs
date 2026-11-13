@@ -15,6 +15,9 @@ use crate::error::{self, Result};
 struct DampedComb {
     delay: DelayLine,
     delay_samples: f32,
+    /// Delay at size mid-point (scale 1.0). Missing on old blobs → healed on `set_size`.
+    #[serde(default)]
+    base_samples: f32,
     feedback: f32,
     damp1: f32,
     damp2: f32,
@@ -23,10 +26,13 @@ struct DampedComb {
 }
 
 impl DampedComb {
+    /// Preallocates 2× `delay_samples` so [`Reverb::set_size`] can grow to 2× without alloc.
     fn new(delay_samples: usize, feedback: f32, damping: f32) -> Self {
+        let base = delay_samples.max(1);
         Self {
-            delay: DelayLine::new(delay_samples),
-            delay_samples: delay_samples as f32,
+            delay: DelayLine::new(base.saturating_mul(2).max(2)),
+            delay_samples: base as f32,
+            base_samples: base as f32,
             feedback,
             damp1: damping,
             damp2: 1.0 - damping,
@@ -54,6 +60,21 @@ impl DampedComb {
         self.damp1 = damping;
         self.damp2 = 1.0 - damping;
     }
+
+    #[inline]
+    fn heal_base(&mut self) {
+        if !(self.base_samples.is_finite() && self.base_samples > 0.0) {
+            // Pre-set_size serde blobs: treat current length as base; expand capped by capacity.
+            self.base_samples = self.delay_samples.max(1.0);
+        }
+    }
+
+    #[inline]
+    fn set_size(&mut self, scale: f32) {
+        self.heal_base();
+        let max = (self.delay.capacity().saturating_sub(1) as f32).max(1.0);
+        self.delay_samples = (self.base_samples * scale).clamp(1.0, max);
+    }
 }
 
 /// Simple allpass for reverb diffusion.
@@ -61,14 +82,20 @@ impl DampedComb {
 struct ReverbAllpass {
     delay: DelayLine,
     delay_samples: f32,
+    /// Delay at size mid-point (scale 1.0). Missing on old blobs → healed on `set_size`.
+    #[serde(default)]
+    base_samples: f32,
     feedback: f32,
 }
 
 impl ReverbAllpass {
+    /// Preallocates 2× `delay_samples` so [`Reverb::set_size`] can grow to 2× without alloc.
     fn new(delay_samples: usize, feedback: f32) -> Self {
+        let base = delay_samples.max(1);
         Self {
-            delay: DelayLine::new(delay_samples),
-            delay_samples: delay_samples as f32,
+            delay: DelayLine::new(base.saturating_mul(2).max(2)),
+            delay_samples: base as f32,
+            base_samples: base as f32,
             feedback,
         }
     }
@@ -80,6 +107,20 @@ impl ReverbAllpass {
         self.delay
             .write(input + self.feedback * crate::flush_denormal(output));
         output
+    }
+
+    #[inline]
+    fn heal_base(&mut self) {
+        if !(self.base_samples.is_finite() && self.base_samples > 0.0) {
+            self.base_samples = self.delay_samples.max(1.0);
+        }
+    }
+
+    #[inline]
+    fn set_size(&mut self, scale: f32) {
+        self.heal_base();
+        let max = (self.delay.capacity().saturating_sub(1) as f32).max(1.0);
+        self.delay_samples = (self.base_samples * scale).clamp(1.0, max);
     }
 }
 
@@ -217,6 +258,35 @@ impl Reverb {
         let damp = damping.clamp(0.0, 1.0);
         for comb in self.combs_l.iter_mut().chain(self.combs_r.iter_mut()) {
             comb.set_damping(damp);
+        }
+    }
+
+    /// RT-safe room-size control via comb/allpass delay lengths. `size` in `[0, 1]`.
+    ///
+    /// Mapping (log₂): `0.5` → scale **1.0** (lengths at construction / default),
+    /// `0.0` → **0.5×**, `1.0` → **2.0×**. Non-finite ignored (previous size kept).
+    ///
+    /// Comb/allpass buffers are preallocated at **2× base** in [`Reverb::new`], so this
+    /// never reallocates — safe on the audio thread. Pre-delay is unchanged.
+    ///
+    /// Old serde blobs without `base_samples` heal on first `set_size` (current length
+    /// becomes base; expand only up to that buffer's existing capacity).
+    #[inline]
+    pub fn set_size(&mut self, size: f32) {
+        if !size.is_finite() {
+            return;
+        }
+        // size 0.5 → 2^0 = 1; 0 → 2^-1 = 0.5; 1 → 2^1 = 2
+        let scale = 2.0_f32.powf((size.clamp(0.0, 1.0) - 0.5) * 2.0);
+        for comb in self.combs_l.iter_mut().chain(self.combs_r.iter_mut()) {
+            comb.set_size(scale);
+        }
+        for ap in self
+            .allpasses_l
+            .iter_mut()
+            .chain(self.allpasses_r.iter_mut())
+        {
+            ap.set_size(scale);
         }
     }
 
@@ -400,5 +470,90 @@ mod tests {
             (ea - eb).abs() <= ea * 1e-5 + 1e-12,
             "NaN decay must not change tail vs previous finite setting: a={ea} b={eb}"
         );
+    }
+
+    #[test]
+    fn set_size_midpoint_matches_default_stream() {
+        let mut a = Reverb::new(0.8, 0.2, 0.0, 1.0, 44100.0).unwrap();
+        let mut b = Reverb::new(0.8, 0.2, 0.0, 1.0, 44100.0).unwrap();
+        b.set_size(0.5);
+        for i in 0..512 {
+            let x = if i == 0 { 1.0 } else { 0.0 };
+            let (la, ra) = a.process_sample(x);
+            let (lb, rb) = b.process_sample(x);
+            assert!((la - lb).abs() < 1e-6 && (ra - rb).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn set_size_changes_impulse_response() {
+        let mut small = Reverb::new(0.8, 0.2, 0.0, 1.0, 44100.0).unwrap();
+        let mut large = Reverb::new(0.8, 0.2, 0.0, 1.0, 44100.0).unwrap();
+        small.set_size(0.0);
+        large.set_size(1.0);
+        let _ = small.process_sample(1.0);
+        let _ = large.process_sample(1.0);
+        let mut max_diff = 0.0f32;
+        for _ in 0..4_000 {
+            let (ls, _) = small.process_sample(0.0);
+            let (ll, _) = large.process_sample(0.0);
+            assert!(ls.is_finite() && ll.is_finite());
+            max_diff = max_diff.max((ls - ll).abs());
+        }
+        assert!(
+            max_diff > 1e-4,
+            "0.5x vs 2x size must change IR (max |diff|={max_diff})"
+        );
+    }
+
+    #[test]
+    fn set_size_nan_is_noop() {
+        let mut a = Reverb::new(0.8, 0.2, 0.0, 1.0, 44100.0).unwrap();
+        let mut b = Reverb::new(0.8, 0.2, 0.0, 1.0, 44100.0).unwrap();
+        a.set_size(0.25);
+        b.set_size(0.25);
+        b.set_size(f32::NAN);
+        b.set_size(f32::INFINITY);
+        let _ = a.process_sample(1.0);
+        let _ = b.process_sample(1.0);
+        for _ in 0..2_000 {
+            let (la, ra) = a.process_sample(0.0);
+            let (lb, rb) = b.process_sample(0.0);
+            assert!((la - lb).abs() < 1e-6 && (ra - rb).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn set_size_survives_serde_and_stays_finite() {
+        let mut rev = Reverb::new(0.7, 0.4, 5.0, 1.0, 48_000.0).unwrap();
+        rev.set_size(0.8);
+        let json = serde_json::to_string(&rev).unwrap();
+        let mut back: Reverb = serde_json::from_str(&json).unwrap();
+        back.set_size(0.2);
+        let _ = back.process_sample(1.0);
+        for _ in 0..2_000 {
+            let (l, r) = back.process_sample(0.0);
+            assert!(l.is_finite() && r.is_finite());
+        }
+    }
+
+    #[test]
+    fn old_serde_blob_without_base_samples_heals_on_set_size() {
+        // Simulate pre-set_size JSON: comb has delay+delay_samples only (no base).
+        // Full Reverb roundtrip always has capacity; heal path is what matters.
+        let mut rev = Reverb::new(0.5, 0.2, 0.0, 1.0, 44100.0).unwrap();
+        // Force zero base like #[serde(default)] on missing field would.
+        for comb in rev.combs_l.iter_mut().chain(rev.combs_r.iter_mut()) {
+            comb.base_samples = 0.0;
+        }
+        for ap in rev.allpasses_l.iter_mut().chain(rev.allpasses_r.iter_mut()) {
+            ap.base_samples = 0.0;
+        }
+        rev.set_size(0.0);
+        let _ = rev.process_sample(1.0);
+        for _ in 0..1_000 {
+            let (l, r) = rev.process_sample(0.0);
+            assert!(l.is_finite() && r.is_finite());
+        }
     }
 }
