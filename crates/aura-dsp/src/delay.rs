@@ -25,6 +25,13 @@ impl DelayLine {
         }
     }
 
+    /// Buffer length / max readable delay index bound (`capacity - 1`).
+    #[inline]
+    #[must_use]
+    pub fn capacity(&self) -> usize {
+        self.max_delay_samples
+    }
+
     /// Write a sample into the delay line.
     #[inline]
     pub fn write(&mut self, sample: f32) {

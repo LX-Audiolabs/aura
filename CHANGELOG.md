@@ -9,6 +9,9 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ### Added
 
+- `Reverb::set_size` — RT-safe room size in `[0, 1]` (0.5 = construction lengths,
+  0 → 0.5×, 1 → 2× log₂); combs/allpasses preallocated 2×; non-finite no-op; no realloc.
+- `DelayLine::capacity` — buffer length accessor for RT delay-length clamps.
 - `Oscillator::new_with_seed` / `from_host_with_seed` / `reseed` — RT-safe white/pink/brown
   decorrelation (default seed 42 unchanged; `seed == 0` → `1`).
 - `Waveform::{SawDown,Step3,Step4,Step8,Pyramid3,Pyramid5,Pyramid9}` for Helm OSC parity; `Waveform::Saw` remains rising.
