@@ -25,6 +25,9 @@ pub struct NoteNameEntry {
 
 /// One curated CLAP remote-controls page. Hosts may persist `page_id`, so keep
 /// it stable. Missing parameter slots remain unassigned.
+///
+/// `param_ids` lists at most 8 entries (CLAP remote-controls slot count);
+/// format wrappers drop extras.
 pub struct RemoteControlsPage {
     pub page_id: u32,
     pub section_name: &'static str,

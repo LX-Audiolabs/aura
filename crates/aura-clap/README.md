@@ -84,7 +84,7 @@ Input priority: native CLAP note events and expressions, then MIDI 2 channel-voi
 
 **Remote-controls:** pages of ≤8 params from `ParamInfo.group`. Empty group = no device page. `"Section/Page"` splits on the first `/`. Hidden/readonly never take a hardware slot.
 
-Products can override generated pages with `PluginLogic::remote_control_pages() -> Some(&'static [RemoteControlsPage])`. Give each page a stable `page_id`; list up to eight parameter IDs. `None` keeps group-derived pages, while `Some(&[])` reports zero pages.
+Products can override generated pages with `PluginLogic::remote_control_pages() -> Some(&'static [RemoteControlsPage])`. Give each page a stable `page_id`; list up to eight parameter IDs (extras dropped). `None` keeps group-derived pages, while `Some(&[])` reports zero pages.
 
 **State context:** set `PluginLogic::state_context_supported() = true` to expose `clap.state-context/2` alongside `clap.state`. Override `save_state_with_context` / `load_state_with_context` for distinct preset, duplicate, and project blobs; defaults use the shared AURA state blob. Both hooks run on the main thread.
 

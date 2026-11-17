@@ -1101,7 +1101,6 @@ unsafe fn collect_input_events(
     ump.clear();
     timed.clear();
     tuning_events.clear();
-    let mut has_clap_notes = false;
     let mut has_midi2_notes = false;
     let ev = unsafe { &*in_events };
     let Some(size_fn) = ev.size else {
@@ -1169,7 +1168,6 @@ unsafe fn collect_input_events(
             | CLAP_EVENT_NOTE_OFF
             | CLAP_EVENT_NOTE_CHOKE
             | CLAP_EVENT_NOTE_END => {
-                has_clap_notes = true;
                 if !accept_note_event(notes.len(), true) {
                     continue;
                 }
@@ -1196,7 +1194,6 @@ unsafe fn collect_input_events(
                 }
             }
             CLAP_EVENT_NOTE_EXPRESSION => {
-                has_clap_notes = true;
                 if !accept_note_event(notes.len(), false) {
                     continue;
                 }
@@ -1237,9 +1234,10 @@ unsafe fn collect_input_events(
             _ => {}
         }
     }
-    // Native CLAP note events win; otherwise expose MIDI2 notes through the
-    // same process surface, leaving raw UMP available for richer controllers.
-    if !has_clap_notes {
+    // Native CLAP note-surface events (on/off/choke/end/expression/poly mod)
+    // already in `notes` win. Only bridge UMP when that buffer stayed empty —
+    // dropped expression floods must not block MIDI2 fallback.
+    if notes.is_empty() {
         let message_type = if has_midi2_notes { 0x4 } else { 0x2 };
         append_ump_as_notes_for_type(
             notes,
@@ -2049,7 +2047,12 @@ fn write_custom_remote_controls_page(
     out.page_id = page.page_id;
     write_name(&mut out.page_name, page.page_name);
     out.param_ids = [CLAP_INVALID_ID; CLAP_REMOTE_CONTROLS_COUNT];
-    for (slot, &id) in out.param_ids.iter_mut().zip(page.param_ids.iter()) {
+    // CLAP hard-caps at 8 slots; extras are dropped (documented on RemoteControlsPage).
+    for (slot, &id) in out
+        .param_ids
+        .iter_mut()
+        .zip(page.param_ids.iter().take(CLAP_REMOTE_CONTROLS_COUNT))
+    {
         *slot = id;
     }
     out.is_for_preset = page.is_for_preset;
@@ -3127,6 +3130,21 @@ mod remote_controls_tests {
                 .all(|&id| id == super::CLAP_INVALID_ID)
         );
         assert!(page.is_for_preset);
+    }
+
+    #[test]
+    fn curated_page_keeps_only_first_eight_param_ids() {
+        let spec = RemoteControlsPage {
+            page_id: 1,
+            section_name: "S",
+            page_name: "P",
+            param_ids: &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+            is_for_preset: false,
+        };
+        let mut page: clap_sys::ext::remote_controls::clap_remote_controls_page =
+            unsafe { std::mem::zeroed() };
+        write_custom_remote_controls_page(&mut page, &spec);
+        assert_eq!(page.param_ids, [1, 2, 3, 4, 5, 6, 7, 8]);
     }
 }
 
