@@ -13,6 +13,14 @@
 
 use aura_params::Params;
 
+/// CLAP state save/load purpose.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StateContext {
+    Preset,
+    Duplicate,
+    Project,
+}
+
 const MAGIC: &[u8; 4] = b"AURA";
 const VERSION_V2: u32 = 2;
 
@@ -188,6 +196,12 @@ mod tests {
         }
     }
 
+    impl Default for TwoParams {
+        fn default() -> Self {
+            Self::new(0.0, 0.0)
+        }
+    }
+
     impl aura_params::__private::Sealed for TwoParams {}
 
     #[allow(clippy::unused_self)]
@@ -252,6 +266,35 @@ mod tests {
             for (id, v) in values {
                 self.set(*id, *v);
             }
+        }
+    }
+
+    struct StateTestLogic;
+
+    impl crate::PluginLogic for StateTestLogic {
+        type Params = TwoParams;
+        type DspState = ();
+
+        fn info() -> crate::PluginInfo {
+            crate::PluginInfo::new("test", "test", "0", "test")
+        }
+
+        fn init(_params: &Self::Params, _sample_rate: f64) -> Self::DspState {}
+
+        fn reset(
+            _state: &mut Self::DspState,
+            _params: &Self::Params,
+            _config: &crate::AudioConfig,
+        ) {
+        }
+
+        fn process(
+            _state: &mut Self::DspState,
+            _params: &Self::Params,
+            _buffer: &mut crate::AudioBuffer<'_, f32>,
+            _context: &mut crate::ProcessContext,
+        ) -> crate::ProcessStatus {
+            crate::ProcessStatus::Continue
         }
     }
 
@@ -325,6 +368,23 @@ mod tests {
         assert!(decode_state(&dst, &blob));
         assert_eq!(dst.get_plain(1), Some(0.25));
         assert_eq!(dst.get_plain(2), Some(0.75));
+    }
+
+    #[test]
+    fn default_context_state_round_trips_preset_and_project() {
+        use crate::PluginLogic;
+
+        assert!(!StateTestLogic::state_context_supported());
+        for context in [StateContext::Preset, StateContext::Project] {
+            let source = TwoParams::new(0.25, 0.75);
+            let blob = StateTestLogic::save_state_with_context(&source, context);
+            let target = TwoParams::default();
+            assert!(StateTestLogic::load_state_with_context(
+                &target, context, &blob
+            ));
+            assert_eq!(target.get(1), Some(0.25));
+            assert_eq!(target.get(2), Some(0.75));
+        }
     }
 
     #[test]

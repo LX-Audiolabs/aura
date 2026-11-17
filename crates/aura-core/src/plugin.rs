@@ -11,6 +11,7 @@ use crate::editor::Editor;
 use crate::info::PluginInfo;
 use crate::preset::FactoryPreset;
 use crate::process::{ProcessContext, ProcessStatus};
+use crate::state::StateContext;
 
 /// One entry in a plugin's custom note-name table (`CLAP_EXT_NOTE_NAME`).
 ///
@@ -20,6 +21,23 @@ pub struct NoteNameEntry {
     pub channel: i16,
     pub key: i16,
     pub name: &'static str,
+}
+
+/// One curated CLAP remote-controls page. Hosts may persist `page_id`, so keep
+/// it stable. Missing parameter slots remain unassigned.
+pub struct RemoteControlsPage {
+    pub page_id: u32,
+    pub section_name: &'static str,
+    pub page_name: &'static str,
+    pub param_ids: &'static [u32],
+    pub is_for_preset: bool,
+}
+
+/// One host context-menu action supplied by a plugin.
+pub struct ContextMenuEntry {
+    pub action_id: u32,
+    pub label: &'static str,
+    pub is_enabled: bool,
 }
 
 /// What plugin authors implement for realtime DSP + optional GUI factory.
@@ -118,6 +136,13 @@ pub trait PluginLogic: 'static {
         &[]
     }
 
+    /// Curated CLAP remote-controls pages. `None` keeps generated group pages;
+    /// `Some` replaces them, including `Some(&[])` to expose no pages.
+    #[must_use]
+    fn remote_control_pages() -> Option<&'static [RemoteControlsPage]> {
+        None
+    }
+
     /// Hardware control mapping changed (`CLAP_EXT_PARAM_INDICATION`
     /// `set_mapping`). Main thread. **CLAP-oriented**. Default: no-op.
     fn on_param_mapping(_params: &Self::Params, _param_id: u32, _has_mapping: bool) {}
@@ -125,4 +150,41 @@ pub trait PluginLogic: 'static {
     /// Automation indication changed (`CLAP_EXT_PARAM_INDICATION`
     /// `set_automation`). Main thread. **CLAP-oriented**. Default: no-op.
     fn on_param_automation(_params: &Self::Params, _param_id: u32, _automation_state: u32) {}
+
+    /// Opt into CLAP state-context callbacks. Default preserves `clap.state` only.
+    #[must_use]
+    fn state_context_supported() -> bool {
+        false
+    }
+
+    /// Encode state for a CLAP preset, duplicate, or project operation.
+    fn save_state_with_context(params: &Self::Params, _context: StateContext) -> Vec<u8> {
+        crate::encode_state(params)
+    }
+
+    /// Restore state saved for any CLAP state context.
+    fn load_state_with_context(params: &Self::Params, _context: StateContext, blob: &[u8]) -> bool {
+        crate::decode_state(params, blob)
+    }
+
+    /// Opt into CLAP parameter context-menu entries.
+    #[must_use]
+    fn context_menu_supported() -> bool {
+        false
+    }
+
+    /// Menu entries for a parameter, or `None` for the global plugin menu.
+    #[must_use]
+    fn context_menu_entries(_param_id: Option<u32>) -> &'static [ContextMenuEntry] {
+        &[]
+    }
+
+    /// Handle a previously advertised context-menu action on the main thread.
+    fn on_context_menu_action(
+        _params: &Self::Params,
+        _param_id: Option<u32>,
+        _action_id: u32,
+    ) -> bool {
+        false
+    }
 }

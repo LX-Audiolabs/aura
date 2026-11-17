@@ -333,6 +333,78 @@ pub fn append_midi_as_notes(notes: &mut NoteBuffer, midi: &crate::MidiBuffer) {
     }
 }
 
+/// Append MIDI channel-voice note events from UMP, retaining MIDI 2 velocity.
+///
+/// `note_id` follows the MIDI 1 fallback policy (key as id); MIDI 2 UMP has no
+/// host note id. Group maps to `port_index`, channel stays explicit.
+pub fn append_ump_as_notes(notes: &mut NoteBuffer, ump: &crate::UmpBuffer) {
+    append_ump_as_notes_inner(notes, ump, None, usize::MAX);
+}
+
+/// Append at most `limit` note events from UMP. Format shells use this to keep
+/// conversion within their preallocated process-event budget.
+pub fn append_ump_as_notes_limited(notes: &mut NoteBuffer, ump: &crate::UmpBuffer, limit: usize) {
+    append_ump_as_notes_inner(notes, ump, None, limit);
+}
+
+/// Append channel-voice note events from only the selected UMP message type.
+/// MIDI 1.0 CV uses type `0x2`; MIDI 2.0 CV uses type `0x4`.
+pub fn append_ump_as_notes_for_type(
+    notes: &mut NoteBuffer,
+    ump: &crate::UmpBuffer,
+    message_type: u8,
+    limit: usize,
+) {
+    append_ump_as_notes_inner(notes, ump, Some(message_type), limit);
+}
+
+fn append_ump_as_notes_inner(
+    notes: &mut NoteBuffer,
+    ump: &crate::UmpBuffer,
+    message_type: Option<u8>,
+    limit: usize,
+) {
+    let start_len = notes.len();
+    for ev in ump.iter() {
+        if notes.len() - start_len >= limit {
+            break;
+        }
+        let packet = ev.packet;
+        if message_type.is_some_and(|message_type| packet.message_type() != message_type) {
+            continue;
+        }
+        let Some(key) = packet.note() else {
+            continue;
+        };
+        let Some(velocity) = packet.velocity_u16() else {
+            continue;
+        };
+        let Some(channel) = packet.channel() else {
+            continue;
+        };
+        let kind = if packet.is_note_on() {
+            NoteEventKind::On {
+                velocity: f64::from(velocity) / f64::from(u16::MAX),
+            }
+        } else if packet.is_note_off() {
+            NoteEventKind::Off {
+                velocity: f64::from(velocity) / f64::from(u16::MAX),
+            }
+        } else {
+            continue;
+        };
+        let key = i16::from(key);
+        notes.push(NoteEvent {
+            sample_offset: ev.sample_offset,
+            note_id: i32::from(key),
+            port_index: i16::from(packet.group()),
+            channel: i16::from(channel),
+            key,
+            kind,
+        });
+    }
+}
+
 /// Prefer CLAP notes when the host sent any; otherwise fill `scratch` from MIDI.
 ///
 /// When `notes` is non-empty, `scratch` is left untouched.
@@ -576,6 +648,20 @@ mod tests {
         assert_eq!(choke.kind, NoteEventKind::Choke);
         assert_eq!(choke.note_id, NOTE_UNSPECIFIED);
         assert_eq!(choke.key, -1);
+    }
+
+    #[test]
+    fn midi2_ump_notes_keep_16_bit_velocity_and_group() {
+        let mut ump = crate::UmpBuffer::new();
+        ump.push(12, crate::Ump::midi2_note_on(3, 2, 64, 0x8000));
+        let mut notes = NoteBuffer::new();
+        append_ump_as_notes(&mut notes, &ump);
+        let note = notes.iter().next().unwrap();
+        assert_eq!(note.sample_offset, 12);
+        assert_eq!((note.port_index, note.channel, note.key), (3, 2, 64));
+        assert!(
+            matches!(note.kind, NoteEventKind::On { velocity } if (velocity - f64::from(0x8000u16) / 65535.0).abs() < 1e-12)
+        );
     }
 
     #[test]

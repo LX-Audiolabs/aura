@@ -190,6 +190,14 @@ impl UmpBuffer {
         self.events.iter().copied()
     }
 
+    /// MIDI 2 per-note pitch-bend packets, retaining block offsets and scope.
+    pub fn iter_per_note_pitch_bend(&self) -> impl Iterator<Item = UmpEvent> + '_ {
+        self.events
+            .iter()
+            .copied()
+            .filter(|event| event.packet.is_per_note_pitch_bend())
+    }
+
     pub fn iter_range(&self, start: u32, end: u32) -> impl Iterator<Item = UmpEvent> + '_ {
         self.events
             .iter()
@@ -288,5 +296,16 @@ mod tests {
         append_ump_as_midi(&mut midi, &ump);
         assert_eq!(midi.len(), 1);
         assert!(midi.as_slice()[0].message.is_note_on());
+    }
+
+    #[test]
+    fn iter_per_note_pitch_bend_filters_channel_voice_packets() {
+        let mut ump = UmpBuffer::new();
+        ump.push(0, Ump::midi2_note_on(0, 0, 60, 0x8000));
+        ump.push(4, Ump::midi2_per_note_pitch_bend(0, 2, 64, 0xC000_0000));
+        let events: Vec<_> = ump.iter_per_note_pitch_bend().collect();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].sample_offset, 4);
+        assert_eq!(events[0].packet.note(), Some(64));
     }
 }
