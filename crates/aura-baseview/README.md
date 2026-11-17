@@ -50,8 +50,7 @@ use aura_baseview::slint_window::SlintWindow;
 
 **MIT** — see [`LICENSE-MIT`](./LICENSE-MIT).  
 
-**crates.io:** prepared with Tier B (`docs/crates-io-prep.md`); `publish = false`
-until the explicit first-release decision. Distinct from BillyDM
+**crates.io:** published as `lx-aura-baseview`. Distinct from BillyDM
 `slint-baseview`.
 
 ## Examples

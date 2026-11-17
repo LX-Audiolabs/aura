@@ -14,7 +14,7 @@ Runtime + formats + build + CLI live here.
 |--|--|
 | **Status** | **0.14.5** — basis complete; used in production LX plugins ([lx-audiolabs-plugins](https://github.com/LX-Audiolabs/lx-audiolabs-plugins)) |
 | **Dependency** | `lx-aura` / `lx-aura-*` published to crates.io; `aura-host` / `aura-hot` / examples path-only (`publish = false`) |
-| **License** | [GPL-3.0-or-later](./LICENSE) — see [docs/licensing-compliance.md](./docs/licensing-compliance.md) |
+| **License** | [GPL-3.0-or-later](./LICENSE) |
 | **Rust** | 1.92+ MSRV (stable channel in `rust-toolchain.toml`), edition 2024 |
 
 Commercial LX product plugins (aether, lucent, meridian, …) are **not** in this repository. The official public catalog is **[lx-audiolabs-plugins](https://github.com/LX-Audiolabs/lx-audiolabs-plugins)**. This repo is the **framework only** — smoke examples prove the ship path.
@@ -244,7 +244,7 @@ aura::export!(MyGain);
 
 Param IDs are **required and wire-stable** — reordering fields does not renumber automation.
 
-More detail: crate docs (`cargo doc -p aura --open`), [docs/versioning.md](./docs/versioning.md), [docs/dsp-layout.md](./docs/dsp-layout.md), [docs/aura-host-idea.md](./docs/aura-host-idea.md), [crates/aura-clap/README.md](./crates/aura-clap/README.md).
+More detail: crate docs (`cargo doc -p aura --open`) and [crates/aura-clap/README.md](./crates/aura-clap/README.md).
 
 ---
 
@@ -309,5 +309,4 @@ Copyright © 2026 LX Audiolabs
 This project is free software under the **GNU General Public License v3.0 or later**.  
 Distributing plugins that link AURA implies GPL obligations for that combined work. Selling with source is fine; closed-only ships are not the goal.
 
-Third-party notes (including **Slint** triple license — default ship path **GPLv3**):  
-[docs/licensing-compliance.md](./docs/licensing-compliance.md).
+Third-party notes: **Slint** is triple-licensed; the default ship path uses its **GPLv3** option.
