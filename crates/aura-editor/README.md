@@ -11,8 +11,8 @@ lx-aura-editor = { version = "0.14", default-features = false, features = ["back
 
 Renderer features are forwarded from `lx-aura-baseview` — see that crate's README for the matrix (`backend-femtovg-gl` / `backend-femtovg-wgpu` / `backend-skia` / `backend-software`).
 
-License: **MIT** (see `LICENSE-MIT`). Core/params remain GPL when linked into a
-plugin — see repository `docs/licensing-compliance.md`.
+License: **MIT** (see [`LICENSE-MIT`](./LICENSE-MIT)). Core/params remain GPL when
+linked into a plugin.
 
 ## Author skeleton
 

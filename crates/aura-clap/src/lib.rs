@@ -2698,16 +2698,30 @@ fn append_context_menu_entries(
     true
 }
 
-/// `None` = unsupported target kind. `Some(None)` = global menu. `Some(Some(id))` = param.
-fn context_menu_param_id(target: *const clap_context_menu_target) -> Option<Option<u32>> {
+/// Host target kind after mapping the CLAP pointer.
+/// `None` from `context_menu_param_id` = unsupported kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ContextMenuTarget {
+    Global,
+    Param(u32),
+}
+
+fn context_menu_param_id(target: *const clap_context_menu_target) -> Option<ContextMenuTarget> {
     if target.is_null() {
-        return Some(None);
+        return Some(ContextMenuTarget::Global);
     }
     let target = unsafe { &*target };
     match target.kind {
-        CLAP_CONTEXT_MENU_TARGET_KIND_GLOBAL => Some(None),
-        CLAP_CONTEXT_MENU_TARGET_KIND_PARAM => Some(Some(target.id)),
+        CLAP_CONTEXT_MENU_TARGET_KIND_GLOBAL => Some(ContextMenuTarget::Global),
+        CLAP_CONTEXT_MENU_TARGET_KIND_PARAM => Some(ContextMenuTarget::Param(target.id)),
         _ => None,
+    }
+}
+
+fn context_menu_param_opt(target: ContextMenuTarget) -> Option<u32> {
+    match target {
+        ContextMenuTarget::Global => None,
+        ContextMenuTarget::Param(id) => Some(id),
     }
 }
 
@@ -2723,9 +2737,10 @@ unsafe extern "C" fn context_menu_populate<L: PluginLogic>(
         if builder.is_null() {
             return false;
         }
-        let Some(param_id) = context_menu_param_id(target) else {
+        let Some(target) = context_menu_param_id(target) else {
             return false;
         };
+        let param_id = context_menu_param_opt(target);
         append_context_menu_entries(unsafe { &*builder }, L::context_menu_entries(param_id))
     })
 }
@@ -2739,9 +2754,10 @@ unsafe extern "C" fn context_menu_perform<L: PluginLogic>(
         let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
             return false;
         };
-        let Some(param_id) = context_menu_param_id(target) else {
+        let Some(target) = context_menu_param_id(target) else {
             return false;
         };
+        let param_id = context_menu_param_opt(target);
         if !L::context_menu_entries(param_id)
             .iter()
             .any(|entry| entry.action_id == action_id && entry.is_enabled)
@@ -3278,30 +3294,39 @@ mod context_menu_tests {
             supports: None,
         };
         assert!(append_context_menu_entries(&builder, &[]));
-        assert!(menu.0.is_empty());
+        assert_eq!(menu.0.len(), 0);
     }
 
     #[test]
     fn global_and_param_targets_map_param_id() {
-        use super::context_menu_param_id;
+        use super::{ContextMenuTarget, context_menu_param_id};
         use clap_sys::ext::context_menu::{
             CLAP_CONTEXT_MENU_TARGET_KIND_GLOBAL, CLAP_CONTEXT_MENU_TARGET_KIND_PARAM,
             clap_context_menu_target,
         };
 
-        assert_eq!(context_menu_param_id(std::ptr::null()), Some(None));
+        assert_eq!(
+            context_menu_param_id(std::ptr::null()),
+            Some(ContextMenuTarget::Global)
+        );
 
         let global = clap_context_menu_target {
             kind: CLAP_CONTEXT_MENU_TARGET_KIND_GLOBAL,
             id: 0,
         };
-        assert_eq!(context_menu_param_id(&global), Some(None));
+        assert_eq!(
+            context_menu_param_id(&global),
+            Some(ContextMenuTarget::Global)
+        );
 
         let param = clap_context_menu_target {
             kind: CLAP_CONTEXT_MENU_TARGET_KIND_PARAM,
             id: 42,
         };
-        assert_eq!(context_menu_param_id(&param), Some(Some(42)));
+        assert_eq!(
+            context_menu_param_id(&param),
+            Some(ContextMenuTarget::Param(42))
+        );
 
         let unknown = clap_context_menu_target { kind: 99, id: 1 };
         assert_eq!(context_menu_param_id(&unknown), None);
