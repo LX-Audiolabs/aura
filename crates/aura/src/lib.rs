@@ -41,15 +41,17 @@ pub use aura_lv2 as lv2;
 
 // --- core surface ---
 pub use aura_core::{
-    AudioBuffer, AudioConfig, BusLayout, ChannelConfig, Editor, EditorBridge, FactoryPreset,
-    FactoryPresetState, IntoEditor, MidiBuffer, MidiDialect, MidiEvent, MidiMessage, MidiStatus,
-    NOTE_UNSPECIFIED, NoteBuffer, NoteEvent, NoteEventKind, NoteExpression, NoteNameEntry,
-    NoteTarget, NoteVoice, NoteVoiceTable, ParamEvent, ParamEventQueue, PluginCategory,
-    PluginContext, PluginInfo, PluginLogic, ProcessContext, ProcessMode, ProcessStatus,
-    RawWindowHandle, Transport, Tuning, TuningEvent, TuningInfo, Ump, UmpBuffer, UmpEvent,
-    append_midi_as_notes, append_midi_as_ump, append_notes_as_midi, append_ump_as_midi,
-    apply_factory_preset, decode_state, encode_state, layout_at, load_preset_file,
-    note_split_points, note_split_points_into, notes_or_midi,
+    AudioBuffer, AudioConfig, BusLayout, ChannelConfig, ContextMenuEntry, Editor, EditorBridge,
+    FactoryPreset, FactoryPresetState, HostTrackInfo, IntoEditor, MidiBuffer, MidiDialect,
+    MidiEvent, MidiMessage, MidiStatus, NOTE_UNSPECIFIED, NoteBuffer, NoteEvent, NoteEventKind,
+    NoteExpression, NoteNameEntry, NoteTarget, NoteVoice, NoteVoiceTable, ParamEvent,
+    ParamEventQueue, PluginCategory, PluginContext, PluginInfo, PluginLogic, ProcessContext,
+    ProcessMode, ProcessStatus, RawWindowHandle, RemoteControlsPage, StateContext, Transport,
+    Tuning, TuningEvent, TuningInfo, Ump, UmpBuffer, UmpEvent, append_midi_as_notes,
+    append_midi_as_ump, append_notes_as_midi, append_ump_as_midi, append_ump_as_notes,
+    append_ump_as_notes_for_type, append_ump_as_notes_limited, apply_factory_preset, decode_state,
+    encode_state, layout_at, load_preset_file, note_split_points, note_split_points_into,
+    notes_or_midi,
 };
 
 // --- params surface ---
@@ -83,15 +85,16 @@ pub mod prelude {
     pub use std::sync::Arc;
 
     pub use crate::{
-        AudioBuffer, AudioConfig, AudioTap, BoolParam, BusLayout, ChannelConfig, Editor, EnumParam,
-        FactoryPreset, FactoryPresetState, FloatParam, FloatParamReadF32, IntParam, IntoEditor,
-        MeterSlot, MidiBuffer, MidiDialect, MidiMessage, NoteBuffer, NoteEvent, NoteEventKind,
-        NoteExpression, NoteNameEntry, NoteTarget, NoteVoice, NoteVoiceTable, ParamEnum,
-        ParamFlags, ParamInfo, ParamRange, ParamUnit, ParamValueKind, Params, PluginCategory,
-        PluginContext, PluginInfo, PluginLogic, ProcessContext, ProcessMode, ProcessStatus,
-        RawWindowHandle, SmoothingStyle, Transport, Ump, UmpBuffer, append_midi_as_notes,
-        decode_state, encode_state, layout_at, note_split_points, note_split_points_into,
-        notes_or_midi,
+        AudioBuffer, AudioConfig, AudioTap, BoolParam, BusLayout, ChannelConfig, ContextMenuEntry,
+        Editor, EnumParam, FactoryPreset, FactoryPresetState, FloatParam, FloatParamReadF32,
+        HostTrackInfo, IntParam, IntoEditor, MeterSlot, MidiBuffer, MidiDialect, MidiMessage,
+        NoteBuffer, NoteEvent, NoteEventKind, NoteExpression, NoteNameEntry, NoteTarget, NoteVoice,
+        NoteVoiceTable, ParamEnum, ParamFlags, ParamInfo, ParamRange, ParamUnit, ParamValueKind,
+        Params, PluginCategory, PluginContext, PluginInfo, PluginLogic, ProcessContext,
+        ProcessMode, ProcessStatus, RawWindowHandle, RemoteControlsPage, SmoothingStyle,
+        StateContext, Transport, Ump, UmpBuffer, append_midi_as_notes, append_ump_as_notes,
+        append_ump_as_notes_for_type, append_ump_as_notes_limited, decode_state, encode_state,
+        layout_at, note_split_points, note_split_points_into, notes_or_midi,
     };
     // FloatParamReadF64: same method names as F32 → E0034 if both in prelude.
     // Use `aura::FloatParamReadF64` explicitly.

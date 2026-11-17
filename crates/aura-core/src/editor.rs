@@ -26,6 +26,11 @@ pub trait EditorBridge: Send + Sync {
     fn end_edit(&self, id: u32);
     fn get_param(&self, id: u32) -> f64;
     fn get_param_plain(&self, id: u32) -> f64;
+
+    /// Current host track metadata, queried on the editor/main thread.
+    fn track_info(&self) -> Option<HostTrackInfo> {
+        None
+    }
     fn request_resize(&self, w: u32, h: u32) -> bool {
         let _ = (w, h);
         false
@@ -41,6 +46,14 @@ pub trait EditorBridge: Send + Sync {
     fn set_scale_hint(&self, scale: f64) {
         let _ = scale;
     }
+}
+
+/// Track name and color supplied by a plugin host.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct HostTrackInfo {
+    pub name: Option<String>,
+    /// Red, green, blue, alpha.
+    pub color: Option<[u8; 4]>,
 }
 
 /// Context passed to [`Editor::open`].

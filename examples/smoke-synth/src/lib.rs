@@ -105,6 +105,30 @@ impl PluginLogic for SmokeSynth {
         info
     }
 
+    fn note_names() -> &'static [NoteNameEntry] {
+        const NAMES: &[NoteNameEntry] = &[
+            NoteNameEntry {
+                port: 0,
+                channel: -1,
+                key: 60,
+                name: "C4",
+            },
+            NoteNameEntry {
+                port: 0,
+                channel: -1,
+                key: 69,
+                name: "A4",
+            },
+            NoteNameEntry {
+                port: 0,
+                channel: -1,
+                key: 72,
+                name: "C5",
+            },
+        ];
+        NAMES
+    }
+
     fn bus_layouts() -> Vec<BusLayout> {
         vec![
             BusLayout::output_only(ChannelConfig::Stereo),

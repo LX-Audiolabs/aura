@@ -31,15 +31,16 @@ use std::ptr;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
 
-use aura_core::editor::{Editor, EditorBridge, PluginContext, RawWindowHandle};
+use aura_core::editor::{Editor, EditorBridge, HostTrackInfo, PluginContext, RawWindowHandle};
 use aura_core::events::{ParamEvent, ParamEventQueue};
 use aura_core::info::PluginCategory;
 use aura_core::transport::Transport;
 use aura_core::{
     AudioBuffer, AudioConfig, BusLayout, ChannelConfig, NoteBuffer, NoteEvent, NoteEventKind,
     NoteExpression, NoteTarget, PluginLogic, ProcessContext, ProcessMode, ProcessStatus,
-    TimedParamEvent, Tuning, apply_at_time, apply_non_chunked, host_callback, host_callback_with,
-    layout_at, route_param_mod, route_param_value, split_points_into,
+    RemoteControlsPage, TimedParamEvent, Tuning, append_ump_as_notes_for_type, apply_at_time,
+    apply_non_chunked, host_callback, host_callback_with, layout_at, route_param_mod,
+    route_param_value, split_points_into,
 };
 use aura_core::{MidiBuffer, MidiMessage, Ump, UmpBuffer};
 use aura_params::{ParamFlags, ParamInfo, ParamRange, Params};
@@ -61,6 +62,12 @@ use clap_sys::ext::audio_ports::{
 };
 use clap_sys::ext::audio_ports_config::{
     CLAP_EXT_AUDIO_PORTS_CONFIG, clap_audio_ports_config, clap_plugin_audio_ports_config,
+};
+use clap_sys::ext::context_menu::{
+    CLAP_CONTEXT_MENU_ITEM_ENTRY, CLAP_CONTEXT_MENU_TARGET_KIND_GLOBAL,
+    CLAP_CONTEXT_MENU_TARGET_KIND_PARAM, CLAP_EXT_CONTEXT_MENU, CLAP_EXT_CONTEXT_MENU_COMPAT,
+    clap_context_menu_builder, clap_context_menu_entry, clap_context_menu_target,
+    clap_plugin_context_menu,
 };
 use clap_sys::ext::draft::tuning::CLAP_EXT_TUNING;
 use clap_sys::ext::gui::{
@@ -93,7 +100,15 @@ use clap_sys::ext::render::{
     clap_plugin_render_mode,
 };
 use clap_sys::ext::state::{CLAP_EXT_STATE, clap_plugin_state};
+use clap_sys::ext::state_context::{
+    CLAP_EXT_STATE_CONTEXT, CLAP_STATE_CONTEXT_FOR_DUPLICATE, CLAP_STATE_CONTEXT_FOR_PRESET,
+    CLAP_STATE_CONTEXT_FOR_PROJECT, clap_plugin_state_context,
+};
 use clap_sys::ext::tail::{CLAP_EXT_TAIL, clap_host_tail, clap_plugin_tail};
+use clap_sys::ext::track_info::{
+    CLAP_EXT_TRACK_INFO, CLAP_EXT_TRACK_INFO_COMPAT, CLAP_TRACK_INFO_HAS_TRACK_COLOR,
+    CLAP_TRACK_INFO_HAS_TRACK_NAME, clap_host_track_info, clap_track_info,
+};
 use clap_sys::ext::voice_info::{
     CLAP_EXT_VOICE_INFO, CLAP_VOICE_INFO_SUPPORTS_OVERLAPPING_NOTES, clap_plugin_voice_info,
     clap_voice_info,
@@ -1086,6 +1101,8 @@ unsafe fn collect_input_events(
     ump.clear();
     timed.clear();
     tuning_events.clear();
+    let mut has_clap_notes = false;
+    let mut has_midi2_notes = false;
     let ev = unsafe { &*in_events };
     let Some(size_fn) = ev.size else {
         return;
@@ -1152,6 +1169,7 @@ unsafe fn collect_input_events(
             | CLAP_EVENT_NOTE_OFF
             | CLAP_EVENT_NOTE_CHOKE
             | CLAP_EVENT_NOTE_END => {
+                has_clap_notes = true;
                 if !accept_note_event(notes.len(), true) {
                     continue;
                 }
@@ -1178,6 +1196,7 @@ unsafe fn collect_input_events(
                 }
             }
             CLAP_EVENT_NOTE_EXPRESSION => {
+                has_clap_notes = true;
                 if !accept_note_event(notes.len(), false) {
                     continue;
                 }
@@ -1205,6 +1224,8 @@ unsafe fn collect_input_events(
             CLAP_EVENT_MIDI2 => {
                 let m = unsafe { &*(hdr as *const clap_event_midi2) };
                 let packet = Ump::from_words(m.data);
+                has_midi2_notes |=
+                    packet.message_type() == 0x4 && (packet.is_note_on() || packet.is_note_off());
                 let essential = packet.is_note_on() || packet.is_note_off();
                 if accept_note_event(ump.len(), essential) {
                     ump.push(header.time, packet);
@@ -1215,6 +1236,17 @@ unsafe fn collect_input_events(
             }
             _ => {}
         }
+    }
+    // Native CLAP note events win; otherwise expose MIDI2 notes through the
+    // same process surface, leaving raw UMP available for richer controllers.
+    if !has_clap_notes {
+        let message_type = if has_midi2_notes { 0x4 } else { 0x2 };
+        append_ump_as_notes_for_type(
+            notes,
+            ump,
+            message_type,
+            MAX_NOTE_EVENTS.saturating_sub(notes.len()),
+        );
     }
 }
 
@@ -1504,6 +1536,14 @@ unsafe extern "C" fn plugin_get_extension<L: PluginLogic>(
     if id == CLAP_EXT_STATE {
         return state_ext::<L>() as *const _ as *const c_void;
     }
+    if id == CLAP_EXT_STATE_CONTEXT && L::state_context_supported() {
+        return state_context_ext::<L>() as *const _ as *const c_void;
+    }
+    if (id == CLAP_EXT_CONTEXT_MENU || id == CLAP_EXT_CONTEXT_MENU_COMPAT)
+        && L::context_menu_supported()
+    {
+        return context_menu_ext::<L>() as *const _ as *const c_void;
+    }
     if preset_load::is_preset_load_ext(id) {
         return preset_load::preset_load_ext::<L>() as *const _ as *const c_void;
     }
@@ -1637,6 +1677,21 @@ unsafe extern "C" fn note_ports_count<L: PluginLogic>(
     }
 }
 
+fn note_port_dialects(dialect: aura_core::info::MidiDialect) -> (u32, u32) {
+    let supported = match dialect {
+        aura_core::info::MidiDialect::Clap | aura_core::info::MidiDialect::Midi2 => {
+            CLAP_NOTE_DIALECT_CLAP | CLAP_NOTE_DIALECT_MIDI | CLAP_NOTE_DIALECT_MIDI2
+        }
+        aura_core::info::MidiDialect::Midi1 => CLAP_NOTE_DIALECT_CLAP | CLAP_NOTE_DIALECT_MIDI,
+    };
+    let preferred = match dialect {
+        aura_core::info::MidiDialect::Clap => CLAP_NOTE_DIALECT_CLAP,
+        aura_core::info::MidiDialect::Midi2 => CLAP_NOTE_DIALECT_MIDI2,
+        aura_core::info::MidiDialect::Midi1 => CLAP_NOTE_DIALECT_MIDI,
+    };
+    (preferred, supported)
+}
+
 unsafe extern "C" fn note_ports_get<L: PluginLogic>(
     _plugin: *const clap_plugin,
     index: u32,
@@ -1652,22 +1707,13 @@ unsafe extern "C" fn note_ports_get<L: PluginLogic>(
     } else {
         meta.midi_output_dialect
     };
-    let dialects = match dialect {
-        aura_core::info::MidiDialect::Clap | aura_core::info::MidiDialect::Midi2 => {
-            CLAP_NOTE_DIALECT_CLAP | CLAP_NOTE_DIALECT_MIDI | CLAP_NOTE_DIALECT_MIDI2
-        }
-        aura_core::info::MidiDialect::Midi1 => CLAP_NOTE_DIALECT_CLAP | CLAP_NOTE_DIALECT_MIDI,
-    };
+    let (preferred, supported) = note_port_dialects(dialect);
     let out = unsafe { &mut *info };
     // Same id in both directions so output events with port_index 0 match.
     // Distinct ids (out=1) made Bitwig Note-FX drop our emits.
     out.id = 0;
-    out.supported_dialects = dialects;
-    out.preferred_dialect = match dialect {
-        aura_core::info::MidiDialect::Clap => CLAP_NOTE_DIALECT_CLAP,
-        aura_core::info::MidiDialect::Midi2 => CLAP_NOTE_DIALECT_MIDI2,
-        aura_core::info::MidiDialect::Midi1 => CLAP_NOTE_DIALECT_MIDI,
-    };
+    out.supported_dialects = supported;
+    out.preferred_dialect = preferred;
     write_name(&mut out.name, if is_input { "Note In" } else { "Note Out" });
     true
 }
@@ -1987,8 +2033,26 @@ unsafe extern "C" fn remote_controls_count<L: PluginLogic>(plugin: *const clap_p
     let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
         return 0;
     };
-    let infos = inst.params.param_infos();
-    remote_control_pages(&infos).len() as u32
+    if let Some(pages) = L::remote_control_pages() {
+        pages.len() as u32
+    } else {
+        let infos = inst.params.param_infos();
+        remote_control_pages(&infos).len() as u32
+    }
+}
+
+fn write_custom_remote_controls_page(
+    out: &mut clap_remote_controls_page,
+    page: &RemoteControlsPage,
+) {
+    write_name(&mut out.section_name, page.section_name);
+    out.page_id = page.page_id;
+    write_name(&mut out.page_name, page.page_name);
+    out.param_ids = [CLAP_INVALID_ID; CLAP_REMOTE_CONTROLS_COUNT];
+    for (slot, &id) in out.param_ids.iter_mut().zip(page.param_ids.iter()) {
+        *slot = id;
+    }
+    out.is_for_preset = page.is_for_preset;
 }
 
 unsafe extern "C" fn remote_controls_get<L: PluginLogic>(
@@ -2001,6 +2065,13 @@ unsafe extern "C" fn remote_controls_get<L: PluginLogic>(
     };
     if out.is_null() {
         return false;
+    }
+    if let Some(pages) = L::remote_control_pages() {
+        let Some(page) = pages.get(page_index as usize) else {
+            return false;
+        };
+        write_custom_remote_controls_page(unsafe { &mut *out }, page);
+        return true;
     }
     let infos = inst.params.param_infos();
     let pages = remote_control_pages(&infos);
@@ -2190,6 +2261,23 @@ impl ClapBridge {
     fn host_scale(&self) -> f64 {
         f64::from_bits(self.host_scale.load(Ordering::Relaxed))
     }
+
+    fn track_info(&self) -> Option<HostTrackInfo> {
+        let get_extension = unsafe { self.host.as_ref()?.get_extension? };
+        let mut ext = unsafe { get_extension(self.host, CLAP_EXT_TRACK_INFO.as_ptr()) };
+        if ext.is_null() {
+            ext = unsafe { get_extension(self.host, CLAP_EXT_TRACK_INFO_COMPAT.as_ptr()) };
+        }
+        if ext.is_null() {
+            return None;
+        }
+        let get_info = unsafe { (*(ext as *const clap_host_track_info)).get? };
+        let mut info: clap_track_info = unsafe { std::mem::zeroed() };
+        if !unsafe { get_info(self.host, &mut info) } {
+            return None;
+        }
+        Some(track_info_snapshot(&info))
+    }
 }
 
 impl EditorBridge for ClapBridge {
@@ -2216,6 +2304,10 @@ impl EditorBridge for ClapBridge {
         self.params.get_plain(id).unwrap_or(0.0)
     }
 
+    fn track_info(&self) -> Option<HostTrackInfo> {
+        ClapBridge::track_info(self)
+    }
+
     fn request_resize(&self, w: u32, h: u32) -> bool {
         let Some(rr) = self.host_gui().and_then(|gui| gui.request_resize) else {
             return false;
@@ -2234,6 +2326,27 @@ impl EditorBridge for ClapBridge {
             self.host_scale.store(scale.to_bits(), Ordering::Relaxed);
         }
     }
+}
+
+fn track_info_snapshot(info: &clap_track_info) -> HostTrackInfo {
+    let name = if info.flags & CLAP_TRACK_INFO_HAS_TRACK_NAME != 0 {
+        let end = info
+            .name
+            .iter()
+            .position(|&c| c == 0)
+            .unwrap_or(info.name.len());
+        let bytes: Vec<u8> = info.name[..end].iter().map(|&c| c as u8).collect();
+        Some(String::from_utf8_lossy(&bytes).into_owned())
+    } else {
+        None
+    };
+    let color = (info.flags & CLAP_TRACK_INFO_HAS_TRACK_COLOR != 0).then_some([
+        info.color.red,
+        info.color.green,
+        info.color.blue,
+        info.color.alpha,
+    ]);
+    HostTrackInfo { name, color }
 }
 
 /// Logical editor size → host GUI pixels (Win/Linux × `host_scale`; macOS identity).
@@ -2544,6 +2657,98 @@ unsafe extern "C" fn gui_hide<L: PluginLogic>(plugin: *const clap_plugin) -> boo
     true
 }
 
+fn context_menu_ext<L: PluginLogic>() -> &'static clap_plugin_context_menu {
+    static CELL: OnceLock<clap_plugin_context_menu> = OnceLock::new();
+    CELL.get_or_init(|| clap_plugin_context_menu {
+        populate: Some(context_menu_populate::<L>),
+        perform: Some(context_menu_perform::<L>),
+    })
+}
+
+fn append_context_menu_entries(
+    builder: &clap_context_menu_builder,
+    entries: &[aura_core::ContextMenuEntry],
+) -> bool {
+    let Some(add_item) = builder.add_item else {
+        return false;
+    };
+    for entry in entries {
+        let Ok(label) = CString::new(entry.label) else {
+            continue;
+        };
+        let item = clap_context_menu_entry {
+            label: label.as_ptr(),
+            is_enabled: entry.is_enabled,
+            action_id: entry.action_id,
+        };
+        if !unsafe {
+            add_item(
+                builder,
+                CLAP_CONTEXT_MENU_ITEM_ENTRY,
+                (&raw const item).cast(),
+            )
+        } {
+            return false;
+        }
+    }
+    // Empty is success: host keeps its own entries; only builder/add failures fail.
+    true
+}
+
+/// `None` = unsupported target kind. `Some(None)` = global menu. `Some(Some(id))` = param.
+fn context_menu_param_id(target: *const clap_context_menu_target) -> Option<Option<u32>> {
+    if target.is_null() {
+        return Some(None);
+    }
+    let target = unsafe { &*target };
+    match target.kind {
+        CLAP_CONTEXT_MENU_TARGET_KIND_GLOBAL => Some(None),
+        CLAP_CONTEXT_MENU_TARGET_KIND_PARAM => Some(Some(target.id)),
+        _ => None,
+    }
+}
+
+unsafe extern "C" fn context_menu_populate<L: PluginLogic>(
+    plugin: *const clap_plugin,
+    target: *const clap_context_menu_target,
+    builder: *const clap_context_menu_builder,
+) -> bool {
+    host_callback_with("CLAP", "context_menu_populate", false, || {
+        let Some(_inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
+            return false;
+        };
+        if builder.is_null() {
+            return false;
+        }
+        let Some(param_id) = context_menu_param_id(target) else {
+            return false;
+        };
+        append_context_menu_entries(unsafe { &*builder }, L::context_menu_entries(param_id))
+    })
+}
+
+unsafe extern "C" fn context_menu_perform<L: PluginLogic>(
+    plugin: *const clap_plugin,
+    target: *const clap_context_menu_target,
+    action_id: clap_id,
+) -> bool {
+    host_callback_with("CLAP", "context_menu_perform", false, || {
+        let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
+            return false;
+        };
+        let Some(param_id) = context_menu_param_id(target) else {
+            return false;
+        };
+        if !L::context_menu_entries(param_id)
+            .iter()
+            .any(|entry| entry.action_id == action_id && entry.is_enabled)
+        {
+            return false;
+        }
+        L::on_context_menu_action(&inst.params, param_id, action_id)
+    })
+}
+
 // ---------------------------------------------------------------------------
 // state
 // ---------------------------------------------------------------------------
@@ -2632,6 +2837,98 @@ unsafe extern "C" fn state_load<L: PluginLogic>(
             // Values changed behind the host's back: per CLAP spec the plugin
             // must ask for a value rescan after a state load, or the host (and
             // clap-validator's state-reproducibility tests) sees stale values.
+            unsafe { request_param_rescan(inst.host) };
+        }
+        ok
+    })
+}
+
+fn state_context_ext<L: PluginLogic>() -> &'static clap_plugin_state_context {
+    static CELL: OnceLock<clap_plugin_state_context> = OnceLock::new();
+    CELL.get_or_init(|| clap_plugin_state_context {
+        save: Some(state_context_save::<L>),
+        load: Some(state_context_load::<L>),
+    })
+}
+
+fn state_context_from_clap(context: u32) -> Option<aura_core::StateContext> {
+    match context {
+        CLAP_STATE_CONTEXT_FOR_PRESET => Some(aura_core::StateContext::Preset),
+        CLAP_STATE_CONTEXT_FOR_DUPLICATE => Some(aura_core::StateContext::Duplicate),
+        CLAP_STATE_CONTEXT_FOR_PROJECT => Some(aura_core::StateContext::Project),
+        _ => None,
+    }
+}
+
+unsafe extern "C" fn state_context_save<L: PluginLogic>(
+    plugin: *const clap_plugin,
+    stream: *const clap_ostream,
+    context: u32,
+) -> bool {
+    host_callback_with("CLAP", "state_context_save", false, || {
+        let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
+            return false;
+        };
+        let Some(context) = state_context_from_clap(context) else {
+            return false;
+        };
+        if stream.is_null() {
+            return false;
+        }
+        let Some(write) = (unsafe { &*stream }).write else {
+            return false;
+        };
+        let blob = L::save_state_with_context(&inst.params, context);
+        let mut written = 0usize;
+        while written < blob.len() {
+            let n = unsafe {
+                write(
+                    stream,
+                    blob.as_ptr().add(written).cast(),
+                    (blob.len() - written) as u64,
+                )
+            };
+            if n <= 0 {
+                return false;
+            }
+            written += n as usize;
+        }
+        true
+    })
+}
+
+unsafe extern "C" fn state_context_load<L: PluginLogic>(
+    plugin: *const clap_plugin,
+    stream: *const clap_istream,
+    context: u32,
+) -> bool {
+    host_callback_with("CLAP", "state_context_load", false, || {
+        let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
+            return false;
+        };
+        let Some(context) = state_context_from_clap(context) else {
+            return false;
+        };
+        if stream.is_null() {
+            return false;
+        }
+        let Some(read) = (unsafe { &*stream }).read else {
+            return false;
+        };
+        let mut blob = Vec::new();
+        let mut chunk = [0u8; 4096];
+        loop {
+            let n = unsafe { read(stream, chunk.as_mut_ptr().cast(), chunk.len() as u64) };
+            if n < 0 {
+                return false;
+            }
+            if n == 0 {
+                break;
+            }
+            blob.extend_from_slice(&chunk[..n as usize]);
+        }
+        let ok = L::load_state_with_context(&inst.params, context, &blob);
+        if ok {
             unsafe { request_param_rescan(inst.host) };
         }
         ok
@@ -2728,7 +3025,11 @@ fn write_c_buf(out: *mut c_char, cap: usize, s: &str) -> bool {
 
 #[cfg(test)]
 mod remote_controls_tests {
-    use super::{remote_control_pages, remote_controls_page_id, split_group};
+    use super::{
+        remote_control_pages, remote_controls_page_id, split_group,
+        write_custom_remote_controls_page,
+    };
+    use aura_core::RemoteControlsPage;
     use aura_params::{ParamFlags, ParamInfo, ParamRange, ParamUnit, ParamValueKind};
 
     fn info(id: u32, group: &'static str) -> ParamInfo {
@@ -2803,6 +3104,342 @@ mod remote_controls_tests {
             remote_controls_page_id("EQ", 0),
             remote_controls_page_id("DYN", 0)
         );
+    }
+
+    #[test]
+    fn curated_page_keeps_stable_id_and_leaves_unused_slots_empty() {
+        let spec = RemoteControlsPage {
+            page_id: 0x1234,
+            section_name: "Perform",
+            page_name: "Filter",
+            param_ids: &[7, 9],
+            is_for_preset: true,
+        };
+        let mut page: clap_sys::ext::remote_controls::clap_remote_controls_page =
+            unsafe { std::mem::zeroed() };
+        write_custom_remote_controls_page(&mut page, &spec);
+        assert_eq!(page.page_id, 0x1234);
+        assert_eq!(page.param_ids[0], 7);
+        assert_eq!(page.param_ids[1], 9);
+        assert!(
+            page.param_ids[2..]
+                .iter()
+                .all(|&id| id == super::CLAP_INVALID_ID)
+        );
+        assert!(page.is_for_preset);
+    }
+}
+
+#[cfg(test)]
+mod note_port_dialect_tests {
+    use super::note_port_dialects;
+    use aura_core::MidiDialect;
+    use clap_sys::ext::note_ports::{
+        CLAP_NOTE_DIALECT_CLAP, CLAP_NOTE_DIALECT_MIDI, CLAP_NOTE_DIALECT_MIDI2,
+    };
+
+    #[test]
+    fn preferred_and_supported_dialects_match_public_matrix() {
+        assert_eq!(
+            note_port_dialects(MidiDialect::Clap),
+            (
+                CLAP_NOTE_DIALECT_CLAP,
+                CLAP_NOTE_DIALECT_CLAP | CLAP_NOTE_DIALECT_MIDI | CLAP_NOTE_DIALECT_MIDI2
+            )
+        );
+        assert_eq!(
+            note_port_dialects(MidiDialect::Midi2),
+            (
+                CLAP_NOTE_DIALECT_MIDI2,
+                CLAP_NOTE_DIALECT_CLAP | CLAP_NOTE_DIALECT_MIDI | CLAP_NOTE_DIALECT_MIDI2
+            )
+        );
+        assert_eq!(
+            note_port_dialects(MidiDialect::Midi1),
+            (
+                CLAP_NOTE_DIALECT_MIDI,
+                CLAP_NOTE_DIALECT_CLAP | CLAP_NOTE_DIALECT_MIDI
+            )
+        );
+    }
+}
+
+#[cfg(test)]
+mod track_info_tests {
+    use super::track_info_snapshot;
+    use clap_sys::ext::track_info::{
+        CLAP_TRACK_INFO_HAS_TRACK_COLOR, CLAP_TRACK_INFO_HAS_TRACK_NAME, clap_track_info,
+    };
+
+    #[test]
+    fn host_track_info_keeps_only_fields_marked_present() {
+        let mut info: clap_track_info = unsafe { std::mem::zeroed() };
+        info.flags = CLAP_TRACK_INFO_HAS_TRACK_NAME | CLAP_TRACK_INFO_HAS_TRACK_COLOR;
+        info.name[0] = b'B' as _;
+        info.name[1] = b'u' as _;
+        info.name[2] = b's' as _;
+        info.color.alpha = 255;
+        info.color.red = 10;
+        info.color.green = 20;
+        info.color.blue = 30;
+        let snapshot = track_info_snapshot(&info);
+        assert_eq!(snapshot.name.as_deref(), Some("Bus"));
+        assert_eq!(snapshot.color, Some([10, 20, 30, 255]));
+        info.flags = 0;
+        let snapshot = track_info_snapshot(&info);
+        assert_eq!(snapshot.name, None);
+        assert_eq!(snapshot.color, None);
+    }
+}
+
+#[cfg(test)]
+mod context_menu_tests {
+    use std::ffi::CStr;
+
+    use super::append_context_menu_entries;
+    use aura_core::ContextMenuEntry;
+    use clap_sys::ext::context_menu::{
+        CLAP_CONTEXT_MENU_ITEM_ENTRY, clap_context_menu_builder, clap_context_menu_entry,
+    };
+    use std::ffi::c_void;
+
+    #[derive(Default)]
+    struct MockMenu(Vec<(String, u32, bool)>);
+
+    unsafe extern "C" fn add_item(
+        builder: *const clap_context_menu_builder,
+        kind: u32,
+        data: *const c_void,
+    ) -> bool {
+        if kind != CLAP_CONTEXT_MENU_ITEM_ENTRY || builder.is_null() || data.is_null() {
+            return false;
+        }
+        let builder = unsafe { &*builder };
+        let menu = unsafe { &mut *(builder.ctx as *mut MockMenu) };
+        let entry = unsafe { &*(data as *const clap_context_menu_entry) };
+        let label = unsafe { CStr::from_ptr(entry.label) }
+            .to_string_lossy()
+            .into_owned();
+        menu.0.push((label, entry.action_id, entry.is_enabled));
+        true
+    }
+
+    #[test]
+    fn plugin_entries_reach_host_builder_with_actions() {
+        let entries = [
+            ContextMenuEntry {
+                action_id: 17,
+                label: "Reset",
+                is_enabled: true,
+            },
+            ContextMenuEntry {
+                action_id: 18,
+                label: "MIDI learn",
+                is_enabled: false,
+            },
+        ];
+        let mut menu = MockMenu::default();
+        let builder = clap_context_menu_builder {
+            ctx: (&mut menu as *mut MockMenu).cast(),
+            add_item: Some(add_item),
+            supports: None,
+        };
+        assert!(append_context_menu_entries(&builder, &entries));
+        assert_eq!(
+            menu.0,
+            vec![("Reset".into(), 17, true), ("MIDI learn".into(), 18, false),]
+        );
+    }
+
+    #[test]
+    fn empty_entries_still_succeed() {
+        let mut menu = MockMenu::default();
+        let builder = clap_context_menu_builder {
+            ctx: (&mut menu as *mut MockMenu).cast(),
+            add_item: Some(add_item),
+            supports: None,
+        };
+        assert!(append_context_menu_entries(&builder, &[]));
+        assert!(menu.0.is_empty());
+    }
+
+    #[test]
+    fn global_and_param_targets_map_param_id() {
+        use super::context_menu_param_id;
+        use clap_sys::ext::context_menu::{
+            CLAP_CONTEXT_MENU_TARGET_KIND_GLOBAL, CLAP_CONTEXT_MENU_TARGET_KIND_PARAM,
+            clap_context_menu_target,
+        };
+
+        assert_eq!(context_menu_param_id(std::ptr::null()), Some(None));
+
+        let global = clap_context_menu_target {
+            kind: CLAP_CONTEXT_MENU_TARGET_KIND_GLOBAL,
+            id: 0,
+        };
+        assert_eq!(context_menu_param_id(&global), Some(None));
+
+        let param = clap_context_menu_target {
+            kind: CLAP_CONTEXT_MENU_TARGET_KIND_PARAM,
+            id: 42,
+        };
+        assert_eq!(context_menu_param_id(&param), Some(Some(42)));
+
+        let unknown = clap_context_menu_target { kind: 99, id: 1 };
+        assert_eq!(context_menu_param_id(&unknown), None);
+    }
+}
+
+#[cfg(test)]
+mod midi2_note_bridge_tests {
+    use super::collect_input_events;
+    use aura_core::{MidiBuffer, NoteBuffer, Ump, UmpBuffer};
+    use clap_sys::events::{
+        CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_MIDI, CLAP_EVENT_MIDI2, CLAP_EVENT_NOTE_ON,
+        clap_event_header, clap_event_midi, clap_event_midi2, clap_event_note, clap_input_events,
+    };
+    use std::ffi::c_void;
+
+    unsafe extern "C" fn size(list: *const clap_input_events) -> u32 {
+        let events = unsafe { &*((*list).ctx as *const Vec<*const clap_event_header>) };
+        events.len() as u32
+    }
+
+    unsafe extern "C" fn get(
+        list: *const clap_input_events,
+        index: u32,
+    ) -> *const clap_event_header {
+        let events = unsafe { &*((*list).ctx as *const Vec<*const clap_event_header>) };
+        events
+            .get(index as usize)
+            .copied()
+            .unwrap_or(std::ptr::null())
+    }
+
+    #[test]
+    fn midi2_only_host_input_reaches_process_notes() {
+        let packet = Ump::midi2_note_on(2, 4, 67, 0xC000);
+        let event = clap_event_midi2 {
+            header: clap_event_header {
+                size: std::mem::size_of::<clap_event_midi2>() as u32,
+                time: 13,
+                space_id: CLAP_CORE_EVENT_SPACE_ID,
+                type_: CLAP_EVENT_MIDI2,
+                flags: 0,
+            },
+            port_index: 0,
+            data: packet.words(),
+        };
+        let midi1 = clap_event_midi {
+            header: clap_event_header {
+                size: std::mem::size_of::<clap_event_midi>() as u32,
+                time: 13,
+                space_id: CLAP_CORE_EVENT_SPACE_ID,
+                type_: CLAP_EVENT_MIDI,
+                flags: 0,
+            },
+            port_index: 0,
+            data: [0x90, 67, 80],
+        };
+        let pointers = vec![
+            (&midi1 as *const clap_event_midi).cast::<clap_event_header>(),
+            (&event as *const clap_event_midi2).cast::<clap_event_header>(),
+        ];
+        let input = clap_input_events {
+            ctx: (&pointers as *const Vec<*const clap_event_header>)
+                .cast_mut()
+                .cast::<c_void>(),
+            size: Some(size),
+            get: Some(get),
+        };
+        let (mut timed, mut tuning, mut midi, mut notes, mut ump) = (
+            Vec::new(),
+            Vec::new(),
+            MidiBuffer::new(),
+            NoteBuffer::new(),
+            UmpBuffer::new(),
+        );
+        unsafe {
+            collect_input_events(
+                &input,
+                &mut timed,
+                &mut tuning,
+                0,
+                &mut midi,
+                &mut notes,
+                &mut ump,
+            );
+        }
+        assert_eq!(notes.len(), 1);
+        let note = notes.iter().next().unwrap();
+        assert_eq!(
+            (note.sample_offset, note.port_index, note.channel, note.key),
+            (13, 2, 4, 67)
+        );
+        assert!(
+            matches!(note.kind, aura_core::NoteEventKind::On { velocity } if (velocity - f64::from(0xC000u16) / 65535.0).abs() < 1e-12)
+        );
+        assert_eq!(ump.len(), 2);
+    }
+
+    #[test]
+    fn native_clap_note_wins_over_midi2_mirror() {
+        let midi2 = clap_event_midi2 {
+            header: clap_event_header {
+                size: std::mem::size_of::<clap_event_midi2>() as u32,
+                time: 13,
+                space_id: CLAP_CORE_EVENT_SPACE_ID,
+                type_: CLAP_EVENT_MIDI2,
+                flags: 0,
+            },
+            port_index: 0,
+            data: Ump::midi2_note_on(0, 0, 60, 0x8000).words(),
+        };
+        let clap_note = clap_event_note {
+            header: clap_event_header {
+                size: std::mem::size_of::<clap_event_note>() as u32,
+                time: 13,
+                space_id: CLAP_CORE_EVENT_SPACE_ID,
+                type_: CLAP_EVENT_NOTE_ON,
+                flags: 0,
+            },
+            note_id: 42,
+            port_index: 0,
+            channel: 0,
+            key: 62,
+            velocity: 0.5,
+        };
+        let pointers = vec![
+            (&midi2 as *const clap_event_midi2).cast::<clap_event_header>(),
+            (&clap_note as *const clap_event_note).cast::<clap_event_header>(),
+        ];
+        let input = clap_input_events {
+            ctx: (&pointers as *const Vec<*const clap_event_header>)
+                .cast_mut()
+                .cast::<c_void>(),
+            size: Some(size),
+            get: Some(get),
+        };
+        let (mut timed, mut tuning, mut midi, mut notes, mut ump) = (
+            Vec::new(),
+            Vec::new(),
+            MidiBuffer::new(),
+            NoteBuffer::new(),
+            UmpBuffer::new(),
+        );
+        unsafe {
+            collect_input_events(
+                &input,
+                &mut timed,
+                &mut tuning,
+                0,
+                &mut midi,
+                &mut notes,
+                &mut ump,
+            );
+        }
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes.iter().next().unwrap().note_id, 42);
     }
 }
 

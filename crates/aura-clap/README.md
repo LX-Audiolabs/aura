@@ -52,6 +52,10 @@ Entry, factory, audio-ports (mono/stereo + optional sidechain), audio-ports-conf
 
 **Note events / expressions:** prefer `MidiDialect::Clap` so the note port lists `CLAP_NOTE_DIALECT_CLAP`. Wrapper fills `ProcessContext.notes` with on/off/choke (`note_id`, key, velocity 0..1), `CLAP_EVENT_NOTE_EXPRESSION` (volume/pan/tuning/…), and still mirrors on/off into 7-bit `midi`.
 
+**Param indication:** `PluginLogic::on_param_mapping` and `on_param_automation` run on the main thread. Mirror their flags into atomics shared by `Params` and the editor; read them when drawing UI. Keep this state out of audio DSP and do not take a lock in `process()`.
+
+**Note names:** `PluginLogic::note_names()` returns the table queried by hosts through `clap.note-name`. Use `-1` for wildcard port, channel, or key. `smoke-synth` exposes C4, A4, and C5 on port 0, any channel.
+
 **Note out:** push to `ProcessContext.notes_out`. CLAP emits `NOTE_ON`/`OFF`/`CHOKE`/`END` and expressions. `midi_out` is always raw `CLAP_EVENT_MIDI` (Bitwig Note FX forwards that dialect). `NOTE_END` (voice silent) needs no output note port — Bitwig can drop poly mods. Generated notes (arp / seq) need `PluginInfo.emits_midi` so a note output port exists. VST3/LV2 map On/Off/Choke to 7-bit MIDI.
 
 **Voice info:** set `PluginInfo.voice_count` / `voice_capacity` (`> 0`) to advertise `clap.voice-info` with overlapping notes. Bitwig Voice Stack stays mono-mapped without this.
@@ -68,9 +72,25 @@ Entry, factory, audio-ports (mono/stereo + optional sidechain), audio-ports-conf
 
 **MIDI 2:** set `PluginInfo.midi_input_dialect = MidiDialect::Midi2` to prefer `CLAP_NOTE_DIALECT_MIDI2` (CLAP + MIDI 1 still advertised). Incoming `CLAP_EVENT_MIDI2` lands on `ProcessContext.ump` as native [`Ump`] packets (per-note pitch bend, SysEx8, Flex included). A 7-bit image is still mirrored to `midi` when `to_midi1` exists. Push generated packets to `ump_out` — CLAP emits `CLAP_EVENT_MIDI2`. Native notes / expressions stay on `MidiDialect::Clap` + `ProcessContext.notes`.
 
+Input priority: native CLAP note events and expressions, then MIDI 2 channel-voice notes, then MIDI 1 channel-voice notes. MIDI2 note on/off populate `ProcessContext.notes` when the host sent no native CLAP note events; when both MIDI 1 and MIDI 2 mirrors exist, MIDI 2 wins. Velocity keeps its 16-bit precision; `port_index` carries the UMP group and `note_id` follows the MIDI 1 key-based fallback. Raw UMP remains available for per-note controllers and pitch bend; `UmpBuffer::iter_per_note_pitch_bend()` filters the latter.
+
+| `midi_input_dialect` | preferred | supported |
+| --- | --- | --- |
+| `Clap` | CLAP | CLAP + MIDI 1 + MIDI 2 |
+| `Midi2` | MIDI 2 | CLAP + MIDI 1 + MIDI 2 |
+| `Midi1` | MIDI 1 | CLAP + MIDI 1 |
+
 **Hot reload:** `cargo aura watch --hot` installs `aura-hot` as `Name.clap` and the real plugin as `Name.impl.dll` (or `.so` / `.dylib`). The host keeps the proxy mapped; watch overwrites the impl. Re-add the instance to run the new DSP.
 
 **Remote-controls:** pages of ≤8 params from `ParamInfo.group`. Empty group = no device page. `"Section/Page"` splits on the first `/`. Hidden/readonly never take a hardware slot.
+
+Products can override generated pages with `PluginLogic::remote_control_pages() -> Some(&'static [RemoteControlsPage])`. Give each page a stable `page_id`; list up to eight parameter IDs. `None` keeps group-derived pages, while `Some(&[])` reports zero pages.
+
+**State context:** set `PluginLogic::state_context_supported() = true` to expose `clap.state-context/2` alongside `clap.state`. Override `save_state_with_context` / `load_state_with_context` for distinct preset, duplicate, and project blobs; defaults use the shared AURA state blob. Both hooks run on the main thread.
+
+**Parameter context menu:** set `context_menu_supported() = true`, return `ContextMenuEntry` values from `context_menu_entries(Some(param_id))`, and handle them in `on_context_menu_action`. Callbacks run on the main thread; unsupported host extension stays absent.
+
+**Host track info:** `EditorBridge::track_info()` polls the host's track name and RGBA color on the editor/main thread. It returns `None` when the host extension is absent or its query fails; each field is independently optional.
 
 **Validator:** in-tree smokes (`smoke-gain`, `smoke-midi-fx`, `smoke-sidechain`, `smoke-synth`) — clap-validator **0 failed** (2026-08-11).
 

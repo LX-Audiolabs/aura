@@ -29,20 +29,21 @@ pub use chunked_process::{
     split_points_into,
 };
 pub use config::{AudioConfig, ProcessMode};
-pub use editor::{Editor, EditorBridge, IntoEditor, PluginContext, RawWindowHandle};
+pub use editor::{Editor, EditorBridge, HostTrackInfo, IntoEditor, PluginContext, RawWindowHandle};
 pub use events::{ParamEvent, ParamEventQueue};
 pub use host_fence::{host_callback, host_callback_with};
 pub use info::{MidiDialect, PluginCategory, PluginInfo};
 pub use note_events::{
     NOTE_UNSPECIFIED, NoteBuffer, NoteEvent, NoteEventKind, NoteExpression, NoteTarget,
-    append_midi_as_notes, append_notes_as_midi, note_split_points, note_split_points_into,
-    notes_or_midi, route_param_mod, route_param_value,
+    append_midi_as_notes, append_notes_as_midi, append_ump_as_notes, append_ump_as_notes_for_type,
+    append_ump_as_notes_limited, note_split_points, note_split_points_into, notes_or_midi,
+    route_param_mod, route_param_value,
 };
 pub use note_voices::{NoteVoice, NoteVoiceTable};
-pub use plugin::{NoteNameEntry, PluginLogic};
+pub use plugin::{ContextMenuEntry, NoteNameEntry, PluginLogic, RemoteControlsPage};
 pub use preset::{FactoryPreset, FactoryPresetState, apply_factory_preset, load_preset_file};
 pub use process::{ProcessContext, ProcessStatus};
-pub use state::{decode_state, encode_state};
+pub use state::{StateContext, decode_state, encode_state};
 pub use transport::Transport;
 pub use tuning::{Tuning, TuningEvent, TuningInfo, TuningProvider};
 
