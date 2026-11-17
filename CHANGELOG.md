@@ -9,10 +9,17 @@ Versioning: [SemVer](https://semver.org/) — see [docs/versioning.md](./docs/ve
 
 ### Added
 
-- CLAP `RemoteControlsPage` overrides, MIDI2 note-on/off bridging with 16-bit velocity,
-  opt-in state-context and parameter context-menu hooks, and editor track-info polling.
+- CLAP `RemoteControlsPage` overrides (max 8 `param_ids`; extras dropped), MIDI2 note-on/off
+  bridging with 16-bit velocity when `ProcessContext.notes` stayed empty, opt-in state-context
+  and parameter context-menu hooks (GLOBAL + param targets), and editor track-info polling.
 - `smoke-synth` CLAP note-name table; `aura-clap` docs for note names, param indication,
   MIDI dialect support, state context, remote controls, and host menus.
+
+### Fixed
+
+- CLAP context menu: `GLOBAL` target no longer rejected; empty plugin entry list returns success.
+- MIDI2→notes bridge gates on empty `notes` (not a pre-accept latch), so a soft-capped expression
+  surface cannot block UMP fallback.
 - `Reverb::set_size` — RT-safe room size in `[0, 1]` (0.5 = construction lengths,
   0 → 0.5×, 1 → 2× log₂); combs/allpasses preallocated 2×; non-finite no-op; no realloc.
 - `DelayLine::capacity` — buffer length accessor for RT delay-length clamps.
