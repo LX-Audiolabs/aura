@@ -33,6 +33,25 @@ impl Visibility {
 #[cfg(test)]
 mod tests {
     use super::Visibility;
+    use std::cell::Cell;
+
+    fn on_timer(vis: &Visibility, host: f32, shown: &Cell<f32>) {
+        if !vis.visible() {
+            return;
+        }
+        shown.set(host);
+    }
+
+    fn draw(vis: &Visibility, host: f32, shown: &Cell<f32>) -> bool {
+        if !vis.visible() {
+            return false;
+        }
+        if vis.take_redraw() {
+            shown.set(host);
+            return true;
+        }
+        false
+    }
 
     #[test]
     fn hide_show_between_ticks_requests_one_redraw() {
@@ -46,5 +65,32 @@ mod tests {
         assert!(state.take_redraw());
         assert!(!state.redraw_pending());
         assert!(!state.take_redraw());
+    }
+
+    #[test]
+    fn hide_blocks_sync_show_catchup_shows_host_value() {
+        let vis = Visibility::default();
+        let shown = Cell::new(0.0);
+
+        vis.hide();
+        on_timer(&vis, 0.75, &shown);
+        assert!(!draw(&vis, 0.75, &shown));
+        assert_eq!(shown.get(), 0.0);
+
+        vis.show();
+        assert!(vis.redraw_pending());
+        assert!(draw(&vis, 0.75, &shown));
+        assert_eq!(shown.get(), 0.75);
+        assert!(!vis.redraw_pending());
+
+        vis.hide();
+        on_timer(&vis, 0.5, &shown);
+        assert!(!draw(&vis, 0.5, &shown));
+        assert_eq!(shown.get(), 0.75);
+
+        vis.show();
+        on_timer(&vis, 0.5, &shown);
+        assert!(draw(&vis, 0.5, &shown));
+        assert_eq!(shown.get(), 0.5);
     }
 }
