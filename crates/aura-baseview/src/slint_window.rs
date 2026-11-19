@@ -867,6 +867,8 @@ where
             return Ok(());
         }
         if self.visibility.take_redraw() {
+            // catch-up: host automation while hidden
+            self.poll();
             self.adapter.redraw.resume();
         }
         let now = std::time::Instant::now();
@@ -919,6 +921,8 @@ where
             return Ok(());
         }
         if self.visibility.take_redraw() {
+            // catch-up: host automation while hidden
+            self.poll();
             self.adapter.redraw.resume();
         }
         let now = std::time::Instant::now();
@@ -953,6 +957,8 @@ where
             return Ok(());
         }
         if self.visibility.take_redraw() {
+            // catch-up: host automation while hidden
+            self.poll();
             self.wgpu.slint_window.request_redraw();
             self.wgpu.present.resume();
         }
@@ -1037,10 +1043,10 @@ where
     }
 
     fn on_timer(&self, _timer: &baseview::TimerHandle) {
-        self.poll();
         if !self.visibility.visible() {
             return;
         }
+        self.poll();
         #[cfg(any(
             feature = "backend-femtovg-gl",
             feature = "backend-femtovg-wgpu",
@@ -1381,9 +1387,6 @@ fn create_wgpu_surface(
         format,
         width: phys.width.max(1),
         height: phys.height.max(1),
-        #[cfg(target_os = "windows")]
-        present_mode: wgpu::PresentMode::AutoNoVsync,
-        #[cfg(not(target_os = "windows"))]
         present_mode: wgpu::PresentMode::AutoVsync,
         desired_maximum_frame_latency: 2,
         alpha_mode: wgpu::CompositeAlphaMode::Auto,
