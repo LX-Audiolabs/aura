@@ -216,7 +216,7 @@ pub fn process_with_input<L: PluginLogic>(inputs: &[Vec<f32>], frames: usize) ->
     assert!(
         matches!(
             status,
-            ProcessStatus::Continue | ProcessStatus::TailFinished
+            ProcessStatus::Continue | ProcessStatus::TailFinished | ProcessStatus::Sleep
         ),
         "process returned Error"
     );

@@ -18,6 +18,8 @@ Versioning: [SemVer](https://semver.org/).
 
 ### Added
 
+- Opt-in `ProcessStatus::Sleep` maps to `CLAP_PROCESS_SLEEP` only when every
+  process chunk sleeps; VST3/LV2 and offline test helpers accept it without suspension.
 - CLAP `RemoteControlsPage` overrides (max 8 `param_ids`; extras dropped), MIDI2 note-on/off
   bridging with 16-bit velocity when `ProcessContext.notes` stayed empty, opt-in state-context
   and parameter context-menu hooks (GLOBAL + param targets), and editor track-info polling.

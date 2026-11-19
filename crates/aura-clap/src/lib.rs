@@ -122,7 +122,8 @@ use clap_sys::plugin_features::{
     CLAP_PLUGIN_FEATURE_NOTE_EFFECT,
 };
 use clap_sys::process::{
-    CLAP_PROCESS_CONTINUE, CLAP_PROCESS_ERROR, CLAP_PROCESS_TAIL, clap_process, clap_process_status,
+    CLAP_PROCESS_CONTINUE, CLAP_PROCESS_ERROR, CLAP_PROCESS_SLEEP, CLAP_PROCESS_TAIL, clap_process,
+    clap_process_status,
 };
 use clap_sys::stream::{clap_istream, clap_ostream};
 use clap_sys::string_sizes::{CLAP_NAME_SIZE, CLAP_PATH_SIZE};
@@ -130,6 +131,9 @@ use clap_sys::version::CLAP_VERSION;
 
 mod preset_load;
 mod tuning;
+
+#[cfg(test)]
+mod process_tests;
 
 // ---------------------------------------------------------------------------
 // Export macro
@@ -823,7 +827,7 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
         let tuning =
             Tuning::new(Arc::clone(&inst.tuning_state) as Arc<dyn aura_core::TuningProvider>);
 
-        let mut status = ProcessStatus::Continue;
+        let mut status = ProcessStatus::Sleep;
         let n_splits = inst.scratch.splits.len();
 
         for si in 0..n_splits.saturating_sub(1) {
@@ -946,6 +950,7 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
             inst.scratch.ump_out.clear();
 
             match chunk_status {
+                ProcessStatus::Sleep => {}
                 ProcessStatus::Error => {
                     status = ProcessStatus::Error;
                     break;
@@ -974,6 +979,7 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
         }
 
         match status {
+            ProcessStatus::Sleep => CLAP_PROCESS_SLEEP,
             ProcessStatus::Continue => CLAP_PROCESS_CONTINUE,
             ProcessStatus::TailFinished => CLAP_PROCESS_TAIL,
             ProcessStatus::Error => CLAP_PROCESS_ERROR,

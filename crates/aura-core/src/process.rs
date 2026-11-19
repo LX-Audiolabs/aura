@@ -12,10 +12,15 @@ pub enum ProcessStatus {
     /// Keep calling process (normal).
     #[default]
     Continue,
-    /// No more output expected until something changes (tail finished).
+    /// Let the host determine further processing from the reported tail length.
+    /// CLAP maps this to `CLAP_PROCESS_TAIL`, not sleep.
     TailFinished,
     /// Error — host may suspend.
     Error,
+    /// No further processing needed until an event (note, parameter, transport)
+    /// or a change in audio input. The host may suspend processing until then.
+    /// Backends without sleep support treat this as [`Self::Continue`].
+    Sleep,
 }
 
 /// Per-block context handed to `process()`.
