@@ -1,4 +1,4 @@
-//! FemtoVG + wgpu window adapter for aura-baseview.
+//! `FemtoVG` + wgpu window adapter for aura-baseview.
 //!
 //! Renders via Slint's `FemtoVGRenderer<WGPUBackend>` directly to a wgpu
 //! surface created from the baseview raw-window-handle — same idea as Slint's
@@ -20,6 +20,7 @@ pub struct FemtovgWgpuWindowAdapter {
     pub renderer: FemtoVGRenderer<WGPUBackend>,
     pub slint_window: Window,
     physical_size: RefCell<PhysicalSize>,
+    pub(crate) redraw: crate::redraw::RedrawState,
 }
 
 impl FemtovgWgpuWindowAdapter {
@@ -27,7 +28,7 @@ impl FemtovgWgpuWindowAdapter {
     /// surface / device init fails.
     ///
     /// # Errors
-    /// Returns [`InitError`] when wgpu surface setup or FemtoVG init fails.
+    /// Returns [`InitError`] when wgpu surface setup or `FemtoVG` init fails.
     pub fn try_new(
         physical_size: PhysicalSize,
         window_handle: &(impl HasWindowHandle + HasDisplayHandle),
@@ -44,6 +45,7 @@ impl FemtovgWgpuWindowAdapter {
                 renderer,
                 slint_window,
                 physical_size: RefCell::new(physical_size),
+                redraw: crate::redraw::RedrawState::default(),
             }
         });
 
@@ -64,7 +66,10 @@ impl FemtovgWgpuWindowAdapter {
     }
 
     pub fn update_size(&self, physical_size: PhysicalSize) {
-        *self.physical_size.borrow_mut() = physical_size;
+        if *self.physical_size.borrow() != physical_size {
+            *self.physical_size.borrow_mut() = physical_size;
+            self.redraw.request();
+        }
     }
 }
 
@@ -82,6 +87,6 @@ impl WindowAdapter for FemtovgWgpuWindowAdapter {
     }
 
     fn request_redraw(&self) {
-        // baseview handles redraws in on_frame
+        self.redraw.request();
     }
 }

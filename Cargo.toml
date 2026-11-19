@@ -32,7 +32,7 @@ members = [
 version = "0.14.5"
 edition = "2024"
 license = "GPL-3.0-or-later"
-rust-version = "1.92"
+rust-version = "1.95"
 description = "AURA — Audio Unified Rust Architecture (Slint + CLAP/VST3/LV2)"
 repository = "https://github.com/LX-Audiolabs/aura"
 homepage = "https://github.com/LX-Audiolabs/aura"
@@ -56,18 +56,17 @@ lx-aura-build = { path = "crates/aura-build", version = "0.14.5" }
 lx-aura-test = { path = "crates/aura-test", version = "0.14.5" }
 
 # --- Slint + windowing (pinned with aura-baseview) ---
-# Stay on 0.3.x for now. 0.4.x is a breaking draw/poll redesign (own PR).
-# 0.3.7: Win32 VST3 first-load DPI hang fix + parent-resize timing.
-baseview = "=0.3.7"
-slint = { version = "=1.18.1", default-features = false, features = [
+# 0.4.2: draw/poll/timer split, on-demand redraw.
+baseview = "=0.4.2"
+slint = { version = "=1.19.0", default-features = false, features = [
     "std",
     "raw-window-handle-06",
     "compat-1-2",
 ] }
-slint-build = { version = "=1.18.1" }
+slint-build = { version = "=1.19.0" }
 # Interpreter is tooling-only (aura-preview). `internal` unlocks
 # create_with_existing_window for hot-reload; safe because of the exact pin.
-slint-interpreter = { version = "=1.18.1", features = [
+slint-interpreter = { version = "=1.19.0", features = [
     "display-diagnostics",
     "image-default-formats",
     "internal",

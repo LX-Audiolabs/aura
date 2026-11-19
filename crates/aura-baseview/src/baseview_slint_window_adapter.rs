@@ -15,6 +15,7 @@ pub struct BaseviewSlintWindowAdapter {
     pub renderer: FemtoVGRenderer,
     pub slint_window: slint::Window,
     physical_size: RefCell<PhysicalSize>,
+    pub(crate) redraw: crate::redraw::RedrawState,
 }
 
 impl BaseviewSlintWindowAdapter {
@@ -51,12 +52,16 @@ impl BaseviewSlintWindowAdapter {
                 renderer,
                 slint_window,
                 physical_size: RefCell::new(physical_size),
+                redraw: crate::redraw::RedrawState::default(),
             }
         }))
     }
 
     pub fn update_size(&self, physical_size: PhysicalSize) {
-        *self.physical_size.borrow_mut() = physical_size;
+        if *self.physical_size.borrow() != physical_size {
+            *self.physical_size.borrow_mut() = physical_size;
+            self.redraw.request();
+        }
     }
 }
 
@@ -74,6 +79,6 @@ impl WindowAdapter for BaseviewSlintWindowAdapter {
     }
 
     fn request_redraw(&self) {
-        // baseview handles redraws in on_frame
+        self.redraw.request();
     }
 }

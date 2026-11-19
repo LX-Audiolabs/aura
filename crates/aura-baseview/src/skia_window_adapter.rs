@@ -1,7 +1,7 @@
 //! Skia-based window adapter for slint-baseview.
 //!
 //! Wraps `SkiaRenderer` (Direct3D on Windows, Metal on macOS, OpenGL on Linux)
-//! instead of FemtoVG OpenGL. No GL context from baseview needed — Skia
+//! instead of `FemtoVG` OpenGL. No GL context from baseview needed — Skia
 //! uses platform-native GPU APIs directly.
 //!
 //! Pattern mirrors `BaseviewSlintWindowAdapter` — same `WindowAdapter` trait,
@@ -18,6 +18,7 @@ pub struct SkiaWindowAdapter {
     pub renderer: SkiaRenderer,
     pub slint_window: Window,
     physical_size: RefCell<PhysicalSize>,
+    pub(crate) redraw: crate::redraw::RedrawState,
 }
 
 impl SkiaWindowAdapter {
@@ -26,6 +27,9 @@ impl SkiaWindowAdapter {
     /// `window_handle` must implement `HasWindowHandle + HasDisplayHandle`
     /// (typically `baseview::WindowContext`). Raw handles are extracted and
     /// wrapped in `Arc` for the Skia renderer.
+    ///
+    /// # Panics
+    /// Panics if the window handles or the Skia surface cannot be initialized.
     pub fn new(
         physical_size: PhysicalSize,
         window_handle: &(impl HasWindowHandle + HasDisplayHandle),
@@ -55,12 +59,16 @@ impl SkiaWindowAdapter {
                 renderer,
                 slint_window,
                 physical_size: RefCell::new(physical_size),
+                redraw: crate::redraw::RedrawState::default(),
             }
         })
     }
 
     pub fn update_size(&self, physical_size: PhysicalSize) {
-        *self.physical_size.borrow_mut() = physical_size;
+        if *self.physical_size.borrow() != physical_size {
+            *self.physical_size.borrow_mut() = physical_size;
+            self.redraw.request();
+        }
     }
 }
 
@@ -78,6 +86,6 @@ impl WindowAdapter for SkiaWindowAdapter {
     }
 
     fn request_redraw(&self) {
-        // baseview handles redraws in on_frame
+        self.redraw.request();
     }
 }
