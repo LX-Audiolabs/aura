@@ -38,9 +38,15 @@ pub fn render_to_rgba(
         renderer.render(px_buf, width as usize);
     });
 
+    convert_pixels(px_buf, rgba_buf);
+}
+
+#[allow(clippy::cast_possible_truncation)] // Premultiplied channels never exceed alpha.
+fn convert_pixels(px_buf: &[PremultipliedRgbaColor], rgba_buf: &mut Vec<u8>) {
+    let pixel_count = px_buf.len();
     rgba_buf.clear();
     rgba_buf.reserve(pixel_count * 4);
-    for px in px_buf.iter() {
+    for px in px_buf {
         let bytes = if px.alpha == 0 {
             [0, 0, 0, 0]
         } else if px.alpha == 255 {
@@ -56,5 +62,74 @@ pub fn render_to_rgba(
             ]
         };
         rgba_buf.extend_from_slice(&bytes);
+    }
+}
+
+pub(crate) fn render_to_rgba_if_needed(
+    window: &MinimalSoftwareWindow,
+    width: u32,
+    height: u32,
+    px_buf: &mut Vec<PremultipliedRgbaColor>,
+    rgba_buf: &mut Vec<u8>,
+) -> bool {
+    let mut drawn = false;
+    window.draw_if_needed(|renderer| {
+        px_buf.resize((width * height) as usize, PremultipliedRgbaColor::default());
+        renderer.render(px_buf, width as usize);
+        convert_pixels(px_buf, rgba_buf);
+        drawn = true;
+    });
+    drawn
+}
+
+#[cfg(test)]
+#[allow(deprecated)] // Keep the workspace's current Slint language edition in this test.
+mod tests {
+    use super::*;
+    use slint::platform::WindowAdapter;
+    use slint::platform::software_renderer::RepaintBufferType;
+
+    slint::slint! {
+        export component TestWindow inherits Window {
+            width: 4px;
+            height: 4px;
+            background: red;
+        }
+    }
+
+    #[test]
+    fn clean_frame_keeps_rgba_unchanged() {
+        crate::platform::ensure_platform();
+        let window = MinimalSoftwareWindow::new(RepaintBufferType::NewBuffer);
+        crate::platform::set_next_adapter(window.clone());
+        let component = TestWindow::new().unwrap();
+        window.set_size(slint::WindowSize::Physical(slint::PhysicalSize::new(4, 4)));
+        let mut pixels = Vec::new();
+        let mut rgba = Vec::new();
+        assert!(render_to_rgba_if_needed(
+            &window,
+            4,
+            4,
+            &mut pixels,
+            &mut rgba
+        ));
+        rgba.fill(42);
+        assert!(!render_to_rgba_if_needed(
+            &window,
+            4,
+            4,
+            &mut pixels,
+            &mut rgba
+        ));
+        assert!(rgba.iter().all(|value| *value == 42));
+        window.request_redraw();
+        assert!(render_to_rgba_if_needed(
+            &window,
+            4,
+            4,
+            &mut pixels,
+            &mut rgba
+        ));
+        drop(component);
     }
 }

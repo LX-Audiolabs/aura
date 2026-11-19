@@ -7,6 +7,11 @@ Versioning: [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Updated Slint to 1.19.0 and raised the minimum supported Rust version to 1.95.
+- Updated baseview to 0.4.2 and adapted window polling and redraw scheduling.
+
 ### Added
 
 - CLAP `RemoteControlsPage` overrides (max 8 `param_ids`; extras dropped), MIDI2 note-on/off

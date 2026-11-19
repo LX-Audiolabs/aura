@@ -56,6 +56,7 @@ pub mod femtovg_wgpu_window_adapter;
 #[cfg(any(feature = "backend-femtovg-wgpu", feature = "backend-skia"))]
 mod owned_handles;
 pub mod platform;
+mod redraw;
 pub mod scale;
 #[cfg(feature = "backend-skia")]
 pub mod skia_window_adapter;
@@ -63,6 +64,7 @@ pub mod slint_window;
 #[cfg(feature = "backend-software")]
 pub mod software_renderer;
 pub mod translate;
+mod visibility;
 
 pub use slint_window::SlintParentedWindow;
 

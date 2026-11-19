@@ -1,7 +1,7 @@
 # AURA
 
 [![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/rust-1.92-orange.svg)](rust-toolchain.toml)
+[![Rust](https://img.shields.io/badge/rust-1.95-orange.svg)](rust-toolchain.toml)
 [![Slint](https://img.shields.io/badge/UI-Slint-2379F4.svg)](https://slint.dev)
 
 **Audio Unified Rust Architecture**  
@@ -15,7 +15,7 @@ Runtime + formats + build + CLI live here.
 | **Status** | **0.14.5** — basis complete; used in production LX plugins ([lx-audiolabs-plugins](https://github.com/LX-Audiolabs/lx-audiolabs-plugins)) |
 | **Dependency** | `lx-aura` / `lx-aura-*` published to crates.io; `aura-host` / `aura-hot` / examples path-only (`publish = false`) |
 | **License** | [GPL-3.0-or-later](./LICENSE) |
-| **Rust** | 1.92+ MSRV (stable channel in `rust-toolchain.toml`), edition 2024 |
+| **Rust** | 1.95+ MSRV (stable channel in `rust-toolchain.toml`), edition 2024 |
 
 Commercial LX product plugins (aether, lucent, meridian, …) are **not** in this repository. The official public catalog is **[lx-audiolabs-plugins](https://github.com/LX-Audiolabs/lx-audiolabs-plugins)**. This repo is the **framework only** — smoke examples prove the ship path.
 

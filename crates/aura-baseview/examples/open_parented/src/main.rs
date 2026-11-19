@@ -72,7 +72,11 @@ impl ParentWindowHandler {
 }
 
 impl WindowHandler for ParentWindowHandler {
-    fn on_frame(&self) -> Result<(), HandlerError> {
+    fn damage(&self, _area: baseview::DamageArea) {
+        self.damaged.set(true);
+    }
+
+    fn draw(&self) -> Result<(), HandlerError> {
         let mut ref_cell = self.surface.borrow_mut();
         let mut buf = ref_cell.buffer_mut().unwrap();
         if self.damaged.get() {

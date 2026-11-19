@@ -11,11 +11,13 @@ use crate::scale::{EditorScale, RequestResizeFn, SizePolicy, to_physical_px, unp
 #[cfg(feature = "backend-skia")]
 use crate::skia_window_adapter::SkiaWindowAdapter as Adapter;
 #[cfg(feature = "backend-software")]
-use crate::software_renderer::render_to_rgba;
+use crate::software_renderer::render_to_rgba_if_needed;
 use crate::translate::translate_mouse_button;
 use baseview::{
     Event, EventStatus, HandlerError, Window, WindowContext, WindowSettings, WindowSize, dpi,
 };
+#[cfg(feature = "backend-femtovg-wgpu")]
+use i_slint_renderer_femtovg::FemtoVGRendererExt;
 use keyboard_types::{Code, Key};
 #[cfg(feature = "backend-software")]
 use raw_window_handle::HasDisplayHandle;
@@ -92,11 +94,33 @@ impl SlintRawHandle {
 /// Some plugin hosts (e.g. LV2 UI) need the concrete widget pointer that was
 /// created as a child of the host-provided parent.
 pub struct SlintParentedWindow {
+    /// Direct native access bypasses the visibility tracking in `show` and `hide`.
     pub window: Window,
     raw_handle: SlintRawHandle,
+    visibility: Arc<crate::visibility::Visibility>,
 }
 
 impl SlintParentedWindow {
+    /// Show the native window and request a fresh frame.
+    ///
+    /// # Errors
+    /// Returns the error from the native window.
+    pub fn show(&self) -> Result<(), baseview::Error> {
+        self.window.show()?;
+        self.visibility.show();
+        Ok(())
+    }
+
+    /// Hide the native window and suspend rendering.
+    ///
+    /// # Errors
+    /// Returns the error from the native window.
+    pub fn hide(&self) -> Result<(), baseview::Error> {
+        self.window.hide()?;
+        self.visibility.hide();
+        Ok(())
+    }
+
     /// Forward to [`Window::close`].
     pub fn close(self) {
         self.window.close();
@@ -145,6 +169,8 @@ pub(crate) struct WgpuState {
     /// Scratch buffers reused every frame.
     px_buf: RefCell<Vec<PremultipliedRgbaColor>>,
     rgba_buf: RefCell<Vec<u8>>,
+    present: crate::redraw::RedrawState,
+    pending_surface_resize: Cell<Option<(u32, u32)>>,
 }
 
 pub struct SlintWindow<C, S, U>
@@ -153,6 +179,8 @@ where
     S: Send + 'static,
     U: Fn(&C, &mut S) + Send + 'static,
 {
+    visibility: Arc<crate::visibility::Visibility>,
+    _poll_timer: baseview::TimerHandle,
     pub component: C,
     pub state: RefCell<S>,
     pub update: U,
@@ -256,6 +284,7 @@ where
     /// Order matches truce-slint: `ScaleFactorChanged` then `Resized`.
     /// Physical adapter size is always `logical × content_scale` and the
     /// child HWND is forced to the same physical extent.
+    #[allow(clippy::cast_precision_loss)] // Window dimensions fit within f32 precision.
     fn apply_geometry(&self, lw: u32, lh: u32, scale: f64) {
         let (phys_w, phys_h) = Self::desired_physical(lw, lh, scale);
         #[allow(clippy::cast_possible_truncation)]
@@ -315,15 +344,8 @@ where
                 .dispatch_event(slint::platform::WindowEvent::Resized {
                     size: LogicalSize::new(lw as f32, lh as f32),
                 });
-            let mut sc = self.wgpu.surface_config.borrow_mut();
-            sc.width = phys_w.max(1);
-            sc.height = phys_h.max(1);
-            self.wgpu.surface.configure(&self.wgpu.device, &sc);
-            drop(sc);
-            self.wgpu
-                .blit
-                .borrow_mut()
-                .resize(&self.wgpu.device, phys_w, phys_h);
+            self.wgpu.slint_window.request_redraw();
+            self.wgpu.pending_surface_resize.set(Some((phys_w, phys_h)));
         }
 
         self.logical_size.set((lw, lh));
@@ -486,6 +508,7 @@ where
         build: B,
         policy: SizePolicy,
         request_resize: Option<RequestResizeFn>,
+        visibility: Arc<crate::visibility::Visibility>,
     ) -> Result<SlintWindow<C, S, U>, HandlerError>
     where
         B: FnOnce(&mut S) -> C + Send + 'static,
@@ -544,6 +567,10 @@ where
         }
 
         Ok(SlintWindow {
+            visibility,
+            _poll_timer: window
+                .create_timer(std::time::Duration::from_millis(16))
+                .map_err(HandlerError::from)?,
             update,
             last_cursor_pos: RefCell::new(LogicalPosition::new(0.0, 0.0)),
             component,
@@ -579,6 +606,7 @@ where
         build: B,
         policy: SizePolicy,
         request_resize: Option<RequestResizeFn>,
+        visibility: Arc<crate::visibility::Visibility>,
     ) -> Result<SlintWindow<C, S, U>, HandlerError>
     where
         B: FnOnce(&mut S) -> C + Send + 'static,
@@ -601,7 +629,7 @@ where
         let component = build(&mut state);
         platform::clear_next_adapter();
 
-        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
         {
             slint_window.dispatch_event(slint::platform::WindowEvent::ScaleFactorChanged {
                 scale_factor: open_scale as f32,
@@ -617,10 +645,9 @@ where
         let (device, queue, surface, surface_config) = match create_wgpu_surface(window) {
             Ok(s) => s,
             Err(e) => {
-                return Err(HandlerError::from(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("LX UI: wgpu surface init failed ({e}) — editor left closed"),
-                )));
+                return Err(HandlerError::from(std::io::Error::other(format!(
+                    "LX UI: wgpu surface init failed ({e}) — editor left closed"
+                ))));
             }
         };
 
@@ -640,6 +667,10 @@ where
         ) = Self::init_policy_fields(policy, request_resize, open_scale);
 
         Ok(SlintWindow {
+            visibility,
+            _poll_timer: window
+                .create_timer(std::time::Duration::from_millis(16))
+                .map_err(HandlerError::from)?,
             update,
             last_cursor_pos: RefCell::new(LogicalPosition::new(0.0, 0.0)),
             component,
@@ -653,6 +684,8 @@ where
                 blit: RefCell::new(blit),
                 px_buf: RefCell::new(Vec::new()),
                 rgba_buf: RefCell::new(Vec::new()),
+                present: crate::redraw::RedrawState::default(),
+                pending_surface_resize: Cell::new(None),
             },
             window_ctx: window.clone(),
             key_capture: KeyCapture::default(),
@@ -714,6 +747,8 @@ where
         B: 'static + Send,
         P: HasWindowHandle,
     {
+        let visibility = Arc::new(crate::visibility::Visibility::default());
+        let handler_visibility = Arc::clone(&visibility);
         let options = options.with_parent(Some(parent));
         let raw_slot: Arc<Mutex<SlintRawHandle>> =
             Arc::new(Mutex::new(SlintRawHandle::Unsupported));
@@ -725,11 +760,23 @@ where
                 *slot = SlintRawHandle::from_raw(handle.as_raw());
             }
             // FemtoVG path: Result (soft-fail on GL). Other backends: always Ok.
-            SlintWindow::new(&w, state, update, build, policy, request_resize)
+            SlintWindow::new(
+                &w,
+                state,
+                update,
+                build,
+                policy,
+                request_resize,
+                handler_visibility,
+            )
         })?;
         window.show()?;
         let raw_handle = raw_slot.lock().map_or(SlintRawHandle::Unsupported, |g| *g);
-        Ok(SlintParentedWindow { window, raw_handle })
+        Ok(SlintParentedWindow {
+            window,
+            raw_handle,
+            visibility,
+        })
     }
 
     /// Open a standalone window and run the event loop until it closes.
@@ -746,7 +793,15 @@ where
         B: FnOnce(&mut S) -> C + Send + 'static,
     {
         let window = Window::create(options, move |w| {
-            SlintWindow::new(&w, state, update, build, SizePolicy::default(), None)
+            SlintWindow::new(
+                &w,
+                state,
+                update,
+                build,
+                SizePolicy::default(),
+                None,
+                Arc::new(crate::visibility::Visibility::default()),
+            )
         })?;
         window.run_until_closed()
     }
@@ -803,18 +858,44 @@ where
     U: Fn(&C, &mut S) + Send + 'static,
 {
     #[cfg(any(feature = "backend-femtovg-gl", feature = "backend-femtovg-wgpu"))]
-    fn on_frame(&self) -> Result<(), HandlerError> {
-        slint::platform::update_timers_and_animations();
-        self.flush_pending_clipboard_paste();
-        // HiDPI / size reconcile before author sync + paint (truce-slint).
-        self.reconcile_pending();
-        (self.update)(&self.component, &mut *self.state.borrow_mut());
-        // baseview closes the window on on_frame Err — swallow transient GL /
+    fn draw(&self) -> Result<(), HandlerError> {
+        // baseview closes the window on draw Err — swallow transient GL /
         // surface glitches (DAW context steal / driver hiccup) so the editor
         // stays open. FemtoVG-wgpu already reconfigures Lost/Outdated inside
         // begin_rendering; leftover Err (e.g. Validation) is soft-failed here.
-        match self.adapter.renderer.render() {
-            Ok(()) => self.render_fail_streak.set(0),
+        if !self.visibility.visible() {
+            return Ok(());
+        }
+        if self.visibility.take_redraw() {
+            self.adapter.redraw.resume();
+        }
+        let now = std::time::Instant::now();
+        if !self
+            .adapter
+            .redraw
+            .begin_frame(now, self.adapter.slint_window.has_active_animations())
+        {
+            return Ok(());
+        }
+        #[cfg(feature = "backend-femtovg-gl")]
+        let result = self.adapter.renderer.render().map(|()| true);
+        #[cfg(feature = "backend-femtovg-wgpu")]
+        let result = self
+            .adapter
+            .renderer
+            .render_transformed(0.0, (0.0, 0.0), self.adapter.slint_window.size())
+            .map(|outcome| outcome == i_slint_core::renderer::DrawOutcome::Success);
+        self.adapter
+            .redraw
+            .finish_frame(now, matches!(result, Ok(true)));
+        match result {
+            Ok(true) => {
+                self.render_fail_streak.set(0);
+                if self.adapter.slint_window.has_active_animations() {
+                    self.window_ctx.request_redraw();
+                }
+            }
+            Ok(false) => {}
             Err(e) => {
                 let n = self.render_fail_streak.get().saturating_add(1);
                 self.render_fail_streak.set(n);
@@ -833,16 +914,32 @@ where
         not(feature = "backend-femtovg-wgpu"),
         not(feature = "backend-software")
     ))]
-    fn on_frame(&self) -> Result<(), HandlerError> {
-        slint::platform::update_timers_and_animations();
-        self.flush_pending_clipboard_paste();
-        self.reconcile_pending();
-        (self.update)(&self.component, &mut *self.state.borrow_mut());
-        self.adapter
-            .renderer
-            .render()
-            .map(|_| ())
-            .map_err(HandlerError::from)
+    fn draw(&self) -> Result<(), HandlerError> {
+        if !self.visibility.visible() {
+            return Ok(());
+        }
+        if self.visibility.take_redraw() {
+            self.adapter.redraw.resume();
+        }
+        let now = std::time::Instant::now();
+        if !self
+            .adapter
+            .redraw
+            .begin_frame(now, self.adapter.slint_window.has_active_animations())
+        {
+            return Ok(());
+        }
+        let result = self.adapter.renderer.render();
+        self.adapter.redraw.finish_frame(
+            now,
+            matches!(result, Ok(i_slint_core::renderer::DrawOutcome::Success)),
+        );
+        if matches!(result, Ok(i_slint_core::renderer::DrawOutcome::Success))
+            && self.adapter.slint_window.has_active_animations()
+        {
+            self.window_ctx.request_redraw();
+        }
+        result.map(|_| ()).map_err(HandlerError::from)
     }
 
     #[cfg(all(
@@ -851,29 +948,47 @@ where
         not(feature = "backend-femtovg-wgpu"),
         not(feature = "backend-skia")
     ))]
-    fn on_frame(&self) -> Result<(), HandlerError> {
-        slint::platform::update_timers_and_animations();
-        self.flush_pending_clipboard_paste();
-        self.reconcile_pending();
-        (self.update)(&self.component, &mut *self.state.borrow_mut());
-
+    fn draw(&self) -> Result<(), HandlerError> {
+        if !self.visibility.visible() {
+            return Ok(());
+        }
+        if self.visibility.take_redraw() {
+            self.wgpu.slint_window.request_redraw();
+            self.wgpu.present.resume();
+        }
+        if let Some((width, height)) = self.wgpu.pending_surface_resize.take() {
+            let mut config = self.wgpu.surface_config.borrow_mut();
+            config.width = width.max(1);
+            config.height = height.max(1);
+            self.wgpu.surface.configure(&self.wgpu.device, &config);
+            self.wgpu
+                .blit
+                .borrow_mut()
+                .resize(&self.wgpu.device, width, height);
+        }
         let sc = self.wgpu.surface_config.borrow();
         let (surf_w, surf_h) = (sc.width, sc.height);
         drop(sc);
 
-        self.wgpu.slint_window.request_redraw();
-        render_to_rgba(
+        if render_to_rgba_if_needed(
             &self.wgpu.slint_window,
             surf_w,
             surf_h,
             &mut self.wgpu.px_buf.borrow_mut(),
             &mut self.wgpu.rgba_buf.borrow_mut(),
-        );
+        ) {
+            self.wgpu.present.request();
+        }
+        let now = std::time::Instant::now();
+        if !self.wgpu.present.begin_frame(now, false) {
+            return Ok(());
+        }
 
         let surface_texture = match self.wgpu.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(tex) => tex,
-            wgpu::CurrentSurfaceTexture::Suboptimal(tex) => tex,
+            wgpu::CurrentSurfaceTexture::Success(tex)
+            | wgpu::CurrentSurfaceTexture::Suboptimal(tex) => tex,
             wgpu::CurrentSurfaceTexture::Timeout | wgpu::CurrentSurfaceTexture::Occluded => {
+                self.wgpu.present.finish_frame(now, false);
                 return Ok(());
             }
             e => {
@@ -902,10 +1017,53 @@ where
         drop(sc);
         self.wgpu.queue.submit(std::iter::once(encoder.finish()));
         self.wgpu.queue.present(surface_texture);
+        self.wgpu.present.finish_frame(now, true);
+        if self.wgpu.slint_window.has_active_animations() {
+            self.window_ctx.request_redraw();
+        }
 
         Ok(())
     }
 
+    fn poll(&self) {
+        slint::platform::update_timers_and_animations();
+        self.flush_pending_clipboard_paste();
+        self.reconcile_pending();
+        (self.update)(&self.component, &mut *self.state.borrow_mut());
+    }
+
+    fn on_timer(&self, _timer: &baseview::TimerHandle) {
+        self.poll();
+        if !self.visibility.visible() {
+            return;
+        }
+        #[cfg(any(
+            feature = "backend-femtovg-gl",
+            feature = "backend-femtovg-wgpu",
+            feature = "backend-skia"
+        ))]
+        let needs_draw = self.visibility.redraw_pending()
+            || self.adapter.redraw.ready(
+                std::time::Instant::now(),
+                self.adapter.slint_window.has_active_animations(),
+            );
+        #[cfg(feature = "backend-software")]
+        let needs_draw = true;
+        if needs_draw {
+            self.window_ctx.request_redraw();
+        }
+    }
+
+    fn damage(&self, _area: baseview::DamageArea) {
+        #[cfg(any(
+            feature = "backend-femtovg-gl",
+            feature = "backend-femtovg-wgpu",
+            feature = "backend-skia"
+        ))]
+        self.adapter.redraw.request();
+        #[cfg(feature = "backend-software")]
+        self.wgpu.slint_window.request_redraw();
+    }
     // ponytail: one big event-dispatch match; splitting it hurts readability.
     #[allow(clippy::too_many_lines)]
     fn on_event(&self, event: Event) -> EventStatus {
@@ -1116,7 +1274,7 @@ fn inject_clipboard_text(win: &slint::Window, text: &str) {
 
 #[cfg(feature = "backend-software")]
 fn string_err(s: impl Into<String>) -> HandlerError {
-    HandlerError::from(std::io::Error::new(std::io::ErrorKind::Other, s.into()))
+    HandlerError::from(std::io::Error::other(s.into()))
 }
 
 #[cfg(feature = "backend-software")]
