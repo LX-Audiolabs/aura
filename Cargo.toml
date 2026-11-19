@@ -56,8 +56,7 @@ lx-aura-build = { path = "crates/aura-build", version = "0.14.5" }
 lx-aura-test = { path = "crates/aura-test", version = "0.14.5" }
 
 # --- Slint + windowing (pinned with aura-baseview) ---
-# Stay on 0.3.x for now. 0.4.x is a breaking draw/poll redesign (own PR).
-# 0.3.7: Win32 VST3 first-load DPI hang fix + parent-resize timing.
+# 0.4.2: draw/poll/timer split, on-demand redraw.
 baseview = "=0.4.2"
 slint = { version = "=1.19.0", default-features = false, features = [
     "std",

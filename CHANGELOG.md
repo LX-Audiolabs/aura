@@ -9,6 +9,7 @@ Versioning: [SemVer](https://semver.org/).
 
 ### Changed
 
+- Idle plugin editors no longer present every frame; they redraw on damage or request.
 - Updated Slint to 1.19.0 and raised the minimum supported Rust version to 1.95.
 - Updated baseview to 0.4.2 and adapted window polling and redraw scheduling.
 

@@ -109,7 +109,7 @@ pub struct SizePolicy {
     /// When true, only the host may write `scale` (embedded Linux plugins).
     /// When false, baseview's OS scale from `Resized` updates `scale`.
     pub host_driven_scale: bool,
-    /// Packed `(w, h)` written by `Editor::set_size`; handler drains in `on_frame`.
+    /// Packed `(w, h)` written by `Editor::set_size`; handler drains in `poll`.
     pub pending_size: Arc<AtomicU64>,
 }
 

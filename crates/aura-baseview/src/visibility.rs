@@ -23,11 +23,6 @@ impl Visibility {
         self.redraw.store(true, Ordering::Release);
         self.visible.store(true, Ordering::Release);
     }
-    #[cfg(any(
-        feature = "backend-femtovg-gl",
-        feature = "backend-femtovg-wgpu",
-        feature = "backend-skia"
-    ))]
     pub(crate) fn redraw_pending(&self) -> bool {
         self.redraw.load(Ordering::Acquire)
     }
@@ -47,7 +42,9 @@ mod tests {
         assert!(!state.visible());
         state.show();
         assert!(state.visible());
+        assert!(state.redraw_pending());
         assert!(state.take_redraw());
+        assert!(!state.redraw_pending());
         assert!(!state.take_redraw());
     }
 }

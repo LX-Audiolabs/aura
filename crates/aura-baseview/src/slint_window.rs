@@ -218,7 +218,7 @@ where
     logical_size: Cell<(u32, u32)>,
     /// Packed `(w,h)` from `Editor::set_size` only (not host Resized).
     pending_size: Arc<AtomicU64>,
-    /// Corrective host resize (logical), issued from `on_frame`.
+    /// Corrective host resize (logical), issued from `poll`.
     pending_host_correct: Cell<Option<(u32, u32)>>,
     /// Optional host `request_resize(logical_w, logical_h)`.
     request_resize: Option<RequestResizeFn>,
@@ -980,7 +980,11 @@ where
             self.wgpu.present.request();
         }
         let now = std::time::Instant::now();
-        if !self.wgpu.present.begin_frame(now, false) {
+        if !self
+            .wgpu
+            .present
+            .begin_frame(now, self.wgpu.slint_window.has_active_animations())
+        {
             return Ok(());
         }
 
@@ -1047,8 +1051,35 @@ where
                 std::time::Instant::now(),
                 self.adapter.slint_window.has_active_animations(),
             );
-        #[cfg(feature = "backend-software")]
-        let needs_draw = true;
+        #[cfg(all(
+            feature = "backend-software",
+            not(feature = "backend-femtovg-gl"),
+            not(feature = "backend-femtovg-wgpu"),
+            not(feature = "backend-skia")
+        ))]
+        let needs_draw = {
+            let pending_resize = self.wgpu.pending_surface_resize.get().is_some();
+            if !pending_resize {
+                let sc = self.wgpu.surface_config.borrow();
+                let (surf_w, surf_h) = (sc.width, sc.height);
+                drop(sc);
+                if render_to_rgba_if_needed(
+                    &self.wgpu.slint_window,
+                    surf_w,
+                    surf_h,
+                    &mut self.wgpu.px_buf.borrow_mut(),
+                    &mut self.wgpu.rgba_buf.borrow_mut(),
+                ) {
+                    self.wgpu.present.request();
+                }
+            }
+            pending_resize
+                || self.visibility.redraw_pending()
+                || self.wgpu.present.ready(
+                    std::time::Instant::now(),
+                    self.wgpu.slint_window.has_active_animations(),
+                )
+        };
         if needs_draw {
             self.window_ctx.request_redraw();
         }
@@ -1061,8 +1092,13 @@ where
             feature = "backend-skia"
         ))]
         self.adapter.redraw.request();
-        #[cfg(feature = "backend-software")]
-        self.wgpu.slint_window.request_redraw();
+        #[cfg(all(
+            feature = "backend-software",
+            not(feature = "backend-femtovg-gl"),
+            not(feature = "backend-femtovg-wgpu"),
+            not(feature = "backend-skia")
+        ))]
+        self.wgpu.present.request();
     }
     // ponytail: one big event-dispatch match; splitting it hurts readability.
     #[allow(clippy::too_many_lines)]
@@ -1150,7 +1186,7 @@ where
                     )
                 );
 
-                // ── Ctrl+V / Paste: capture and defer to on_frame ───────────
+                // ── Ctrl+V / Paste: capture and defer to poll ───────────
                 // Reading the OS clipboard inside WM_KEYDOWN/WM_CHAR fails
                 // re-entrantly: the host has the clipboard open while the key
                 // message is in flight. Set a flag and read it on the next

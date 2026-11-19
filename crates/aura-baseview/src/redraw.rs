@@ -24,12 +24,6 @@ impl RedrawState {
         self.request();
     }
 
-    #[cfg(any(
-        test,
-        feature = "backend-femtovg-gl",
-        feature = "backend-femtovg-wgpu",
-        feature = "backend-skia"
-    ))]
     pub(crate) fn ready(&self, now: Instant, active_animation: bool) -> bool {
         self.retry_at.get().is_none_or(|deadline| now >= deadline)
             && (self.dirty.get() || active_animation)
