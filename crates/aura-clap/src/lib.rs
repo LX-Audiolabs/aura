@@ -135,6 +135,9 @@ mod tuning;
 #[cfg(test)]
 mod process_tests;
 
+#[cfg(test)]
+mod state_tests;
+
 // ---------------------------------------------------------------------------
 // Export macro
 // ---------------------------------------------------------------------------
@@ -2803,7 +2806,7 @@ unsafe extern "C" fn state_save<L: PluginLogic>(
             return false;
         };
 
-        let blob = aura_core::encode_state(&*inst.params);
+        let blob = L::save_state_with_context(&inst.params, aura_core::StateContext::Project);
 
         let mut written = 0usize;
         while written < blob.len() {
@@ -2857,7 +2860,7 @@ unsafe extern "C" fn state_load<L: PluginLogic>(
             blob.extend_from_slice(&chunk[..n as usize]);
         }
 
-        let ok = aura_core::decode_state(&*inst.params, &blob);
+        let ok = L::load_state_with_context(&inst.params, aura_core::StateContext::Project, &blob);
         if ok {
             // Values changed behind the host's back: per CLAP spec the plugin
             // must ask for a value rescan after a state load, or the host (and

@@ -84,7 +84,19 @@ unsafe extern "C" fn from_location<L: PluginLogic>(
                 };
                 match L::factory_presets().iter().find(|p| p.key == key) {
                     Some(preset) => {
-                        if apply_factory_preset(&*inst.params, preset) {
+                        let ok = match preset.state {
+                            aura_core::FactoryPresetState::Blob(blob) => {
+                                L::load_state_with_context(
+                                    &inst.params,
+                                    aura_core::StateContext::Preset,
+                                    blob,
+                                )
+                            }
+                            aura_core::FactoryPresetState::Values(_) => {
+                                apply_factory_preset(&*inst.params, preset)
+                            }
+                        };
+                        if ok {
                             Ok(())
                         } else {
                             Err((0, "factory preset blob rejected".into()))
