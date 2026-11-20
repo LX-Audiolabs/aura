@@ -1,7 +1,9 @@
-//! Shared plugin state blob — host-agnostic, so every format wrapper
-//! (CLAP `clap.state`, VST3 `IComponent::getState`, LV2 state ext)
-//! speaks the same byte layout and a session saved via one format
-//! restores identically in another.
+//! Shared plugin state blob — host-agnostic by default, so every format
+//! wrapper (CLAP `clap.state`, VST3 `IComponent::getState`, LV2 state ext)
+//! speaks the same byte layout via [`crate::PluginLogic::save_state_with_context`]
+//! / [`load_state_with_context`](crate::PluginLogic::load_state_with_context).
+//! Defaults keep sessions portable across formats; custom codecs stay
+//! consistent only when the override is used on every format you ship.
 //!
 //! **v1** (legacy): `u32 LE` param count, then per param `u32 LE` id +
 //! `u64 LE` f64 bits. Still decoded for old sessions.
@@ -385,6 +387,99 @@ mod tests {
             assert_eq!(target.get(1), Some(0.25));
             assert_eq!(target.get(2), Some(0.75));
         }
+    }
+
+    /// Custom codec that only accepts a tagged 2-byte blob; AURA default rejects it.
+    struct CustomCodecLogic;
+
+    impl crate::PluginLogic for CustomCodecLogic {
+        type Params = TwoParams;
+        type DspState = ();
+
+        fn info() -> crate::PluginInfo {
+            crate::PluginInfo::new("custom", "test", "0", "custom")
+        }
+
+        fn init(_params: &Self::Params, _sample_rate: f64) -> Self::DspState {}
+
+        fn reset(
+            _state: &mut Self::DspState,
+            _params: &Self::Params,
+            _config: &crate::AudioConfig,
+        ) {
+        }
+
+        fn process(
+            _state: &mut Self::DspState,
+            _params: &Self::Params,
+            _buffer: &mut crate::AudioBuffer<'_, f32>,
+            _context: &mut crate::ProcessContext,
+        ) -> crate::ProcessStatus {
+            crate::ProcessStatus::Continue
+        }
+
+        fn save_state_with_context(params: &TwoParams, context: StateContext) -> Vec<u8> {
+            let tag = match context {
+                StateContext::Project => b'H',
+                StateContext::Preset => b'P',
+                StateContext::Duplicate => b'D',
+            };
+            let a = params.get(1).unwrap_or(0.0);
+            // Store only param 1 as a single byte scale 0..100 for the test.
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let scaled = (a * 100.0).round() as u8;
+            vec![tag, scaled]
+        }
+
+        fn load_state_with_context(params: &TwoParams, context: StateContext, blob: &[u8]) -> bool {
+            let expected = match context {
+                StateContext::Project => b'H',
+                StateContext::Preset => b'P',
+                StateContext::Duplicate => b'D',
+            };
+            let [tag, value] = blob else {
+                return false;
+            };
+            if *tag != expected {
+                return false;
+            }
+            params.set(1, f64::from(*value) / 100.0);
+            params.set(2, 0.0);
+            true
+        }
+    }
+
+    #[test]
+    fn factory_preset_blob_uses_plugin_codec() {
+        use crate::{FactoryPreset, FactoryPresetState, PluginLogic};
+
+        let params = TwoParams::default();
+        let preset = FactoryPreset {
+            key: "custom",
+            name: "Custom",
+            state: FactoryPresetState::Blob(b"P*"),
+        };
+        // Default free helper speaks AURA codec only — custom blob rejected.
+        assert!(!crate::apply_factory_preset(&params, &preset));
+        // PluginLogic path honors the override.
+        assert!(CustomCodecLogic::apply_factory_preset(&params, &preset));
+        assert_eq!(params.get(1), Some(0.42));
+    }
+
+    #[test]
+    fn project_hooks_round_trip_custom_codec() {
+        use crate::PluginLogic;
+
+        let source = TwoParams::new(0.42, 0.0);
+        let blob = CustomCodecLogic::save_state_with_context(&source, StateContext::Project);
+        assert_eq!(blob, b"H*");
+        let target = TwoParams::default();
+        assert!(CustomCodecLogic::load_state_with_context(
+            &target,
+            StateContext::Project,
+            &blob
+        ));
+        assert_eq!(target.get(1), Some(0.42));
     }
 
     #[test]

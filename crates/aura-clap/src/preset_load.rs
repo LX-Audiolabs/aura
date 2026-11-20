@@ -5,7 +5,7 @@ use std::path::Path;
 use std::ptr;
 use std::sync::OnceLock;
 
-use aura_core::{PluginLogic, apply_factory_preset};
+use aura_core::PluginLogic;
 use clap_sys::ext::preset_load::{
     CLAP_EXT_PRESET_LOAD, CLAP_EXT_PRESET_LOAD_COMPAT, clap_host_preset_load,
     clap_plugin_preset_load,
@@ -84,22 +84,10 @@ unsafe extern "C" fn from_location<L: PluginLogic>(
                 };
                 match L::factory_presets().iter().find(|p| p.key == key) {
                     Some(preset) => {
-                        let ok = match preset.state {
-                            aura_core::FactoryPresetState::Blob(blob) => {
-                                L::load_state_with_context(
-                                    &inst.params,
-                                    aura_core::StateContext::Preset,
-                                    blob,
-                                )
-                            }
-                            aura_core::FactoryPresetState::Values(_) => {
-                                apply_factory_preset(&*inst.params, preset)
-                            }
-                        };
-                        if ok {
+                        if L::apply_factory_preset(&inst.params, preset) {
                             Ok(())
                         } else {
-                            Err((0, "factory preset blob rejected".into()))
+                            Err((0, "factory preset rejected".into()))
                         }
                     }
                     None => Err((0, format!("unknown factory preset key `{key}`"))),

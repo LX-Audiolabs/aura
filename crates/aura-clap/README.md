@@ -66,7 +66,7 @@ Entry, factory, audio-ports (mono/stereo + optional sidechain), audio-ports-conf
 
 **Render:** `clap.render` sets `ProcessContext.process_mode` (`Realtime` / `Offline`).
 
-**Preset load:** `clap.preset-load/2` (compat `clap.preset-load.draft/2`). FILE location reads a v1 state blob (`PluginLogic::load_preset_from_file`). PLUGIN location looks up `PluginLogic::factory_presets` by `load_key`. Non-empty factory list also exposes `preset-discovery-factory/2` (PLUGIN / factory content).
+**Preset load:** `clap.preset-load/2` (compat `clap.preset-load.draft/2`). FILE → `PluginLogic::load_preset_from_file` (default: bytes through `load_state_with_context(Preset)`). PLUGIN → `PluginLogic::apply_factory_preset` by `load_key` (Values pairs or Blob via same load hook). Non-empty factory list also exposes `preset-discovery-factory/2` (PLUGIN / factory content).
 
 **Tuning / MTS-ESP:** set `PluginInfo.supports_tuning = true` to advertise `clap.tuning/2`. In `process()`, query `context.tuning.relative_offset(port, channel, key, sample_offset)` for the detune in semitones and `context.tuning.should_play(...)` to honor host-driven note filtering. Host tuning changes split the block sample-accurately; `PluginLogic::tuning_changed` is called when the host reports that the tuning pool changed.
 
@@ -86,7 +86,7 @@ Input priority: native CLAP note events and expressions, then MIDI 2 channel-voi
 
 Products can override generated pages with `PluginLogic::remote_control_pages() -> Some(&'static [RemoteControlsPage])`. Give each page a stable `page_id`; list up to eight parameter IDs (extras dropped). `None` keeps group-derived pages, while `Some(&[])` reports zero pages.
 
-**State context:** set `PluginLogic::state_context_supported() = true` to expose `clap.state-context/2` alongside `clap.state`. Override `save_state_with_context` / `load_state_with_context` for distinct preset, duplicate, and project blobs; defaults use the shared AURA state blob. Both hooks run on the main thread.
+**State:** `clap.state` and (opt-in) `clap.state-context/2` call `PluginLogic::save_state_with_context` / `load_state_with_context`. Ordinary `clap.state` uses `StateContext::Project`. Set `state_context_supported() = true` to expose preset/duplicate contexts. Same hooks drive VST3/LV2 project state and factory preset **Blob** loads. Defaults use the shared AURA blob. Main thread. Custom load overrides must snap smoothers themselves.
 
 **Parameter context menu:** set `context_menu_supported() = true`, return `ContextMenuEntry` values from `context_menu_entries(Some(param_id))`, and handle them in `on_context_menu_action`. Callbacks run on the main thread; unsupported host extension stays absent.
 

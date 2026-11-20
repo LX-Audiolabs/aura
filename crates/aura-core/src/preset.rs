@@ -20,11 +20,17 @@ pub struct FactoryPreset {
 pub enum FactoryPresetState {
     /// `(param id, plain value)` pairs — applied with [`Params::restore_values`].
     Values(&'static [(u32, f64)]),
-    /// Raw v1 blob ([`crate::encode_state`] layout).
+    /// Host state blob. Format wrappers load this via
+    /// [`crate::PluginLogic::load_state_with_context`] (`StateContext::Preset`).
+    /// Free helpers below only understand the shared AURA v1/v2 layout.
     Blob(&'static [u8]),
 }
 
-/// Apply a factory preset onto `params`. Returns `false` if a blob is malformed.
+/// Apply a factory preset with the **default AURA codec** only.
+///
+/// Prefer [`crate::PluginLogic::apply_factory_preset`] from format wrappers so
+/// custom `load_state_with_context` codecs are honored. Returns `false` if a
+/// blob is malformed under the AURA layout.
 pub fn apply_factory_preset(params: &dyn Params, preset: &FactoryPreset) -> bool {
     match preset.state {
         FactoryPresetState::Values(pairs) => {
@@ -36,7 +42,9 @@ pub fn apply_factory_preset(params: &dyn Params, preset: &FactoryPreset) -> bool
     }
 }
 
-/// Load a v1 state file from disk. Default [`PluginLogic`] file path.
+/// Load an AURA v1/v2 state file from disk (default codec only).
+///
+/// Host preset-file paths go through [`crate::PluginLogic::load_preset_from_file`].
 ///
 /// # Errors
 ///

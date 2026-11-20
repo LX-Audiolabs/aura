@@ -21,8 +21,10 @@
 //! Port map (first layout): mono → 0 in · 1 out · 2+ controls; stereo →
 //! 0/1 in · 2/3 out · 4+ controls (+ sidechain/aux channels when declared).
 //! MIDI atom ports append after controls when `accepts_midi_in` /
-//! `emits_midi`. State: shared [`aura_core::encode_state`] blob. GUI: same
-//! [`Editor`](aura_core::editor::Editor) as CLAP/VST3 via `lv2ui_descriptor`.
+//! `emits_midi`. State: [`PluginLogic::save_state_with_context`] /
+//! [`PluginLogic::load_state_with_context`] (`StateContext::Project`; default
+//! AURA blob). GUI: same [`Editor`](aura_core::editor::Editor) as CLAP/VST3
+//! via `lv2ui_descriptor`.
 
 #![allow(clippy::missing_safety_doc)]
 #![allow(non_snake_case)]
@@ -57,8 +59,8 @@ use std::sync::{Arc, OnceLock};
 use aura_core::info::PluginInfo;
 use aura_core::{
     AudioBuffer, AudioConfig, BusLayout, MidiBuffer, MidiMessage, MidiStatus, NoteBuffer,
-    PluginLogic, ProcessContext, ProcessMode, UmpBuffer, append_midi_as_ump, append_notes_as_midi,
-    append_ump_as_midi, decode_state, encode_state, host_callback, host_callback_with, layout_at,
+    PluginLogic, ProcessContext, ProcessMode, StateContext, UmpBuffer, append_midi_as_ump,
+    append_notes_as_midi, append_ump_as_midi, host_callback, host_callback_with, layout_at,
 };
 use aura_params::Params;
 use lv2_sys::{
@@ -779,7 +781,7 @@ unsafe extern "C" fn state_save<L: PluginLogic>(
             if inst.state_key == 0 || inst.chunk_type == 0 {
                 return LV2_State_Status_LV2_STATE_ERR_NO_FEATURE;
             }
-            let blob = encode_state(&*inst.params);
+            let blob = L::save_state_with_context(&inst.params, StateContext::Project);
             if blob.is_empty() {
                 return LV2_State_Status_LV2_STATE_SUCCESS;
             }
@@ -832,7 +834,7 @@ unsafe extern "C" fn state_restore<L: PluginLogic>(
                 return LV2_State_Status_LV2_STATE_SUCCESS; // empty = defaults
             }
             let slice = unsafe { std::slice::from_raw_parts(ptr as *const u8, size) };
-            if decode_state(&*inst.params, slice) {
+            if L::load_state_with_context(&inst.params, StateContext::Project, slice) {
                 LV2_State_Status_LV2_STATE_SUCCESS
             } else {
                 LV2_State_Status_LV2_STATE_ERR_UNKNOWN

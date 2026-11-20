@@ -9,7 +9,7 @@ use crate::bus::BusLayout;
 use crate::config::AudioConfig;
 use crate::editor::Editor;
 use crate::info::PluginInfo;
-use crate::preset::FactoryPreset;
+use crate::preset::{FactoryPreset, FactoryPresetState};
 use crate::process::{ProcessContext, ProcessStatus};
 use crate::state::StateContext;
 
@@ -118,14 +118,36 @@ pub trait PluginLogic: 'static {
         &[]
     }
 
+    /// Apply a bundled [`FactoryPreset`]. Values pairs go through
+    /// [`Params::restore_values`]; blobs go through
+    /// [`Self::load_state_with_context`] with [`StateContext::Preset`].
+    fn apply_factory_preset(params: &Self::Params, preset: &FactoryPreset) -> bool {
+        match preset.state {
+            FactoryPresetState::Values(pairs) => {
+                params.restore_values(pairs);
+                params.snap_smoothers();
+                true
+            }
+            FactoryPresetState::Blob(blob) => {
+                Self::load_state_with_context(params, StateContext::Preset, blob)
+            }
+        }
+    }
+
     /// Load a host-chosen preset file (CLAP `preset-load` FILE location).
-    /// Default: shared host blob ([`crate::decode_state`], v1 or v2).
+    /// Default: read bytes then [`Self::load_state_with_context`] with
+    /// [`StateContext::Preset`].
     ///
     /// # Errors
     ///
     /// Returns an error if the file cannot be read or is not a valid state blob.
     fn load_preset_from_file(params: &Self::Params, path: &std::path::Path) -> Result<(), String> {
-        crate::preset::load_preset_file(params, path)
+        let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+        if Self::load_state_with_context(params, StateContext::Preset, &bytes) {
+            Ok(())
+        } else {
+            Err("not a valid state blob".into())
+        }
     }
 
     /// Host tuning pool changed (`clap.tuning`). Audio thread, next block.
@@ -160,12 +182,16 @@ pub trait PluginLogic: 'static {
         false
     }
 
-    /// Encode state for a CLAP preset, duplicate, or project operation.
+    /// Encode host state (CLAP / VST3 / LV2 project, or CLAP preset/duplicate).
+    /// Defaults to the shared AURA blob. Custom codecs must call
+    /// [`Params::snap_smoothers`] themselves after restore on load.
     fn save_state_with_context(params: &Self::Params, _context: StateContext) -> Vec<u8> {
         crate::encode_state(params)
     }
 
-    /// Restore state saved for any CLAP state context.
+    /// Restore host state for any format wrapper / CLAP state context.
+    /// Default: [`crate::decode_state`] (snaps smoothers). Overrides that touch
+    /// params must snap smoothers themselves to avoid audible ramps.
     fn load_state_with_context(params: &Self::Params, _context: StateContext, blob: &[u8]) -> bool {
         crate::decode_state(params, blob)
     }

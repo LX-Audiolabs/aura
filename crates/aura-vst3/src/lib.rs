@@ -11,10 +11,12 @@
 //! Covers: `GetPluginFactory` entry, single-component model (`IComponent` +
 //! `IAudioProcessor` + `IEditController` on one object), main FX bus
 //! (mono/stereo from [`PluginLogic::bus_layouts`]), f32 samples, params
-//! (1:1 `ParamID` map, no hash), flat state blob via
-//! [`aura_core::encode_state`] / [`aura_core::decode_state`], parented GUI
-//! via `IPlugView` + the same [`Editor`] trait as CLAP. MIDI note input
-//! (`PluginInfo::accepts_midi_in` declares the event input bus).
+//! (1:1 `ParamID` map, no hash), state via
+//! [`PluginLogic::save_state_with_context`] /
+//! [`PluginLogic::load_state_with_context`] (`StateContext::Project`; default
+//! AURA blob), parented GUI via `IPlugView` + the same [`Editor`] trait as
+//! CLAP. MIDI note input (`PluginInfo::accepts_midi_in` declares the event
+//! input bus).
 
 #![allow(clippy::missing_safety_doc)]
 // ponytail: VST3 FFI glue — raw-pointer casts and C-int size conversions are
@@ -46,8 +48,8 @@ use aura_core::info::PluginCategory;
 use aura_core::transport::Transport;
 use aura_core::{
     AudioBuffer, AudioConfig, BusLayout, MidiBuffer, MidiMessage, MidiStatus, NoteBuffer,
-    PluginLogic, ProcessContext, ProcessMode, UmpBuffer, append_midi_as_ump, append_notes_as_midi,
-    append_ump_as_midi, decode_state, encode_state, host_callback_with, layout_at,
+    PluginLogic, ProcessContext, ProcessMode, StateContext, UmpBuffer, append_midi_as_ump,
+    append_notes_as_midi, append_ump_as_midi, host_callback_with, layout_at,
 };
 use aura_params::{ParamFlags, ParamInfo, ParamValueKind, Params};
 use gui::GuiState;
@@ -924,11 +926,11 @@ impl<L: PluginLogic> IComponentTrait for Component<L> {
     }
 
     unsafe fn setState(&self, state: *mut IBStream) -> tresult {
-        load_state(&*self.params, state)
+        load_state::<L>(&self.params, state)
     }
 
     unsafe fn getState(&self, state: *mut IBStream) -> tresult {
-        save_state(&*self.params, state)
+        save_state::<L>(&self.params, state)
     }
 }
 
@@ -1065,7 +1067,7 @@ impl<L: PluginLogic> IAudioProcessorTrait for Component<L> {
 impl<L: PluginLogic> IEditControllerTrait for Component<L> {
     unsafe fn setComponentState(&self, state: *mut IBStream) -> tresult {
         // Single component: the component state IS the param state.
-        load_state(&*self.params, state)
+        load_state::<L>(&self.params, state)
     }
 
     unsafe fn setState(&self, _state: *mut IBStream) -> tresult {
@@ -1517,30 +1519,30 @@ unsafe fn read_stream(stream: *mut IBStream) -> Option<Vec<u8>> {
     Some(blob)
 }
 
-fn load_state(params: &dyn Params, stream: *mut IBStream) -> tresult {
+fn load_state<L: PluginLogic>(params: &L::Params, stream: *mut IBStream) -> tresult {
     host_callback_with("VST3", "state_load", kInternalError, || {
-        load_state_inner(params, stream)
+        load_state_inner::<L>(params, stream)
     })
 }
 
-fn load_state_inner(params: &dyn Params, stream: *mut IBStream) -> tresult {
+fn load_state_inner<L: PluginLogic>(params: &L::Params, stream: *mut IBStream) -> tresult {
     let Some(blob) = (unsafe { read_stream(stream) }) else {
         return kInvalidArgument;
     };
-    if decode_state(params, &blob) {
+    if L::load_state_with_context(params, StateContext::Project, &blob) {
         kResultOk
     } else {
         kResultFalse
     }
 }
 
-fn save_state(params: &dyn Params, stream: *mut IBStream) -> tresult {
+fn save_state<L: PluginLogic>(params: &L::Params, stream: *mut IBStream) -> tresult {
     host_callback_with("VST3", "state_save", kInternalError, || {
         // SAFETY: host passes a valid IBStream; ComRef does not touch the refcount.
         let Some(stream) = (unsafe { ComRef::from_raw(stream) }) else {
             return kInvalidArgument;
         };
-        let blob = encode_state(params);
+        let blob = L::save_state_with_context(params, StateContext::Project);
         let mut written: int32 = 0;
         // SAFETY: `blob` is a valid readable buffer of `blob.len()` bytes; the
         // stream only reads from it.
