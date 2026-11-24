@@ -13,17 +13,13 @@ use std::sync::LazyLock;
 use crate::error::{self, Result};
 use crate::wavetable::Wavetable;
 
-/// One cycle, additive soft-saw: harmonic `n` amplitude `1/n²`, n = 1…64.
-static SOFT_SAW_TABLE: LazyLock<Wavetable> = LazyLock::new(|| {
-    const N: usize = 64;
-    const SIZE: usize = 2048;
-    let amps: Vec<f32> = (1..=N)
-        .map(|i| {
-            let n = i as f32;
-            1.0 / (n * n)
-        })
-        .collect();
-    Wavetable::from_harmonics(N, &amps, SIZE).expect("soft-saw wavetable")
+/// Octave-spaced mip levels, richest first. Construct before audio processing.
+static SOFT_SAW_TABLES: LazyLock<[Wavetable; 7]> = LazyLock::new(|| {
+    std::array::from_fn(|level| {
+        let harmonics = 64 >> level;
+        let amps: Vec<f32> = (1..=harmonics).map(|n| 1.0 / (n * n) as f32).collect();
+        Wavetable::from_harmonics(harmonics, &amps, 2048).expect("soft-saw wavetable")
+    })
 });
 
 /// Soft saw oscillator — warmer alternative to a standard sawtooth.
@@ -43,6 +39,7 @@ static SOFT_SAW_TABLE: LazyLock<Wavetable> = LazyLock::new(|| {
 pub struct SoftSaw {
     phase: f32,
     sample_rate: f32,
+    tables: &'static [Wavetable; 7],
 }
 
 impl SoftSaw {
@@ -58,6 +55,7 @@ impl SoftSaw {
         Ok(Self {
             phase: 0.0,
             sample_rate,
+            tables: LazyLock::force(&SOFT_SAW_TABLES),
         })
     }
 
@@ -68,7 +66,11 @@ impl SoftSaw {
     /// Returns error if `sample_rate` is invalid.
     pub fn with_phase(sample_rate: f32, phase: f32) -> Result<Self> {
         let mut osc = Self::new(sample_rate)?;
-        osc.phase = phase.clamp(0.0, 1.0);
+        osc.phase = if phase.is_finite() {
+            phase.rem_euclid(1.0)
+        } else {
+            0.0
+        };
         Ok(osc)
     }
 
@@ -81,10 +83,24 @@ impl SoftSaw {
     /// Generate next sample at the given frequency (Hz).
     #[inline]
     pub fn next_sample(&mut self, frequency: f32) -> f32 {
-        let sample = SOFT_SAW_TABLE.read_interpolated(self.phase);
-        let delta = frequency.max(0.0) / self.sample_rate;
-        self.phase += delta;
-        self.phase -= self.phase.floor();
+        if !frequency.is_finite() || frequency <= 0.0 || frequency >= self.sample_rate * 0.5 {
+            return 0.0;
+        }
+        let budget = f64::from(self.sample_rate) * 0.5 / f64::from(frequency);
+        let limit = budget.ceil() - 1.0;
+        let level = (0..7)
+            .find(|level| f64::from(64 >> level) <= limit)
+            .unwrap_or(6);
+        let rich = self.tables[level].read_interpolated(self.phase);
+        let lean = if level < 6 {
+            self.tables[level + 1].read_interpolated(self.phase)
+        } else {
+            0.0
+        };
+        // Fade a level in only after all its harmonics fit below Nyquist.
+        let blend = (budget / f64::from(64 >> level) - 1.0).clamp(0.0, 1.0) as f32;
+        let sample = lean + (rich - lean) * blend;
+        self.phase = (self.phase + frequency / self.sample_rate).rem_euclid(1.0);
         sample
     }
 
@@ -130,7 +146,42 @@ mod tests {
 
     #[test]
     fn soft_saw_table_has_content() {
-        assert!(!SOFT_SAW_TABLE.is_empty());
-        assert!(SOFT_SAW_TABLE.len() >= 1024);
+        let osc = SoftSaw::new(48_000.0).unwrap();
+        assert!(osc.tables.iter().all(|table| table.len() >= 1024));
+    }
+}
+
+#[cfg(test)]
+mod regression_tests {
+    use super::*;
+    #[test]
+    fn regression_high_note_alias() {
+        let mut o = SoftSaw::new(48_000.0).unwrap();
+        let mut re = 0.0_f64;
+        let mut im = 0.0_f64;
+        for i in 0..4800 {
+            let y = f64::from(o.next_sample(10_000.0));
+            let t = std::f64::consts::TAU * 18_000.0 * f64::from(i) / 48_000.0;
+            re += y * t.cos();
+            im += y * t.sin();
+        }
+        assert!(2.0 * re.hypot(im) / 4800.0 < 1e-4);
+    }
+}
+
+#[cfg(test)]
+mod continuity_tests {
+    use super::*;
+    #[test]
+    fn mip_boundaries_are_continuous() {
+        for harmonic in [2.0, 4.0, 8.0, 16.0, 32.0, 64.0] {
+            let freq = 24_000.0 / harmonic;
+            let mut below = SoftSaw::with_phase(48_000.0, 0.13).unwrap();
+            let mut above = below.clone();
+            assert!(
+                (below.next_sample(freq * 0.99999) - above.next_sample(freq * 1.00001)).abs()
+                    < 1e-3
+            );
+        }
     }
 }

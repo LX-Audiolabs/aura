@@ -47,7 +47,7 @@ impl PredictiveLadder {
     /// Returns [`DspError::InvalidSampleRate`] if `sample_rate <= 0`.
     /// Returns [`DspError::InvalidFrequency`] if `cutoff` is out of range.
     pub fn new(sample_rate: f32, cutoff: f32, q: f32) -> Result<Self> {
-        if sample_rate <= 0.0 {
+        if sample_rate <= 0.0 || !sample_rate.is_finite() {
             return Err(DspError::InvalidSampleRate { sample_rate });
         }
         let nyquist = sample_rate / 2.0;
@@ -56,6 +56,9 @@ impl PredictiveLadder {
                 frequency: cutoff,
                 nyquist,
             });
+        }
+        if !q.is_finite() || q < 0.0 || q > f32::MAX / 4.0 {
+            return Err(DspError::InvalidFilterParameters);
         }
         let mut filter = Self {
             sample_rate,
@@ -70,15 +73,24 @@ impl PredictiveLadder {
         Ok(filter)
     }
 
-    /// Set cutoff frequency (Hz) and resonance.
+    /// Set cutoff frequency (Hz) and resonance. Invalid values leave parameters unchanged.
     #[inline]
     pub fn set_cutoff_q(&mut self, cutoff: f32, q: f32) {
+        if !cutoff.is_finite()
+            || cutoff <= 0.0
+            || cutoff >= self.sample_rate * 0.5
+            || !q.is_finite()
+            || q < 0.0
+            || q > f32::MAX / 4.0
+        {
+            return;
+        }
         self.cutoff = cutoff;
         self.q = q;
         let max_f = self.sample_rate * 0.49;
-        let fc = cutoff.clamp(10.0, max_f);
-        self.g = fast_tan(PI * fc / self.sample_rate);
-        self.k = q * 4.0;
+        let fc = cutoff.min(max_f);
+        self.g = (PI * fc / self.sample_rate).tan();
+        self.k = self.q * 4.0;
         self.beta = 1.0 / (1.0 + self.g);
     }
 
@@ -141,6 +153,10 @@ impl PredictiveLadder {
     #[inline]
     #[allow(clippy::many_single_char_names)]
     fn step(s: &mut [f32; 4], sample: &mut f32, g: f32, k: f32, beta: f32) {
+        if !sample.is_finite() {
+            *sample = 0.0;
+            return;
+        }
         let x = *sample;
 
         let g_val = g * beta;
@@ -168,24 +184,18 @@ impl PredictiveLadder {
         let v4 = g_val * v3 + s3;
 
         // Update state (trapezoidal integrator update: s[n] = 2*v - s[n-1])
-        s[0] = 2.0 * v1 - s[0];
-        s[1] = 2.0 * v2 - s[1];
-        s[2] = 2.0 * v3 - s[2];
-        s[3] = 2.0 * v4 - s[3];
+        s[0] = crate::flush_denormal(2.0 * v1 - s[0]);
+        s[1] = crate::flush_denormal(2.0 * v2 - s[1]);
+        s[2] = crate::flush_denormal(2.0 * v3 - s[2]);
+        s[3] = crate::flush_denormal(2.0 * v4 - s[3]);
 
-        *sample = v4;
+        if !v4.is_finite() || s.iter().any(|x| !x.is_finite()) {
+            *s = [0.0; 4];
+            *sample = 0.0;
+        } else {
+            *sample = v4;
+        }
     }
-}
-
-/// Fast tan(x) — small-angle Taylor approximation.
-///
-/// `tan(x) ≈ x + x³/3`, error < 1% for x < 0.5 (covers cutoffs up to ~8 kHz at 48 kHz).
-/// The filter clamps cutoff to 0.49·fs so x ≤ ~1.54, where the approximation
-/// still stays positive and stable.
-#[inline]
-fn fast_tan(x: f32) -> f32 {
-    let x2 = x * x;
-    x * (1.0 + 0.333_333 * x2)
 }
 
 /// Fast tanh(x) — rational approximation.
@@ -246,5 +256,28 @@ mod tests {
         f.reset();
         let out = f.process_sample(0.0);
         assert!(out.abs() < 0.001);
+    }
+}
+
+#[cfg(test)]
+mod regressions {
+    use super::*;
+    #[test]
+    fn predictive_prewarp_tracks_high_cutoff() {
+        let f = PredictiveLadder::new(48000.0, 20000.0, 0.0).unwrap();
+        let effective = f.g.atan() * 48000.0 / PI;
+        assert!((effective - 20000.0).abs() < 1.0, "{effective}");
+    }
+    #[test]
+    fn predictive_rejects_bad_parameters_and_recovers_bad_input() {
+        assert!(PredictiveLadder::new(f32::NAN, 1000.0, 0.5).is_err());
+        assert!(PredictiveLadder::new(48000.0, 1000.0, f32::NAN).is_err());
+        let mut f = PredictiveLadder::new(48000.0, 1000.0, 0.5).unwrap();
+        f.set_cutoff_q(f32::NAN, 1.0);
+        assert_eq!(f.cutoff(), 1000.0);
+        f.set_cutoff_q(2000.0, f32::MAX);
+        assert_eq!(f.cutoff(), 1000.0);
+        assert_eq!(f.process_sample(f32::NAN), 0.0);
+        assert!(f.process_sample(0.1).is_finite());
     }
 }

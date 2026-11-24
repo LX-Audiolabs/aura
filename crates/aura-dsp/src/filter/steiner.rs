@@ -181,10 +181,7 @@ impl SteinerParkerFilter {
 
 fn validate_resonance(resonance: f32) -> Result<()> {
     if !resonance.is_finite() || resonance < 0.0 {
-        return Err(DspError::InvalidParameter {
-            name: "resonance".into(),
-            reason: "must be finite and >= 0".into(),
-        });
+        return Err(DspError::InvalidFilterParameters);
     }
     Ok(())
 }

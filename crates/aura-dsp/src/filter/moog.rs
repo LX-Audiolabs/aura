@@ -51,7 +51,7 @@ impl MoogLadder {
     /// Returns [`DspError::InvalidSampleRate`] if `sample_rate <= 0`.
     /// Returns [`DspError::InvalidFrequency`] if `cutoff` is out of valid range.
     pub fn new(sample_rate: f32, cutoff: f32, q: f32) -> Result<Self> {
-        if sample_rate <= 0.0 {
+        if sample_rate <= 0.0 || !sample_rate.is_finite() {
             return Err(DspError::InvalidSampleRate { sample_rate });
         }
         let nyquist = sample_rate / 2.0;
@@ -60,6 +60,9 @@ impl MoogLadder {
                 frequency: cutoff,
                 nyquist,
             });
+        }
+        if !q.is_finite() || q < 0.0 || q > f32::MAX / 4.0 {
+            return Err(DspError::InvalidFilterParameters);
         }
         let mut filter = Self {
             sample_rate,
@@ -81,12 +84,21 @@ impl MoogLadder {
         Ok(filter)
     }
 
-    /// Set cutoff frequency (Hz) and resonance (Q).
+    /// Set cutoff frequency (Hz) and resonance (Q). Invalid values leave parameters unchanged.
     ///
     /// Q values above ~0.5 produce self-oscillation.
     /// Typical musical range: 0.0–0.9.
     #[inline]
     pub fn set_cutoff_q(&mut self, cutoff: f32, q: f32) {
+        if !cutoff.is_finite()
+            || cutoff <= 0.0
+            || cutoff >= self.sample_rate * 0.5
+            || !q.is_finite()
+            || q < 0.0
+            || q > f32::MAX / 4.0
+        {
+            return;
+        }
         self.cutoff = cutoff;
         self.q = q;
         let c = 2.0 * cutoff / self.sample_rate;
@@ -94,7 +106,7 @@ impl MoogLadder {
         self.k = 2.0 * (c * std::f32::consts::PI * 0.5).sin() - 1.0;
         let t1 = (1.0 - self.p) * 1.386_249;
         let t2 = 12.0 + t1 * t1;
-        self.rez = q * (t2 + 6.0 * t1) / (t2 - 6.0 * t1);
+        self.rez = self.q * ((t2 + 6.0 * t1) / (t2 - 6.0 * t1));
     }
 
     /// Set cutoff frequency (Hz).
@@ -137,18 +149,23 @@ impl MoogLadder {
     /// Process a single sample through the filter.
     #[inline]
     pub fn process_sample(&mut self, input: f32) -> f32 {
+        if !input.is_finite() {
+            return 0.0;
+        }
         // Feedback through resonance
-        let x = -self.rez * self.s3 + input;
+        let x = crate::flush_denormal(-self.rez * self.s3 + input);
 
         // 4-stage cascade with trapezoidal integration
         // Stage 0
-        self.s0 = (x + self.px) * self.p - self.k * self.s0;
+        self.s0 = crate::flush_denormal((x + self.px) * self.p - self.k * self.s0);
         // Stage 1
-        self.s1 = (self.s0 + self.ps0) * self.p - self.k * self.s1;
+        self.s1 = crate::flush_denormal((self.s0 + self.ps0) * self.p - self.k * self.s1);
         // Stage 2
-        self.s2 = (self.s1 + self.ps1) * self.p - self.k * self.s2;
+        self.s2 = crate::flush_denormal((self.s1 + self.ps1) * self.p - self.k * self.s2);
         // Stage 3 with tanh saturation
-        self.s3 = tanh_approx((self.s2 + self.ps2) * self.p - self.k * self.s3);
+        self.s3 = crate::flush_denormal(tanh_approx(
+            (self.s2 + self.ps2) * self.p - self.k * self.s3,
+        ));
 
         // Save state for next sample
         self.px = x;
@@ -156,6 +173,14 @@ impl MoogLadder {
         self.ps1 = self.s1;
         self.ps2 = self.s2;
 
+        if !self.s0.is_finite()
+            || !self.s1.is_finite()
+            || !self.s2.is_finite()
+            || !self.s3.is_finite()
+        {
+            self.reset();
+            return 0.0;
+        }
         self.s3
     }
 
@@ -174,6 +199,7 @@ impl MoogLadder {
 /// while preserving the musical saturation character.
 #[inline]
 fn tanh_approx(x: f32) -> f32 {
+    let x = x.clamp(-3.0, 3.0);
     let x2 = x * x;
     let numerator = x * (27.0 + x2);
     let denominator = 27.0 + 9.0 * x2;
@@ -232,5 +258,28 @@ mod tests {
         m.reset();
         let out = m.process_sample(0.0);
         assert!(out.abs() < 0.001);
+    }
+}
+
+#[cfg(test)]
+mod regressions {
+    use super::*;
+    #[test]
+    fn moog_rejects_invalid_parameters_and_recovers_bad_input() {
+        assert!(MoogLadder::new(f32::NAN, 1000.0, 0.5).is_err());
+        assert!(MoogLadder::new(48000.0, 1000.0, f32::NAN).is_err());
+        let mut f = MoogLadder::new(48000.0, 1000.0, 0.5).unwrap();
+        f.set_cutoff_q(f32::NAN, 1.0);
+        assert_eq!(f.cutoff(), 1000.0);
+        f.set_cutoff_q(2000.0, f32::MAX);
+        assert_eq!(f.cutoff(), 1000.0);
+        assert_eq!(f.process_sample(f32::NAN), 0.0);
+        assert!(f.process_sample(0.1).is_finite());
+    }
+    #[test]
+    fn moog_saturator_stays_bounded() {
+        for x in [-100.0, -10.0, 10.0, 100.0] {
+            assert!(tanh_approx(x).abs() <= 1.0);
+        }
     }
 }

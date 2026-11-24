@@ -35,7 +35,7 @@ pub enum FilterType {
     LowPass,
     /// High-pass filter.
     HighPass,
-    /// Band-pass filter (constant skirt gain).
+    /// Band-pass filter (constant 0 dB peak gain).
     BandPass,
     /// Notch (band-reject) filter.
     Notch,
@@ -55,17 +55,18 @@ pub enum FilterType {
 /// numerical behavior with floating point.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BiquadFilter {
+    // Double coefficients and state preserve poles at sub-Hz cutoffs.
     // Coefficients (normalized by a0)
-    b0: f32,
-    b1: f32,
-    b2: f32,
-    a1: f32,
-    a2: f32,
+    b0: f64,
+    b1: f64,
+    b2: f64,
+    a1: f64,
+    a2: f64,
     // State variables (Direct Form II Transposed)
     #[serde(skip)]
-    z1: f32,
+    z1: f64,
     #[serde(skip)]
-    z2: f32,
+    z2: f64,
     // Parameters for recalculation
     filter_type: FilterType,
     sample_rate: f32,
@@ -117,13 +118,13 @@ impl BiquadFilter {
         if let Some(e) = error::validate_frequency(frequency, sample_rate) {
             return Err(e);
         }
-        if q <= 0.0 || !q.is_finite() {
-            return Err(DspError::InvalidParameter {
-                name: "q".to_string(),
-                reason: "must be > 0".to_string(),
-            });
+        if q <= 0.0 || !q.is_finite() || !(1.0 / q).is_finite() {
+            return Err(DspError::InvalidFilterParameters);
         }
 
+        if !gain_db.is_finite() {
+            return Err(DspError::InvalidFilterParameters);
+        }
         debug!(?filter_type, frequency, q, gain_db, "biquad filter created");
         let mut filter = Self {
             b0: 1.0,
@@ -145,14 +146,14 @@ impl BiquadFilter {
 
     /// Compute biquad coefficients from the Audio EQ Cookbook.
     fn compute_coefficients(&mut self) {
-        let w0 = std::f32::consts::TAU * self.frequency / self.sample_rate;
+        let w0 = std::f64::consts::TAU * f64::from(self.frequency) / f64::from(self.sample_rate);
         let cos_w0 = w0.cos();
         let sin_w0 = w0.sin();
-        let alpha = sin_w0 / (2.0 * self.q);
+        let alpha = sin_w0 / (2.0 * f64::from(self.q));
 
         let (b0, b1, b2, a0, a1, a2) = match self.filter_type {
             FilterType::LowPass => {
-                let b1 = 1.0 - cos_w0;
+                let b1 = 2.0 * (w0 * 0.5).sin().powi(2);
                 let b0 = b1 / 2.0;
                 let b2 = b0;
                 let a0 = 1.0 + alpha;
@@ -198,7 +199,7 @@ impl BiquadFilter {
                 (b0, b1, b2, a0, a1, a2)
             }
             FilterType::LowShelf => {
-                let a_gain = 10.0f32.powf(self.gain_db / 40.0);
+                let a_gain = 10.0f64.powf(f64::from(self.gain_db) / 40.0);
                 let two_sqrt_a_alpha = 2.0 * a_gain.sqrt() * alpha;
                 let b0 = a_gain * ((a_gain + 1.0) - (a_gain - 1.0) * cos_w0 + two_sqrt_a_alpha);
                 let b1 = 2.0 * a_gain * ((a_gain - 1.0) - (a_gain + 1.0) * cos_w0);
@@ -209,7 +210,7 @@ impl BiquadFilter {
                 (b0, b1, b2, a0, a1, a2)
             }
             FilterType::HighShelf => {
-                let a_gain = 10.0f32.powf(self.gain_db / 40.0);
+                let a_gain = 10.0f64.powf(f64::from(self.gain_db) / 40.0);
                 let two_sqrt_a_alpha = 2.0 * a_gain.sqrt() * alpha;
                 let b0 = a_gain * ((a_gain + 1.0) + (a_gain - 1.0) * cos_w0 + two_sqrt_a_alpha);
                 let b1 = -2.0 * a_gain * ((a_gain - 1.0) + (a_gain + 1.0) * cos_w0);
@@ -220,7 +221,7 @@ impl BiquadFilter {
                 (b0, b1, b2, a0, a1, a2)
             }
             FilterType::Peak => {
-                let a_gain = 10.0f32.powf(self.gain_db / 40.0);
+                let a_gain = 10.0f64.powf(f64::from(self.gain_db) / 40.0);
                 let b0 = 1.0 + alpha * a_gain;
                 let b1 = -2.0 * cos_w0;
                 let b2 = 1.0 - alpha * a_gain;
@@ -247,10 +248,26 @@ impl BiquadFilter {
     #[inline]
     #[must_use]
     pub fn process_sample(&mut self, input: f32) -> f32 {
+        if !input.is_finite() {
+            return 0.0;
+        }
+        let input = f64::from(input);
         let output = self.b0 * input + self.z1;
-        self.z1 = crate::flush_denormal(self.b1 * input - self.a1 * output + self.z2);
-        self.z2 = crate::flush_denormal(self.b2 * input - self.a2 * output);
-        output
+        self.z1 = self.b1 * input - self.a1 * output + self.z2;
+        self.z2 = self.b2 * input - self.a2 * output;
+        if self.z1.abs() < f64::MIN_POSITIVE {
+            self.z1 = 0.0;
+        }
+        if self.z2.abs() < f64::MIN_POSITIVE {
+            self.z2 = 0.0;
+        }
+        let output = output as f32;
+        if output.is_finite() && self.z1.is_finite() && self.z2.is_finite() {
+            output
+        } else {
+            self.reset();
+            0.0
+        }
     }
 
     /// Update filter parameters and recalculate coefficients.
@@ -262,11 +279,11 @@ impl BiquadFilter {
         if let Some(e) = error::validate_frequency(frequency, self.sample_rate) {
             return Err(e);
         }
-        if q <= 0.0 || !q.is_finite() {
-            return Err(DspError::InvalidParameter {
-                name: "q".to_string(),
-                reason: "must be > 0".to_string(),
-            });
+        if q <= 0.0 || !q.is_finite() || !(1.0 / q).is_finite() {
+            return Err(DspError::InvalidFilterParameters);
+        }
+        if !gain_db.is_finite() {
+            return Err(DspError::InvalidFilterParameters);
         }
         self.frequency = frequency;
         self.q = q;
@@ -362,11 +379,8 @@ impl StateVariableFilter {
         if let Some(e) = error::validate_frequency(frequency, sample_rate) {
             return Err(e);
         }
-        if q <= 0.0 || !q.is_finite() {
-            return Err(DspError::InvalidParameter {
-                name: "q".to_string(),
-                reason: "must be > 0".to_string(),
-            });
+        if q <= 0.0 || !q.is_finite() || !(1.0 / q).is_finite() {
+            return Err(DspError::InvalidFilterParameters);
         }
 
         let g = (std::f32::consts::PI * frequency / sample_rate).tan();
@@ -419,11 +433,8 @@ impl StateVariableFilter {
         if let Some(e) = error::validate_frequency(frequency, self.sample_rate) {
             return Err(e);
         }
-        if q <= 0.0 || !q.is_finite() {
-            return Err(DspError::InvalidParameter {
-                name: "q".to_string(),
-                reason: "must be > 0".to_string(),
-            });
+        if q <= 0.0 || !q.is_finite() || !(1.0 / q).is_finite() {
+            return Err(DspError::InvalidFilterParameters);
         }
 
         self.frequency = frequency;
@@ -442,6 +453,17 @@ impl StateVariableFilter {
     #[inline]
     #[must_use]
     pub fn process_sample(&mut self, input: f32) -> SvfOutput {
+        if !input.is_finite() {
+            return SvfOutput {
+                low_pass: 0.0,
+                high_pass: 0.0,
+                band_pass: 0.0,
+                notch: 0.0,
+            };
+        }
+        if !self.ic1eq.is_finite() || !self.ic2eq.is_finite() {
+            self.reset();
+        }
         let v3 = input - self.ic2eq;
         let v1 = self.a1 * self.ic1eq + self.a2 * v3;
         let v2 = self.ic2eq + self.a2 * self.ic1eq + self.a3 * v3;
@@ -599,5 +621,44 @@ mod tests {
             notch: 0.0,
         };
         assert_eq!(blend_svf_outputs(&o, 1.0, 0.0, 0.0), 0.0);
+    }
+}
+
+#[cfg(test)]
+mod regressions {
+    use super::*;
+    #[test]
+    fn biquad_one_hz_lowpass_passes_dc() {
+        let mut f = BiquadFilter::new(FilterType::LowPass, 48000.0, 1.0, 0.707).unwrap();
+        let mut y = 0.0;
+        for _ in 0..480_000 {
+            y = f.process_sample(1.0);
+        }
+        assert!((y - 1.0).abs() < 0.001, "{y}");
+    }
+    #[test]
+    fn biquad_rejects_nonfinite_gain_without_mutation() {
+        assert!(BiquadFilter::with_gain(FilterType::Peak, 48000.0, 1000.0, 0.7, f32::NAN).is_err());
+        let mut f = BiquadFilter::new(FilterType::Peak, 48000.0, 1000.0, 0.7).unwrap();
+        assert!(f.set_params(1000.0, 0.7, f32::INFINITY).is_err());
+        assert!(f.process_sample(1.0).is_finite());
+    }
+}
+#[cfg(test)]
+mod robustness_regressions {
+    use super::*;
+    #[test]
+    fn filters_ignore_invalid_samples_and_reject_reciprocal_overflow() {
+        let tiny = f32::from_bits(1);
+        assert!(StateVariableFilter::new(1000.0, tiny, 48000.0).is_err());
+        assert!(super::PolivoksFilter::new(48000.0, 1000.0, tiny, 1.0).is_err());
+        let mut svf = StateVariableFilter::new(1000.0, 0.7, 48000.0).unwrap();
+        let mut biquad = BiquadFilter::new(FilterType::LowPass, 48000.0, 1000.0, 0.7).unwrap();
+        for bad in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            assert_eq!(svf.process_sample(bad).low_pass, 0.0);
+            assert_eq!(biquad.process_sample(bad), 0.0);
+        }
+        assert!(svf.process_sample(1.0).low_pass > 0.0);
+        assert!(biquad.process_sample(1.0) > 0.0);
     }
 }
