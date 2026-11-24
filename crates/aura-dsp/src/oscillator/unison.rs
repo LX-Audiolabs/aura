@@ -84,7 +84,11 @@ impl UnisonOscillator {
             frequency,
             sample_rate,
             num_voices: nv,
-            detune_cents: detune_cents.max(0.0),
+            detune_cents: if detune_cents.is_finite() {
+                detune_cents.clamp(0.0, 9600.0)
+            } else {
+                0.0
+            },
             stereo_spread: 0.5,
             phases,
             detune_ratios: [1.0; 8],
@@ -122,7 +126,7 @@ impl UnisonOscillator {
         let nv = self.num_voices;
 
         for i in 0..nv {
-            let freq = self.frequency * self.detune_ratios[i];
+            let freq = (self.frequency * self.detune_ratios[i]).min(self.sample_rate * 0.499_999);
             let dt = freq / self.sample_rate;
             let t = self.phases[i];
 
@@ -155,7 +159,7 @@ impl UnisonOscillator {
         let nv = self.num_voices;
 
         for i in 0..nv {
-            let freq = self.frequency * self.detune_ratios[i];
+            let freq = (self.frequency * self.detune_ratios[i]).min(self.sample_rate * 0.499_999);
             let dt = freq / self.sample_rate;
             let t = self.phases[i];
 
@@ -211,13 +215,18 @@ impl UnisonOscillator {
 
     /// Set the detune amount in cents.
     pub fn set_detune_cents(&mut self, cents: f32) {
-        self.detune_cents = cents.max(0.0);
+        if !cents.is_finite() {
+            return;
+        }
+        self.detune_cents = cents.clamp(0.0, 9600.0);
         self.ratios_dirty = true;
     }
 
     /// Set the stereo spread (0.0 = mono, 1.0 = full width).
     pub fn set_stereo_spread(&mut self, spread: f32) {
-        self.stereo_spread = spread.clamp(0.0, 1.0);
+        if spread.is_finite() {
+            self.stereo_spread = spread.clamp(0.0, 1.0);
+        }
     }
 
     /// Set the base frequency.

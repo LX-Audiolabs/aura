@@ -11,16 +11,11 @@
 #[inline]
 #[must_use]
 pub fn wavefold(sample: f32, drive: f32) -> f32 {
-    let driven = sample * (1.0 + drive);
-    // Simple triangle folding: fold the driven signal into [-1, 1].
-    let folded = (driven + 1.0).rem_euclid(4.0) - 2.0;
-    if folded > 1.0 {
-        2.0 - folded
-    } else if folded < -1.0 {
-        -2.0 - folded
-    } else {
-        folded
+    if !sample.is_finite() || !drive.is_finite() {
+        return 0.0;
     }
+    let driven = f64::from(sample) * (1.0 + f64::from(drive.max(0.0)));
+    (1.0 - ((driven + 1.0).rem_euclid(4.0) - 2.0).abs()) as f32
 }
 
 #[derive(Debug, Clone)]
@@ -35,30 +30,46 @@ impl PhaseDistortionOscillator {
     pub fn new(sample_rate: f32) -> Self {
         Self {
             phase: 0.0,
-            sample_rate,
+            sample_rate: if sample_rate.is_finite() && sample_rate > 0.0 {
+                sample_rate
+            } else {
+                48_000.0
+            },
             shape_x: 0.0,
             shape_y: 0.0,
         }
     }
 
     pub fn set_shape_x(&mut self, value: f32) {
-        self.shape_x = value.clamp(0.0, 1.0);
+        self.shape_x = if value.is_finite() {
+            value.clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
     }
 
     pub fn set_shape_y(&mut self, value: f32) {
-        self.shape_y = value.clamp(0.0, 1.0);
+        self.shape_y = if value.is_finite() {
+            value.clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
     }
 
     fn advance(&mut self, frequency: f32) -> f32 {
-        let phase_inc = frequency / self.sample_rate;
-        self.phase += phase_inc;
-        self.phase -= self.phase.floor();
+        let phase_inc = if frequency.is_finite() {
+            f64::from(frequency) / f64::from(self.sample_rate)
+        } else {
+            0.0
+        };
+        self.phase = (f64::from(self.phase) + phase_inc).rem_euclid(1.0) as f32;
         self.phase
     }
 
     fn distort_phase(phase: f32, shape: f32) -> f32 {
         // shape 0 -> sine-like, shape 1 -> saw-like
-        let s = shape.clamp(0.0, 1.0);
+        // Neutral shape is identity; keep the knee away from singular endpoints.
+        let s = 0.5 - 0.49 * shape.clamp(0.0, 1.0);
         if phase < s {
             0.5 * phase / s.max(0.0001)
         } else {
@@ -209,17 +220,17 @@ mod tests {
 
     #[test]
     fn wavefold_known_values() {
-        // Drive 0.0: the function is a triangle wave with period 4, shifted so
-        // sample 0 maps to -1.
-        assert!((wavefold(0.0, 0.0) - -1.0).abs() < 1e-6);
-        assert!((wavefold(1.0, 0.0) - 0.0).abs() < 1e-6);
-        assert!((wavefold(2.0, 0.0) - 1.0).abs() < 1e-6);
-        assert!((wavefold(3.0, 0.0) - 0.0).abs() < 1e-6);
-        assert!((wavefold(4.0, 0.0) - -1.0).abs() < 1e-6);
-
-        // Negative samples mirror the same period.
-        assert!((wavefold(-1.0, 0.0) - 0.0).abs() < 1e-6);
-        assert!((wavefold(-2.0, 0.0) - 1.0).abs() < 1e-6);
+        for (input, expected) in [
+            (0.0, 0.0),
+            (1.0, 1.0),
+            (2.0, 0.0),
+            (3.0, -1.0),
+            (4.0, 0.0),
+            (-1.0, -1.0),
+            (-2.0, 0.0),
+        ] {
+            assert!((wavefold(input, 0.0) - expected).abs() < 1e-6);
+        }
 
         // Drive doubles the effective input.
         assert!((wavefold(0.5, 1.0) - wavefold(1.0, 0.0)).abs() < 1e-6);
@@ -283,6 +294,28 @@ mod tests {
                     "driven sample {sample} out of bounds at ({shape_x}, {shape_y})"
                 );
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod regression_tests {
+    use super::*;
+
+    #[test]
+    fn regression_neutral_sine() {
+        let mut o = PhaseDistortionOscillator::new(48_000.0);
+        for i in 1..=48 {
+            let expected = (std::f32::consts::TAU * (i % 48) as f32 / 48.0).sin();
+            assert!((o.next_sample(1000.0) - expected).abs() < 1e-5);
+        }
+    }
+    #[test]
+    fn regression_wavefold_unity() {
+        for i in -20..=20 {
+            let x = i as f32 / 20.0;
+            assert!((wavefold(x, 0.0) - x).abs() < 1e-6);
+            assert!((wavefold(x, 3.0) + wavefold(-x, 3.0)).abs() < 1e-6);
         }
     }
 }

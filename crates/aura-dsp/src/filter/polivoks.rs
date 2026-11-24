@@ -140,21 +140,15 @@ impl PolivoksFilter {
 }
 
 fn validate_resonance(resonance: f32) -> Result<()> {
-    if !resonance.is_finite() || resonance <= 0.0 {
-        return Err(DspError::InvalidParameter {
-            name: "resonance".into(),
-            reason: "must be finite and > 0".into(),
-        });
+    if !resonance.is_finite() || resonance <= 0.0 || !(1.0 / resonance).is_finite() {
+        return Err(DspError::InvalidFilterParameters);
     }
     Ok(())
 }
 
 fn validate_drive(drive: f32) -> Result<()> {
     if !drive.is_finite() || drive <= 0.0 {
-        return Err(DspError::InvalidParameter {
-            name: "drive".into(),
-            reason: "must be finite and > 0".into(),
-        });
+        return Err(DspError::InvalidFilterParameters);
     }
     Ok(())
 }

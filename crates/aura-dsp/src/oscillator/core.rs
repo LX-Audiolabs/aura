@@ -18,7 +18,7 @@ pub enum Waveform {
     SawDown,
     /// Band-limited square wave (`PolyBLEP`).
     Square,
-    /// Triangle wave (integrated square).
+    /// Triangle wave with `PolyBLAMP` slope correction.
     Triangle,
     /// Band-limited pulse wave with variable width (`PolyBLEP`).
     Pulse,
@@ -42,49 +42,40 @@ pub enum Waveform {
     Pyramid9,
 }
 
-/// 4-point `PolyBLEP` correction for anti-aliased discontinuities.
-///
-/// Extends the correction window to 2 samples on each side of the
-/// discontinuity (vs 1 sample for 2-point `PolyBLEP`), providing better
-/// suppression of aliasing harmonics at high frequencies. The residual
-/// is derived from an integrated piecewise-cubic BLAMP kernel, yielding
-/// C1 continuity at the transition boundaries.
-///
-/// `t` is the phase position (0..1), `dt` is the phase increment per sample.
+/// Two-point `PolyBLEP` residual for a unit phase wrap, valid through Nyquist.
+/// `t` is in 0..1; `dt` is the positive phase increment, at most 0.5.
 #[inline]
 #[must_use]
 pub fn polyblep(t: f32, dt: f32) -> f32 {
-    if dt <= 0.0 {
+    if !dt.is_finite() || dt <= 0.0 || !t.is_finite() {
         return 0.0;
     }
-    let dt2 = 2.0 * dt;
+    let dt = dt.min(0.5);
     if t < dt {
-        // First sample after discontinuity
         let n = t / dt;
-        let n2 = n * n;
-        let blep2 = 2.0 * n - n2 - 1.0;
-        let cubic = n2 * (n - 1.0) * 0.5;
-        blep2 + cubic
-    } else if t < dt2 {
-        // Second sample after discontinuity (cubic tail)
-        let n = t / dt - 1.0;
-        let n2 = n * n;
-        -n2 * (1.0 - n) * 0.5
+        n * (2.0 - n) - 1.0
     } else if t > 1.0 - dt {
-        // First sample before discontinuity
         let n = (t - 1.0) / dt;
-        let n2 = n * n;
-        let blep2 = n2 + 2.0 * n + 1.0;
-        let cubic = -n2 * (n + 1.0) * 0.5;
-        blep2 + cubic
-    } else if t > 1.0 - dt2 {
-        // Second sample before discontinuity (cubic tail)
-        let n = (t - 1.0) / dt + 1.0;
-        let n2 = n * n;
-        n2 * (1.0 + n) * 0.5
+        (n + 1.0) * (n + 1.0)
     } else {
         0.0
     }
+}
+
+/// Integral of the BLEP residual, used at triangle slope discontinuities.
+#[inline]
+fn polyblamp(t: f32, dt: f32) -> f32 {
+    if dt <= 0.0 {
+        return 0.0;
+    }
+    let n = if t < dt {
+        1.0 - t / dt
+    } else if t > 1.0 - dt {
+        1.0 + (t - 1.0) / dt
+    } else {
+        return 0.0;
+    };
+    dt * n * n * n / 3.0
 }
 
 /// Audio oscillator with band-limited waveform generation.
@@ -97,8 +88,6 @@ pub struct Oscillator {
     pulse_width: f32,
     #[serde(skip)]
     noise_gen: Option<noise::NoiseGenerator>,
-    #[serde(skip)]
-    triangle_sum: f32,
 }
 
 /// Default noise PRNG seed for [`Oscillator::new`] / [`Oscillator::from_host`]
@@ -168,7 +157,6 @@ impl Oscillator {
             sample_rate,
             pulse_width: 0.5,
             noise_gen,
-            triangle_sum: 0.0,
         })
     }
 
@@ -247,7 +235,7 @@ impl Oscillator {
     ///
     /// Does **not**:
     /// - advance [`Self::phase`]
-    /// - mutate `triangle_sum` (stateless triangle shape, not the leaky integrator)
+    /// - mutate waveform state (triangle uses a stateless `PolyBLAMP` shape)
     /// - consume the noise RNG (noise waveforms return `0.0`)
     ///
     /// `PolyBLEP` uses lookup phase `t = (phase + offset).rem_euclid(1)` with
@@ -256,7 +244,7 @@ impl Oscillator {
     /// pulse width.
     ///
     /// Lookup is not a substitute for [`Self::next_sample`]: callers typically
-    /// take a modulated peek, then advance with `next_sample`.
+    /// take a modulated lookup, then advance with `next_sample`.
     #[inline]
     #[must_use]
     pub fn sample_offset(&self, offset_cycles: f32) -> f32 {
@@ -272,6 +260,50 @@ impl Oscillator {
 
             other => stateless_waveform_sample(other, t, dt),
         }
+    }
+
+    /// Uncorrected waveform value at an event, for hard-sync jump magnitude.
+    pub(super) fn raw_sample_at(&self, phase: f32) -> f32 {
+        match self.waveform {
+            Waveform::Pulse => {
+                if phase < self.pulse_width {
+                    1.0
+                } else {
+                    -1.0
+                }
+            }
+            other => stateless_waveform_sample(other, phase, 0.0),
+        }
+    }
+
+    /// Discontinuities of the periodic shape (up to sixteen for `Pyramid9`).
+    pub(super) fn edges(&self) -> ([f32; 16], usize) {
+        let mut edges = [0.0; 16];
+        let count = match self.waveform {
+            Waveform::Saw | Waveform::SawDown => 1,
+            Waveform::Square | Waveform::Pulse => 2,
+            Waveform::Step3 => 3,
+            Waveform::Step4 | Waveform::Pyramid3 => 4,
+            Waveform::Step8 | Waveform::Pyramid5 => 8,
+            Waveform::Pyramid9 => 16,
+            _ => 0,
+        };
+        for (i, edge) in edges.iter_mut().take(count).enumerate() {
+            *edge = i as f32 / count as f32;
+        }
+        if self.waveform == Waveform::Pulse {
+            edges[1] = self.pulse_width;
+        }
+        // Pyramids are shifted square sums: every edge lies on this grid.
+        if matches!(
+            self.waveform,
+            Waveform::Pyramid3 | Waveform::Pyramid5 | Waveform::Pyramid9
+        ) {
+            for edge in edges.iter_mut().take(count) {
+                *edge = (*edge + 0.25).rem_euclid(1.0);
+            }
+        }
+        (edges, count)
     }
 
     /// Band-limited pulse at phase `t` using this oscillator's pulse width.
@@ -307,14 +339,7 @@ impl Oscillator {
                 naive + polyblep(t, dt) - polyblep((t + 0.5) % 1.0, dt)
             }
 
-            Waveform::Triangle => {
-                // Integrated square wave for triangle
-                let square = if t < 0.5 { 1.0 } else { -1.0 };
-                let square_blep = square + polyblep(t, dt) - polyblep((t + 0.5) % 1.0, dt);
-                // Leaky integrator
-                self.triangle_sum = 0.999 * self.triangle_sum + square_blep * dt * 4.0;
-                self.triangle_sum.clamp(-1.0, 1.0)
-            }
+            Waveform::Triangle => stateless_waveform_sample(Waveform::Triangle, t, dt),
 
             Waveform::Pulse => self.pulse_at(t, dt),
 
@@ -403,18 +428,21 @@ impl Oscillator {
 
     /// Set the pulse width (clamped to 0.01..0.99).
     pub fn set_pulse_width(&mut self, pw: f32) {
-        self.pulse_width = pw.clamp(0.01, 0.99);
+        if pw.is_finite() {
+            self.pulse_width = pw.clamp(0.01, 0.99);
+        }
     }
 
     /// Set the oscillator phase (0.0 to 1.0).
     pub fn set_phase(&mut self, phase: f32) {
-        self.phase = phase.rem_euclid(1.0);
+        if phase.is_finite() {
+            self.phase = phase.rem_euclid(1.0);
+        }
     }
 
     /// Reset the oscillator phase to zero.
     pub fn reset_phase(&mut self) {
         self.phase = 0.0;
-        self.triangle_sum = 0.0;
     }
 
     /// Advance phase by a custom increment (for FM synthesis).
@@ -425,9 +453,8 @@ impl Oscillator {
     #[inline]
     pub fn advance_phase_sine(&mut self, dt: f32) -> f32 {
         let sample = (self.phase * std::f32::consts::TAU).sin();
-        self.phase += dt;
-        if self.phase >= 1.0 {
-            self.phase -= 1.0;
+        if dt.is_finite() {
+            self.phase = (self.phase + dt).rem_euclid(1.0);
         }
         sample
     }
@@ -436,7 +463,7 @@ impl Oscillator {
 /// Generate a single waveform sample from phase and phase increment (no state mutation).
 ///
 /// Used by [`super::unison::UnisonOscillator`] to avoid duplicating waveform logic per voice.
-/// Does not support noise waveforms or triangle integration (stateless).
+/// Does not support noise waveforms. Triangle uses the same `PolyBLAMP` shape as the core.
 #[inline]
 pub(super) fn stateless_waveform_sample(waveform: Waveform, t: f32, dt: f32) -> f32 {
     match waveform {
@@ -454,14 +481,19 @@ pub(super) fn stateless_waveform_sample(waveform: Waveform, t: f32, dt: f32) -> 
             naive + polyblep(t, dt) - polyblep((t + 0.5) % 1.0, dt)
         }
         Waveform::Triangle => {
-            if t < 0.25 {
+            let naive = if t < 0.25 {
                 4.0 * t
             } else if t < 0.75 {
                 2.0 - 4.0 * t
             } else {
                 4.0 * t - 4.0
-            }
+            };
+            naive
+                + 4.0
+                    * (polyblamp((t + 0.25).rem_euclid(1.0), dt)
+                        - polyblamp((t + 0.75).rem_euclid(1.0), dt))
         }
+
         Waveform::Pulse => {
             // Default 50% duty cycle for unison (pulse width not per-voice)
             let naive = if t < 0.5 { 1.0 } else { -1.0 };
@@ -517,6 +549,31 @@ fn digital_waveform_sample(waveform: Waveform, t: f32, dt: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn regression_blep_symmetry_triangle_pitch_and_invalid_controls() {
+        for dt in [0.01, 0.1, 0.3, 0.49] {
+            for i in 1..1000 {
+                let t = i as f32 / 1000.0;
+                assert!((polyblep(t, dt) + polyblep(1.0 - t, dt)).abs() < 1e-5);
+            }
+        }
+        for sr in [48_000.0, 96_000.0] {
+            let mut osc = Oscillator::new(Waveform::Triangle, 5.0, sr).unwrap();
+            let mut peak = 0.0_f32;
+            for _ in 0..sr as usize {
+                let lookup = osc.sample_offset(0.0);
+                let y = osc.next_sample();
+                assert!((lookup - y).abs() < 1e-6);
+                peak = peak.max(y.abs());
+            }
+            assert!(peak > 0.99, "triangle bass peak {peak}");
+        }
+        let mut osc = Oscillator::new(Waveform::Pulse, 440.0, 48_000.0).unwrap();
+        osc.set_phase(f32::NAN);
+        osc.set_pulse_width(f32::NAN);
+        assert!(osc.next_sample().is_finite());
+    }
 
     #[test]
     fn saw_down_is_negative_of_rising_saw_at_lookup_phases() {
@@ -654,10 +711,10 @@ mod tests {
         let mut osc = Oscillator::from_host(Waveform::Sine, 440.0, 48_000.0);
         osc.set_phase(0.37);
         let phase_before = osc.phase();
-        let peek = osc.sample_offset(0.0);
+        let lookup = osc.sample_offset(0.0);
         assert_eq!(osc.phase(), phase_before);
         let advanced = osc.next_sample();
-        assert!((peek - advanced).abs() < f32::EPSILON);
+        assert!((lookup - advanced).abs() < f32::EPSILON);
         assert_ne!(osc.phase(), phase_before);
     }
 
@@ -741,8 +798,8 @@ mod tests {
     #[test]
     fn sample_offset_noise_is_silent_without_rng_consume() {
         let mut osc = Oscillator::from_host(Waveform::WhiteNoise, 0.1, 48_000.0);
-        let peek = osc.sample_offset(0.0);
-        assert_eq!(peek, 0.0);
+        let lookup = osc.sample_offset(0.0);
+        assert_eq!(lookup, 0.0);
         let a = osc.next_sample();
         let mut other = Oscillator::from_host(Waveform::WhiteNoise, 0.1, 48_000.0);
         let b = other.next_sample();
@@ -772,14 +829,14 @@ mod tests {
         fifty.set_phase(0.35);
 
         let phase = narrow.phase();
-        let peek = narrow.sample_offset(0.0);
+        let lookup = narrow.sample_offset(0.0);
         assert_eq!(narrow.phase(), phase);
         let advanced = dry.next_sample();
-        assert!((peek - advanced).abs() < f32::EPSILON);
+        assert!((lookup - advanced).abs() < f32::EPSILON);
         let fifty_peek = fifty.sample_offset(0.0);
         assert!(
-            (peek - fifty_peek).abs() > 1e-3,
-            "25% pulse must differ from 50% at t=0.35 ({peek} vs {fifty_peek})"
+            (lookup - fifty_peek).abs() > 1e-3,
+            "25% pulse must differ from 50% at t=0.35 ({lookup} vs {fifty_peek})"
         );
     }
 

@@ -52,7 +52,11 @@ impl DsfSaw {
     /// Returns error if `sample_rate` is invalid.
     pub fn with_phase(sample_rate: f32, roughness: f32, phase: f32) -> Result<Self> {
         let mut osc = Self::new(sample_rate, roughness)?;
-        osc.phase = phase.clamp(0.0, 1.0);
+        osc.phase = if phase.is_finite() {
+            phase.rem_euclid(1.0)
+        } else {
+            0.0
+        };
         Ok(osc)
     }
 
@@ -131,7 +135,11 @@ impl DsfSquare {
     /// Returns error if `sample_rate` is invalid.
     pub fn with_phase(sample_rate: f32, roughness: f32, phase: f32) -> Result<Self> {
         let mut osc = Self::new(sample_rate, roughness)?;
-        osc.phase = phase.clamp(0.0, 1.0);
+        osc.phase = if phase.is_finite() {
+            phase.rem_euclid(1.0)
+        } else {
+            0.0
+        };
         Ok(osc)
     }
 
@@ -179,7 +187,11 @@ impl DsfSquare {
 /// fundsp clamps roughness away from the singular endpoints 0 and 1.
 #[inline]
 fn clamp_roughness(r: f32) -> f32 {
-    r.clamp(0.0001, 0.9999)
+    if r.is_finite() {
+        r.clamp(0.0001, 0.9999)
+    } else {
+        0.5
+    }
 }
 
 /// Advance phase and evaluate DSF (fundsp `Dsf::tick` logic).
@@ -192,18 +204,19 @@ fn dsf_tick(
     harmonic_spacing: f32,
     roughness: f32,
 ) -> f32 {
-    let freq = frequency.max(0.0);
-    *phase += freq * sample_duration;
-    *phase -= phase.floor();
+    if !frequency.is_finite() || frequency <= 0.0 || frequency >= sample_rate * 0.5 {
+        return 0.0;
+    }
+    let freq = frequency;
+    *phase = (*phase + freq * sample_duration).rem_euclid(1.0);
 
-    // Partials under Nyquist (fundsp uses 22050 ≈ DEFAULT_SR/2; we use actual sr/2).
-    let n = if freq > 0.0 && harmonic_spacing > 0.0 {
-        ((sample_rate * 0.5) / freq / harmonic_spacing)
-            .floor()
-            .max(1.0)
-    } else {
-        1.0
-    };
+    // Index i is inclusive; partial i has frequency (1 + i * spacing) * freq.
+    let last = (((f64::from(sample_rate) * 0.5 / f64::from(freq)) - 1.0)
+        / f64::from(harmonic_spacing))
+    .ceil()
+        - 1.0;
+    // Beyond this index even the brightest supported roughness is negligible.
+    let n = last.clamp(0.0, 1_000_000.0) as f32;
 
     // f = phase in radians; d = increment per partial index (fundsp passes f * spacing).
     let f = *phase * TAU;
@@ -216,17 +229,13 @@ fn dsf_tick(
 /// Computes `sum_{i=0..n} r^i * sin(f + i * d)`.
 #[inline]
 fn dsf(f: f32, d: f32, r: f32, n: f32) -> f32 {
+    let (f, d, r, n) = (f64::from(f), f64::from(d), f64::from(r), f64::from(n));
     let rn1 = r.powf(n + 1.0);
-    let denom = 1.0 + r * r - 2.0 * r * d.cos();
-
-    if denom.abs() < 1e-10 {
-        return 0.0;
-    }
-
+    // Equivalent to 1+r²-2r*cos(d), without cancellation near r=1, d=0.
+    let denom = (1.0 - r).powi(2) + 4.0 * r * (d * 0.5).sin().powi(2);
     let num =
         f.sin() - r * (f - d).sin() - rn1 * ((f + (n + 1.0) * d).sin() - r * (f + n * d).sin());
-
-    num / denom
+    (num / denom) as f32
 }
 
 #[cfg(test)]
@@ -235,7 +244,7 @@ mod tests {
 
     #[test]
     fn dsf_saw_produces_audio() {
-        let mut osc = DsfSaw::new(44100.0, 0.5).unwrap();
+        let mut osc = DsfSaw::new(44_100.0, 0.5).unwrap();
         let mut sum = 0.0f32;
         for _ in 0..100 {
             let s = osc.next_sample(440.0);
@@ -247,7 +256,7 @@ mod tests {
 
     #[test]
     fn dsf_square_produces_audio() {
-        let mut osc = DsfSquare::new(44100.0, 0.5).unwrap();
+        let mut osc = DsfSquare::new(44_100.0, 0.5).unwrap();
         let mut sum = 0.0f32;
         for _ in 0..100 {
             let s = osc.next_sample(440.0);
@@ -265,7 +274,7 @@ mod tests {
     #[test]
     fn dsf_saw_high_roughness_not_silent() {
         // Old bug: * (1 - roughness) zeroed the output at r→1.
-        let mut osc = DsfSaw::new(44100.0, 0.99).unwrap();
+        let mut osc = DsfSaw::new(44_100.0, 0.99).unwrap();
         let mut sum = 0.0f32;
         for _ in 0..256 {
             sum += osc.next_sample(220.0).abs();
@@ -294,5 +303,44 @@ mod tests {
             (closed - naive).abs() < 1e-4,
             "closed={closed} naive={naive}"
         );
+    }
+}
+
+#[cfg(test)]
+mod regression_tests {
+    use super::*;
+
+    #[test]
+    fn regression_partial_limit() {
+        for spacing in [1.0, 2.0] {
+            for freq in [8000.0, 10_000.0, 15_000.0, 24_000.0, 30_000.0] {
+                let mut phase = 0.0;
+                for _ in 0..48 {
+                    let y = dsf_tick(&mut phase, 1.0 / 48_000.0, 48_000.0, freq, spacing, 0.8);
+                    let expected: f64 = (0..64)
+                        .filter(|i| (1.0 + *i as f32 * spacing) * freq < 24_000.0)
+                        .map(|i| {
+                            0.8_f64.powi(i)
+                                * (f64::from(phase)
+                                    * std::f64::consts::TAU
+                                    * (1.0 + f64::from(i) * f64::from(spacing)))
+                                .sin()
+                        })
+                        .sum();
+                    assert!(
+                        (f64::from(y) - expected).abs() < 1e-4,
+                        "{freq} {spacing}: {y} vs {expected}"
+                    );
+                }
+            }
+        }
+    }
+    #[test]
+    fn regression_near_unity_roughness() {
+        let f = 0.00001;
+        let expected: f64 = (0..=8)
+            .map(|i| 0.9999_f64.powi(i) * (f64::from(f) * f64::from(i + 1)).sin())
+            .sum();
+        assert!((f64::from(dsf(f, f, 0.9999, 8.0)) - expected).abs() < 1e-6);
     }
 }

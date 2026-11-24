@@ -80,36 +80,51 @@ impl Ms20Filter {
         self.revision = revision;
     }
 
+    /// Solve the saturated band-pass feedback in the current sample. Both modes
+    /// retain two TPT poles; the revision sets the feedback saturation voltage.
     pub fn process_sample(&mut self, input: f32) -> f32 {
-        let input = if input.is_finite() { input } else { 0.0 };
-        let vd = match self.revision {
+        if !input.is_finite() {
+            return 0.0;
+        }
+        let voltage = match self.revision {
             Ms20Revision::Diode => 0.33,
             Ms20Revision::Ota => 1.0,
         };
-        let feedback = self.s2 + vd * (3.0 * self.s2 / vd).tanh();
-        let x = input - self.resonance * feedback;
-        let v1 = self.g * (x - self.s1) / (1.0 + self.g);
-        let lp1 = v1 + self.s1;
-        self.s1 = crate::flush_denormal(lp1 + v1);
-
-        // LP: cascade pole1 → pole2, out = lp2.
-        // HP: inject dry at second integrator lower node (Stinchcombe);
-        //     out = that stage's HP tap — not "input minus cascaded LP".
-        let output = match self.mode {
-            Ms20Mode::LowPass => {
-                let v2 = self.g * (lp1 - self.s2) / (1.0 + self.g);
-                let lp2 = v2 + self.s2;
-                self.s2 = crate::flush_denormal(lp2 + v2);
-                lp2
-            }
-            Ms20Mode::HighPass => {
-                let v2 = self.g * (input - self.s2) / (1.0 + self.g);
-                let lp2 = v2 + self.s2;
-                self.s2 = crate::flush_denormal(lp2 + v2);
-                input - lp2
-            }
+        let gain = self.g / (1.0 + self.g);
+        let complement = 1.0 / (1.0 + self.g);
+        let gamma = gain * complement;
+        let sigma = match self.mode {
+            Ms20Mode::LowPass => complement * (complement * self.s1 - self.s2),
+            Ms20Mode::HighPass => complement * (self.s2 - gain * self.s1),
         };
-        if output.is_finite() { output } else { 0.0 }
+        let resonance = 1.98 * self.resonance;
+        let mut driven = input;
+        // The derivative is >= 1 - 1.98/4 > 0.5. Fixed work, no convergence loop.
+        for _ in 0..8 {
+            let saturated = ((gamma * driven + sigma) / voltage).tanh();
+            let residual = driven - input - resonance * voltage * saturated;
+            let derivative = 1.0 - resonance * gamma * (1.0 - saturated * saturated);
+            driven = (driven - residual / derivative)
+                .clamp(input - resonance * voltage, input + resonance * voltage);
+        }
+        let lp1 = gain * driven + complement * self.s1;
+        let second_input = match self.mode {
+            Ms20Mode::LowPass => lp1,
+            Ms20Mode::HighPass => driven - lp1,
+        };
+        let lp2 = gain * second_input + complement * self.s2;
+        self.s1 = crate::flush_denormal(2.0 * lp1 - self.s1);
+        self.s2 = crate::flush_denormal(2.0 * lp2 - self.s2);
+        let output = match self.mode {
+            Ms20Mode::LowPass => lp2,
+            Ms20Mode::HighPass => second_input - lp2,
+        };
+        if output.is_finite() && self.s1.is_finite() && self.s2.is_finite() {
+            output
+        } else {
+            self.reset();
+            0.0
+        }
     }
 
     pub fn process_buffer(&mut self, buffer: &mut [f32]) {
@@ -139,10 +154,7 @@ impl Ms20Filter {
 
 fn validate_resonance(resonance: f32) -> Result<()> {
     if !resonance.is_finite() || resonance < 0.0 {
-        return Err(DspError::InvalidParameter {
-            name: "resonance".into(),
-            reason: "must be finite and >= 0".into(),
-        });
+        return Err(DspError::InvalidFilterParameters);
     }
     Ok(())
 }
@@ -191,7 +203,7 @@ mod tests {
         let mut lp_energy: f32 = 0.0;
         let mut hp_energy: f32 = 0.0;
         for i in 0..512 {
-            let x = (std::f32::consts::TAU * 1_000.0 * i as f32 / 44_100.0).sin();
+            let x = (std::f32::consts::TAU * 100.0 * i as f32 / 44_100.0).sin();
             lp_energy += lp.process_sample(x).abs();
             hp_energy += hp.process_sample(x).abs();
         }
@@ -223,5 +235,95 @@ mod tests {
         let mut f = Ms20Filter::new(44_100.0, 1_000.0, 0.3).unwrap();
         assert!(f.set_params(0.0, 0.3).is_err());
         assert!((f.cutoff() - 1_000.0).abs() < f32::EPSILON);
+    }
+}
+
+#[cfg(test)]
+mod regressions {
+    use super::*;
+    #[test]
+    fn ms20_cutoff_sweep_is_bounded_and_recovers() {
+        for sr in [44100.0, 48000.0, 96000.0] {
+            for ratio in [0.01, 0.2, 0.42, 0.49] {
+                for mode in [Ms20Mode::LowPass, Ms20Mode::HighPass] {
+                    let mut f = Ms20Filter::new(sr, sr * ratio, 1.0).unwrap();
+                    f.set_mode(mode);
+                    for i in 0..12000 {
+                        let y = f.process_sample(0.1 * (i as f32 * 0.1).sin());
+                        assert!(
+                            y.is_finite() && y.abs() < 10.0,
+                            "{sr} {ratio} {mode:?}: {y}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+    #[test]
+    fn ms20_highpass_resonance_and_revision_change_output() {
+        let mut dry = Ms20Filter::new(48000.0, 1000.0, 0.0).unwrap();
+        dry.set_mode(Ms20Mode::HighPass);
+        let mut resonant = dry.clone();
+        resonant.set_params(1000.0, 1.0).unwrap();
+        let mut diode = resonant.clone();
+        diode.set_revision(Ms20Revision::Diode);
+        let (mut resonance_diff, mut revision_diff) = (0.0f32, 0.0f32);
+        for i in 0..4000 {
+            let x = (i as f32 * std::f32::consts::TAU * 1000.0 / 48000.0).sin();
+            let a = dry.process_sample(x);
+            let b = resonant.process_sample(x);
+            let c = diode.process_sample(x);
+            resonance_diff += (a - b).abs();
+            revision_diff += (b - c).abs();
+        }
+        assert!(resonance_diff > 1.0 && revision_diff > 1.0);
+    }
+    #[test]
+    fn ms20_highpass_has_two_pole_low_frequency_slope() {
+        fn rms(hz: f32) -> f32 {
+            let mut f = Ms20Filter::new(48000.0, 2000.0, 0.0).unwrap();
+            f.set_mode(Ms20Mode::HighPass);
+            let mut sum = 0.0;
+            for i in 0..48000 {
+                let y = f.process_sample((i as f32 * std::f32::consts::TAU * hz / 48000.0).sin());
+                if i >= 24000 {
+                    sum += y * y;
+                }
+            }
+            (sum / 24000.0).sqrt()
+        }
+        let ratio = rms(200.0) / rms(100.0);
+        assert!((3.8..4.2).contains(&ratio), "{ratio}");
+    }
+}
+
+#[cfg(test)]
+mod feedback_regressions {
+    use super::*;
+    #[test]
+    fn implicit_feedback_matches_current_sample_bandpass() {
+        for mode in [Ms20Mode::LowPass, Ms20Mode::HighPass] {
+            let mut f = Ms20Filter::new(48000.0, 12000.0, 0.8).unwrap();
+            f.set_mode(mode);
+            for i in 0..100 {
+                let x = 0.4 * (i as f32 * 0.2).sin();
+                let old1 = f.s1;
+                let old2 = f.s2;
+                let y = f.process_sample(x);
+                let lp1 = f32::midpoint(old1, f.s1);
+                let lp2 = f32::midpoint(old2, f.s2);
+                let gain = f.g / (1.0 + f.g);
+                let c = 1.0 / (1.0 + f.g);
+                let driven = (lp1 - c * old1) / gain;
+                let bp = match mode {
+                    Ms20Mode::LowPass => lp1 - y,
+                    Ms20Mode::HighPass => lp2,
+                };
+                assert!(
+                    (driven - x - 1.98 * 0.8 * bp.tanh()).abs() < 1e-5,
+                    "{mode:?}"
+                );
+            }
+        }
     }
 }

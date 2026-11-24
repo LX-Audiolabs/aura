@@ -1,12 +1,14 @@
 //! Error types for the aura-dsp synthesis crate.
 
 use serde::{Deserialize, Serialize};
-use tracing::warn;
 
 /// Errors that can occur during audio synthesis operations.
 #[derive(Debug, Clone, Serialize, Deserialize, thiserror::Error)]
 #[non_exhaustive]
 pub enum DspError {
+    /// Invalid filter parameters; allocation-free for audio-thread setters.
+    #[error("invalid filter parameters: values must be finite and within the documented range")]
+    InvalidFilterParameters,
     /// Frequency is out of valid range (must be > 0 and < Nyquist).
     #[error("invalid frequency {frequency}: must be > 0 and < {nyquist} (Nyquist)")]
     InvalidFrequency {
@@ -57,7 +59,6 @@ pub type Result<T> = std::result::Result<T, DspError>;
 pub(crate) fn validate_frequency(frequency: f32, sample_rate: f32) -> Option<DspError> {
     let nyquist = sample_rate / 2.0;
     if frequency <= 0.0 || frequency >= nyquist || !frequency.is_finite() {
-        warn!(frequency, nyquist, "invalid frequency");
         Some(DspError::InvalidFrequency { frequency, nyquist })
     } else {
         None
@@ -68,7 +69,6 @@ pub(crate) fn validate_frequency(frequency: f32, sample_rate: f32) -> Option<Dsp
 #[must_use]
 pub(crate) fn validate_sample_rate(sample_rate: f32) -> Option<DspError> {
     if sample_rate <= 0.0 || !sample_rate.is_finite() {
-        warn!(sample_rate, "invalid sample rate");
         Some(DspError::InvalidSampleRate { sample_rate })
     } else {
         None

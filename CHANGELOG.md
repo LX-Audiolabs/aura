@@ -7,6 +7,23 @@ Versioning: [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.7] - 2026-11-24
+
+### Fixed
+
+- Corrected oscillator PolyBLEP symmetry/DC, DSF Nyquist partial limits,
+  phase-distortion neutral shape and wavefolder zero-drive behavior.
+- Fixed MS-20 filter instability and disconnected high-pass resonance;
+  improved low-cutoff biquad precision and predictive-ladder cutoff tuning.
+- Hardened filter parameter validation and state recovery, removed logging
+  from shared DSP validation, and added allocation-free filter parameter errors.
+- Prepared soft-saw tables before rendering and limited harmonics by pitch;
+  corrected triangle generation and hard-sync timing/discontinuity handling.
+- Added DSP regressions for stability, DC, spectral aliases and parameter edges.
+
+These fixes intentionally change affected oscillator/filter output. Public DSP
+entry points remain available; existing presets can sound different.
+
 ## [0.14.6] - 2026-11-24
 
 ### Changed
@@ -554,7 +571,8 @@ this release records what `main` contains after the multi-format + UI pass.
 - Still open for “Basis fertig”: VST3/LV2 real-host smoke; optional LV2 UI; product cutover later
 - Crates not published to crates.io (`publish = false`)
 
-[Unreleased]: https://github.com/LX-Audiolabs/aura/compare/v0.14.6...HEAD
+[Unreleased]: https://github.com/LX-Audiolabs/aura/compare/v0.14.7...HEAD
+[0.14.7]: https://github.com/LX-Audiolabs/aura/compare/v0.14.6...v0.14.7
 [0.14.6]: https://github.com/LX-Audiolabs/aura/compare/v0.14.5...v0.14.6
 [0.14.5]: https://github.com/LX-Audiolabs/aura/compare/v0.14.4...v0.14.5
 [0.14.0]: https://github.com/LX-Audiolabs/aura/compare/v0.13.0...v0.14.0
