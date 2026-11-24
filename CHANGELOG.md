@@ -11,6 +11,9 @@ Versioning: [SemVer](https://semver.org/).
 
 ### Changed
 
+- Updated locked transitive dependencies `clipboard-win` to 5.4.3 and
+  `async-executor` to 1.14.1, replacing yanked versions without changing Slint
+  or baseview versions.
 - Hidden editors skip poll work; first draw after show catch-up syncs host params.
 - Software rendering uses VSync on Windows.
 
