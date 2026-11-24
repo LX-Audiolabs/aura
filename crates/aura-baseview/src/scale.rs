@@ -61,12 +61,16 @@ impl EditorScale {
     }
 }
 
-/// Convert logical points → physical pixels (round-to-nearest, min 1).
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+/// Convert logical points → physical pixels (Slint-compatible f32 truncation, min 1).
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss
+)]
 #[inline]
 #[must_use]
 pub fn to_physical_px(logical: u32, scale: f64) -> u32 {
-    (f64::from(logical.max(1)) * scale).round().max(1.0) as u32
+    ((logical.max(1) as f32 * scale as f32) as u32).max(1)
 }
 
 /// Pack `(width, height)` into a `u64` for atomic handoff. `0` = none.
@@ -149,3 +153,22 @@ impl Default for SizePolicy {
 
 /// Host resize request: `(logical_w, logical_h) -> accepted`.
 pub type RequestResizeFn = Arc<dyn Fn(u32, u32) -> bool + Send + Sync>;
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+    fn physical_pixels_match_slint() {
+        for logical in [300, 395, 500, 670, 730, 940, 990] {
+            for scale in [0.75, 1.0, 1.2, 1.25, 1.5, 2.0] {
+                let expected = slint::LogicalSize::new(logical as f32, logical as f32)
+                    .to_physical(scale as f32);
+                assert_eq!(
+                    super::to_physical_px(logical, scale),
+                    expected.width,
+                    "logical={logical}, scale={scale}"
+                );
+            }
+        }
+    }
+}

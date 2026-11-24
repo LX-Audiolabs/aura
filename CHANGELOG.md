@@ -7,6 +7,8 @@ Versioning: [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.6] - 2026-11-24
+
 ### Changed
 
 - Hidden editors skip poll work; first draw after show catch-up syncs host params.
@@ -28,6 +30,23 @@ Versioning: [SemVer](https://semver.org/).
 
 ### Fixed
 
+- Baseview HiDPI sizing now matches Slint's `f32` multiplication and truncation,
+  keeping the child window and renderer pixel sizes aligned at fractional scales
+  (e.g. 990 × 670 at 125% becomes 1237 × 837). This prevents grey FemtoVG/wgpu editors.
+  Regression verified failing before the fix (395 at 125%: 494 vs Slint's 493),
+  then passing all 5 library tests with
+  `cargo test -p lx-aura-baseview --release --lib --no-default-features --features backend-femtovg-wgpu`,
+  including 42 size/scale comparisons against `slint::LogicalSize::to_physical`.
+  Reviewed editor open/resize and adapter geometry callers; CLAP/VST3 host-frame
+  rounding and physical-to-logical conversions remain unchanged.
+  Validation: `cargo fmt --all -- --check`, `git diff --check`, and release-library
+  Clippy with the same backend/features and `-D warnings` passed. Meridian 1.11.8
+  built in release mode from a temporary copy of `lx-audiolabs-analysis`, patched
+  to local AURA 0.14.5 with Slint 1.19.0/baseview 0.4.2; the original catalog
+  manifests, lockfile, vendor patch, and 990 × 670 design size were preserved.
+  In a separate REAPER 7.75 Windows instance at 120 DPI (125%), the FemtoVG/wgpu
+  UI visibly rendered; the native Baseview client measured 1237 × 837 pixels
+  (host wrapper: 1238 × 838). No workspace-wide build/test run was performed.
 - CLAP context menu: `GLOBAL` target no longer rejected; empty plugin entry list returns success.
 - MIDI2→notes bridge gates on empty `notes` (not a pre-accept latch), so a soft-capped expression
   surface cannot block UMP fallback.
@@ -532,7 +551,8 @@ this release records what `main` contains after the multi-format + UI pass.
 - Still open for “Basis fertig”: VST3/LV2 real-host smoke; optional LV2 UI; product cutover later
 - Crates not published to crates.io (`publish = false`)
 
-[Unreleased]: https://github.com/LX-Audiolabs/aura/compare/v0.14.5...HEAD
+[Unreleased]: https://github.com/LX-Audiolabs/aura/compare/v0.14.6...HEAD
+[0.14.6]: https://github.com/LX-Audiolabs/aura/compare/v0.14.5...v0.14.6
 [0.14.5]: https://github.com/LX-Audiolabs/aura/compare/v0.14.4...v0.14.5
 [0.14.0]: https://github.com/LX-Audiolabs/aura/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/LX-Audiolabs/aura/compare/v0.12.0...v0.13.0

@@ -12,7 +12,7 @@ Runtime + formats + build + CLI live here.
 
 | | |
 |--|--|
-| **Status** | **0.14.5** — basis complete; used in production LX plugins ([lx-audiolabs-plugins](https://github.com/LX-Audiolabs/lx-audiolabs-plugins)) |
+| **Status** | **0.14.6** — basis complete; used in production LX plugins ([lx-audiolabs-plugins](https://github.com/LX-Audiolabs/lx-audiolabs-plugins)) |
 | **Dependency** | `lx-aura` / `lx-aura-*` published to crates.io; `aura-host` / `aura-hot` / examples path-only (`publish = false`) |
 | **License** | [GPL-3.0-or-later](./LICENSE) |
 | **Rust** | 1.95+ MSRV (stable channel in `rust-toolchain.toml`), edition 2024 |
