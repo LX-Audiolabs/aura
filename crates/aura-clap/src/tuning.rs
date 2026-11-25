@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicU16, AtomicU32, Ordering};
 
 use aura_core::{PluginLogic, TuningEvent, TuningInfo, TuningProvider};
 use clap_sys::ext::draft::tuning::{
-    CLAP_EXT_TUNING, clap_event_tuning, clap_host_tuning, clap_plugin_tuning_t,
+    CLAP_EXT_TUNING, clap_event_tuning, clap_host_tuning, clap_plugin_tuning,
 };
 use clap_sys::ext::event_registry::{CLAP_EXT_EVENT_REGISTRY, clap_host_event_registry};
 use clap_sys::host::clap_host;
@@ -151,9 +151,9 @@ impl TuningProvider for TuningState {
     }
 }
 
-pub(crate) fn tuning_ext<L: PluginLogic>() -> &'static clap_plugin_tuning_t {
-    static CELL: std::sync::OnceLock<clap_plugin_tuning_t> = std::sync::OnceLock::new();
-    CELL.get_or_init(|| clap_plugin_tuning_t {
+pub(crate) fn tuning_ext<L: PluginLogic>() -> &'static clap_plugin_tuning {
+    static CELL: std::sync::OnceLock<clap_plugin_tuning> = std::sync::OnceLock::new();
+    CELL.get_or_init(|| clap_plugin_tuning {
         changed: Some(tuning_changed::<L>),
     })
 }

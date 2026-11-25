@@ -1002,9 +1002,9 @@ dependencies = [
 
 [[package]]
 name = "clap-sys"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a76abbdb2907f6fd97fb6bc0b7be96b77d328f2dd9669d1075cc03369ed22154"
+checksum = "8506185e2773e968286c74ba5460a278e4c4604a224aef4d2a595383efd7d7c5"
 
 [[package]]
 name = "clap_builder"

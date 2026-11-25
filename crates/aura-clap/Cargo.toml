@@ -20,7 +20,7 @@ name = "aura_clap"
 [dependencies]
 lx-aura-core = { workspace = true }
 lx-aura-params = { workspace = true }
-clap-sys = "0.5"
+clap-sys = "0.6"
 
 [package.metadata.docs.rs]
 all-features = true

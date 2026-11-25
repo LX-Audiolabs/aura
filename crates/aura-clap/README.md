@@ -20,12 +20,12 @@ Rules:
 
 ### Version snapshot (check when bumping)
 
-Checked **2026-10-16**.
+Checked **2026-11-25**.
 
 | | Version |
 |--|---------|
 | free-audio/clap (upstream) | **1.2.10** (as of check against `main` `version.h`) |
-| clap-sys (this workspace lock) | **0.5.0** — `CLAP_VERSION_*` = **1.2.2** |
+| clap-sys (this workspace lock) | **0.6.0** — `CLAP_VERSION_*` = **1.2.10** |
 
 Bump clap-sys only when a **new extension** needs bindings. Revision lag inside 1.2.x is not a ship blocker.
 

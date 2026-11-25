@@ -9,8 +9,8 @@ Versioning: [SemVer](https://semver.org/).
 
 ### Changed
 
-- Updated Slint to 1.19.1 (patch: FemtoVG text alignment, software-renderer
-  clip panic, ListView scrolling, two-way bindings on `_` model fields).
+- Updated `clap-sys` to 0.6.0 (CLAP 1.2.10; `clap_plugin_tuning_t` renamed to
+  `clap_plugin_tuning`).
 
 ## [0.14.7] - 2026-11-24
 

@@ -12,7 +12,7 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-clap-sys = "0.5"
+clap-sys = "0.6"
 
 [lints]
 workspace = true

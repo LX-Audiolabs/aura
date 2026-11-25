@@ -13,7 +13,7 @@ name = "aura-host"
 path = "src/main.rs"
 
 [dependencies]
-clap-sys = "0.5"
+clap-sys = "0.6"
 libloading = "0.9"
 cpal = "0.18.2"
 midir = "0.11"
