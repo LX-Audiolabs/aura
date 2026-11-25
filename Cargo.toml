@@ -58,15 +58,15 @@ lx-aura-test = { path = "crates/aura-test", version = "0.14.7" }
 # --- Slint + windowing (pinned with aura-baseview) ---
 # 0.4.2: draw/poll/timer split, on-demand redraw.
 baseview = "=0.4.2"
-slint = { version = "=1.19.0", default-features = false, features = [
+slint = { version = "=1.19.1", default-features = false, features = [
     "std",
     "raw-window-handle-06",
     "compat-1-2",
 ] }
-slint-build = { version = "=1.19.0" }
+slint-build = { version = "=1.19.1" }
 # Interpreter is tooling-only (aura-preview). `internal` unlocks
 # create_with_existing_window for hot-reload; safe because of the exact pin.
-slint-interpreter = { version = "=1.19.0", features = [
+slint-interpreter = { version = "=1.19.1", features = [
     "display-diagnostics",
     "image-default-formats",
     "internal",

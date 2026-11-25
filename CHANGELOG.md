@@ -7,6 +7,11 @@ Versioning: [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Updated Slint to 1.19.1 (patch: FemtoVG text alignment, software-renderer
+  clip panic, ListView scrolling, two-way bindings on `_` model fields).
+
 ## [0.14.7] - 2026-11-24
 
 ### Fixed
