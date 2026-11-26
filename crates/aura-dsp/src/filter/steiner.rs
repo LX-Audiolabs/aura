@@ -1,10 +1,15 @@
 //! Three-feed Steiner-Parker Sallen-Key filter approximation.
 //!
-//! Shared second-order pole pair (bilinear, TPT-warped g). Each jack applies a
+//! Shared second-order pole pair (bilinear, prewarped g). Each jack applies a
 //! different zero set into that resonator; one shared output node. Resonance
-//! softens damping through a tanh Q-path (positive-feedback character).
+//! changes damping through a delayed, sign-dependent tanh Q-path. This is a
+//! heuristic coloration, not a circuit-validated model of Steiner nonlinearities.
+//! The DF1 recursion uses double precision to preserve low-cutoff DC gain.
+//!
+//! No internal antialiasing is applied. When oversampling, run the entire filter
+//! at the higher sample rate with filtered upsampling and downsampling.
 
-use std::f32::consts::PI;
+use std::f64::consts::PI;
 
 use crate::error::{self, DspError, Result};
 
@@ -20,17 +25,17 @@ pub struct SteinerParkerFilter {
     sample_rate: f32,
     cutoff: f32,
     resonance: f32,
-    g: f32,
+    g: f64,
     /// Shared output delays y[n-1], y[n-2] (DF1 recursive part).
-    y1: f32,
-    y2: f32,
+    y1: f64,
+    y2: f64,
     /// Feed-forward input history (three jacks × two delays).
-    lp1: f32,
-    lp2: f32,
-    bp1: f32,
-    bp2: f32,
-    hp1: f32,
-    hp2: f32,
+    lp1: f64,
+    lp2: f64,
+    bp1: f64,
+    bp2: f64,
+    hp1: f64,
+    hp2: f64,
 }
 
 impl SteinerParkerFilter {
@@ -50,7 +55,7 @@ impl SteinerParkerFilter {
             sample_rate,
             cutoff,
             resonance: resonance.min(1.5),
-            g: (PI * cutoff / sample_rate).tan(),
+            g: (PI * f64::from(cutoff) / f64::from(sample_rate)).tan(),
             y1: 0.0,
             y2: 0.0,
             lp1: 0.0,
@@ -73,7 +78,7 @@ impl SteinerParkerFilter {
         validate_resonance(resonance)?;
         self.cutoff = cutoff;
         self.resonance = resonance.min(1.5);
-        self.g = (PI * cutoff / self.sample_rate).tan();
+        self.g = (PI * f64::from(cutoff) / f64::from(self.sample_rate)).tan();
         Ok(())
     }
 
@@ -101,13 +106,15 @@ impl SteinerParkerFilter {
     /// `Y = (ω² L + s ω B + s² H) / (s² + d ω s + ω²)`.
     /// Digital monic DF1 with shared poles; numerators per jack.
     fn step(&mut self, lp: f32, bp: f32, hp: f32) -> f32 {
+        let (lp, bp, hp) = (f64::from(lp), f64::from(bp), f64::from(hp));
+        let resonance = f64::from(self.resonance);
         let g = self.g;
         let g2 = g * g;
         // Linear damping: resonance 0 → d≈2 (gentle); 1.5 → d≈0.5 (peaky).
-        let d_lin = (2.0 - self.resonance).clamp(0.05, 2.0);
-        // Nonlinear Q path: soften damping with delayed output (bounded).
+        let d_lin = (2.0 - resonance).clamp(0.05, 2.0);
+        // Heuristic Q path: positive output lowers damping, negative raises it.
         let soft = self.y1.tanh();
-        let d = (d_lin - 0.35 * self.resonance * soft).clamp(0.05, 2.0);
+        let d = (d_lin - 0.35 * resonance * soft).clamp(0.05, 2.0);
 
         let inv = 1.0 / (1.0 + d * g + g2);
         // Shared poles (monic a0 = 1 after scale):
@@ -137,11 +144,14 @@ impl SteinerParkerFilter {
             - a1 * self.y1
             - a2 * self.y2;
 
-        if !y.is_finite() {
+        let output = y as f32;
+        if !output.is_finite() {
             self.reset();
             return 0.0;
         }
-        y = crate::flush_denormal(y);
+        if y.abs() < f64::MIN_POSITIVE {
+            y = 0.0;
+        }
 
         self.lp2 = self.lp1;
         self.lp1 = lp;
@@ -151,7 +161,7 @@ impl SteinerParkerFilter {
         self.hp1 = hp;
         self.y2 = self.y1;
         self.y1 = y;
-        y
+        crate::flush_denormal(output)
     }
 
     pub fn process_buffer_mode(&mut self, buffer: &mut [f32], mode: SteinerMode) {
@@ -206,6 +216,31 @@ mod tests {
             y = f.process_mode(1.0, SteinerMode::LowPass);
         }
         assert!(y.is_finite() && y > 0.3);
+    }
+    #[test]
+    fn steiner_low_cutoff_preserves_dc_gain() {
+        for sample_rate in [44_100.0, 48_000.0, 96_000.0] {
+            for cutoff in [1.0, 20.0] {
+                for resonance in [0.0, 1.5] {
+                    let constructed =
+                        SteinerParkerFilter::new(sample_rate, cutoff, resonance).unwrap();
+                    let mut updated = SteinerParkerFilter::new(sample_rate, 1_000.0, 0.3).unwrap();
+                    updated.set_params(cutoff, resonance).unwrap();
+                    // High resonance at 1 Hz needs longer to settle its ringing.
+                    let seconds = if resonance > 0.0 { 60 } else { 10 };
+                    for mut f in [constructed, updated] {
+                        let mut y = 0.0;
+                        for _ in 0..(sample_rate as usize * seconds) {
+                            y = f.process_mode(1.0, SteinerMode::LowPass);
+                        }
+                        assert!(
+                            (y - 1.0).abs() < 0.001,
+                            "DC gain: sample_rate={sample_rate}, cutoff={cutoff}, resonance={resonance}, output={y}"
+                        );
+                    }
+                }
+            }
+        }
     }
     #[test]
     fn steiner_hp_blocks_dc() {

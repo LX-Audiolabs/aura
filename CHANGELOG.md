@@ -7,6 +7,13 @@ Versioning: [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Preserved Steiner-Parker low-cutoff DC gain with double-precision coefficients
+  and recursive state; public sample and parameter APIs remain `f32`.
+- Clarified that the Steiner-Parker nonlinear damping is a sign-dependent
+  heuristic, not a circuit-validated model, and has no internal antialiasing.
+
 ### Changed
 
 - Updated `clap-sys` to 0.6.0 (CLAP 1.2.10; `clap_plugin_tuning_t` renamed to
