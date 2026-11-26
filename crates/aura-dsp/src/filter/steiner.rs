@@ -2,7 +2,8 @@
 //!
 //! Shared second-order pole pair (bilinear, prewarped g). Each jack applies a
 //! different zero set into that resonator; one shared output node. Resonance
-//! changes damping through a delayed, sign-dependent tanh Q-path. This is a
+//! approaches small-signal Q=50 at resonance 1.5; delayed amplitude-dependent
+//! damping compresses the peak and generates harmonics under drive. This is a
 //! heuristic coloration, not a circuit-validated model of Steiner nonlinearities.
 //! The DF1 recursion uses double precision to preserve low-cutoff DC gain.
 //!
@@ -110,11 +111,11 @@ impl SteinerParkerFilter {
         let resonance = f64::from(self.resonance);
         let g = self.g;
         let g2 = g * g;
-        // Linear damping: resonance 0 → d≈2 (gentle); 1.5 → d≈0.5 (peaky).
-        let d_lin = (2.0 - resonance).clamp(0.05, 2.0);
-        // Heuristic Q path: positive output lowers damping, negative raises it.
+        // Bend the upper resonance range toward oscillation: d=2 → 0.02 (Q=50).
+        let d_lin = 2.0 - resonance - 0.48 * (resonance / 1.5).powi(4);
+        // Symmetric nonlinear loss limits ringing without changing the jack zeros.
         let soft = self.y1.tanh();
-        let d = (d_lin - 0.35 * resonance * soft).clamp(0.05, 2.0);
+        let d = (d_lin + 0.35 * resonance * soft * soft).clamp(0.02, 2.0);
 
         let inv = 1.0 / (1.0 + d * g + g2);
         // Shared poles (monic a0 = 1 after scale):
@@ -215,7 +216,7 @@ mod tests {
         for _ in 0..1_000 {
             y = f.process_mode(1.0, SteinerMode::LowPass);
         }
-        assert!(y.is_finite() && y > 0.3);
+        assert!((y - 1.0).abs() < 0.001, "LP DC gain: {y}");
     }
     #[test]
     fn steiner_low_cutoff_preserves_dc_gain() {
@@ -270,6 +271,92 @@ mod tests {
         let mut f = SteinerParkerFilter::new(44_100.0, 10_000.0, 1.5).unwrap();
         for _ in 0..10_000 {
             assert!(f.process_mode(0.1, SteinerMode::LowPass).is_finite());
+        }
+    }
+    #[test]
+    fn steiner_high_res_has_sharp_peak_and_harmonics() {
+        let mut gains = [0.0_f64; 2];
+        let mut third_ratio = 0.0;
+        for (index, amplitude) in [0.001_f32, 0.1].into_iter().enumerate() {
+            let mut f = SteinerParkerFilter::new(48_000.0, 1_000.0, 1.5).unwrap();
+            let (mut fundamental, mut third) = (0.0, 0.0);
+            let (mut fundamental_cos, mut third_cos) = (0.0, 0.0);
+            for i in 0..48_000 {
+                let phase = std::f64::consts::TAU * f64::from(i) / 48.0;
+                let y =
+                    f64::from(f.process_mode(amplitude * phase.sin() as f32, SteinerMode::LowPass));
+                if i >= 24_000 {
+                    fundamental += y * phase.sin();
+                    fundamental_cos += y * phase.cos();
+                    third += y * (3.0 * phase).sin();
+                    third_cos += y * (3.0 * phase).cos();
+                }
+            }
+            let fundamental = fundamental.hypot(fundamental_cos) / 12_000.0;
+            gains[index] = fundamental / f64::from(amplitude);
+            third_ratio = third.hypot(third_cos) / 12_000.0 / fundamental;
+        }
+        let mut impulse = SteinerParkerFilter::new(48_000.0, 1_000.0, 1.5).unwrap();
+        let mut tail_energy = 0.0;
+        for i in 0..4_800 {
+            let y = f64::from(
+                impulse.process_mode(if i == 0 { 1.0 } else { 0.0 }, SteinerMode::LowPass),
+            );
+            if i >= 2_400 {
+                tail_energy += y * y;
+            }
+        }
+        eprintln!(
+            "Steiner res=1.5: small gain={}, driven gain={}, H3/fundamental={}, impulse late energy={tail_energy}",
+            gains[0], gains[1], third_ratio
+        );
+        assert!(
+            gains[0] > 20.0,
+            "small-signal resonance must exceed Q=2 baseline: {gains:?}"
+        );
+        assert!(
+            gains[1] > 3.0 && gains[1] < gains[0],
+            "driven resonance must remain loud and compress: {gains:?}"
+        );
+        assert!(
+            third_ratio > 0.002,
+            "resonance must generate harmonics: {third_ratio}"
+        );
+        assert!(
+            tail_energy > 1e-6,
+            "impulse must ring beyond 50 ms: {tail_energy}"
+        );
+    }
+
+    #[test]
+    fn steiner_extreme_cutoffs_and_inputs_stay_finite() {
+        for sample_rate in [44_100.0, 48_000.0, 96_000.0] {
+            let below_nyquist = f32::from_bits((sample_rate * 0.5_f32).to_bits() - 1);
+            for cutoff in [1.0, 20.0, 1_000.0, sample_rate * 0.49, below_nyquist] {
+                for mode in [
+                    SteinerMode::LowPass,
+                    SteinerMode::BandPass,
+                    SteinerMode::HighPass,
+                ] {
+                    let mut f = SteinerParkerFilter::new(sample_rate, cutoff, 1.5).unwrap();
+                    for i in 0..48_000 {
+                        let input = if i < 12_000 {
+                            1.0
+                        } else {
+                            (f64::from(i) * 0.13).sin() as f32
+                        };
+                        let y = f.process_mode(input, mode);
+                        assert!(
+                            y.is_finite() && y.abs() < 100.0,
+                            "sr={sample_rate} cutoff={cutoff} mode={mode:?} output={y}"
+                        );
+                    }
+                    assert_eq!(f.process_mode(f32::NAN, mode), 0.0);
+                    assert_eq!(f.process_sample(0.0, f32::NAN, 0.0), 0.0);
+                    assert!(f.process_sample(f32::MAX, -f32::MAX, f32::MAX).is_finite());
+                    assert!(f.process_mode(0.0, mode).is_finite());
+                }
+            }
         }
     }
     #[test]
