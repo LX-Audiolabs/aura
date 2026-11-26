@@ -13,10 +13,21 @@ DSP provenance (aura-dsp)
   - fundsp (MIT OR Apache-2.0) — DSF, soft-saw, Karplus-Strong, Moog ladder
   - InfiniteDSP (MIT) — PredictiveLadder ZDF
 
+CLAP bindings (clap-sys)
+------------------------
+Currently crates.io `clap-sys` 0.6 (MIT OR Apache-2.0) by Micah Johnston and
+Robbert van der Helm: https://github.com/micahrj/clap-sys
+CLAP C API headers (MIT) by Alexandre BIQUE: https://github.com/free-audio/clap
+
+In-tree takeover plan: **docs/clap-sys.md**. When that crate lands, keep the
+upstream LICENSE-MIT, keep those copyrights in this NOTICE, package as
+`lx-aura-clap-sys` (lib `clap_sys`), license MIT — do not relicense as GPL,
+do not publish under the crates.io name `clap-sys`.
+
 Other dependencies
 ------------------
 See each crate's Cargo.toml / cargo license output for the full graph
-(clap-sys, vst3-rs, lv2-sys, Slint, baseview, etc.). Keep their attribution
+(vst3-rs, lv2-sys, Slint, baseview, etc.). Keep their attribution
 requirements when redistributing.
 
 Fonts bundled with aura-build

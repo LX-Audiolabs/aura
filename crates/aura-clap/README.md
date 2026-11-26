@@ -9,13 +9,13 @@ CLAP format wrapper for AURA.
 | Layer | What |
 |-------|------|
 | **Spec / ABI** | free-audio/clap (`CLAP_VERSION` on their `main` / releases) |
-| **Rust bindings** | [`clap-sys`](https://crates.io/crates/clap-sys) — C layout + constants from those headers |
+| **Rust bindings** | crates.io [`clap-sys`](https://crates.io/crates/clap-sys) today — C layout + constants from those headers. **Intent:** in-tree takeover, see [`docs/clap-sys.md`](../../docs/clap-sys.md) |
 | **Our code** | `export!`, factory, process, audio-ports (+ config, sidechain), note-ports, params (sample-accurate + mono mod), state, GUI, remote-controls, latency, tail, render, **preset-load** (+ discovery when factory presets exist) |
 
 Rules:
 
 1. **New extensions and behaviour** come from free-audio docs/headers (product needs decide *which* extensions we ship).
-2. **`clap-sys` may lag** the latest free-audio **revision** (1.2.x). Major/minor 1.2 stay ABI-compatible (`clap_version_is_compatible`: major ≥ 1). We still design against free-audio; bump `clap-sys` when bindings catch up or switch to git/bindgen if we need a newer header.
+2. **Do not wait on crates.io `clap-sys`.** Major/minor 1.2 stay ABI-compatible (`clap_version_is_compatible`: major ≥ 1). Design against free-audio. AURA will maintain the bindings in-tree ([`docs/clap-sys.md`](../../docs/clap-sys.md)). Until that crate exists, vendor a newer header rather than wait for an upstream publish.
 3. **Do not invent** extension IDs or struct layouts — copy free-audio names.
 
 ### Version snapshot (check when bumping)
@@ -27,7 +27,7 @@ Checked **2026-11-25**.
 | free-audio/clap (upstream) | **1.2.10** (as of check against `main` `version.h`) |
 | clap-sys (this workspace lock) | **0.6.0** — `CLAP_VERSION_*` = **1.2.10** |
 
-Bump clap-sys only when a **new extension** needs bindings. Revision lag inside 1.2.x is not a ship blocker.
+A crates.io bump is not the plan. New extension needed before the in-tree crate exists → vendor. Revision lag inside 1.2.x is not a ship blocker.
 
 ## Usage
 
@@ -137,7 +137,7 @@ Install: `cargo aura install --clap --release -plug smoke-synth smoke-midi-fx sm
 
 ### Spec / bindings (not a ship blocker)
 
-- `clap-sys` may lag free-audio 1.2.x revision — bump only when a **new** extension is needed (see version snapshot above).
+- crates.io `clap-sys` may lag free-audio 1.2.x — do not wait on it. Takeover plan: [`docs/clap-sys.md`](../../docs/clap-sys.md).
 - Do **not** claim “full CLAP zoo” (thread-pool, surround/ambisonic ports, context-menu, track-info, …) unless product requires it.
 
 ### Explicit non-goals (AURA)

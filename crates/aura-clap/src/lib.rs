@@ -1,8 +1,9 @@
 //! Minimal CLAP wrapper for AURA.
 //!
 //! **Spec:** [free-audio/clap](https://github.com/free-audio/clap) is the source of truth.
-//! Bindings: [`clap-sys`](https://crates.io/crates/clap-sys) (may lag free-audio *revision*;
-//! see crate README). Extensions and layouts always follow free-audio headers.
+//! Bindings: crates.io [`clap-sys`](https://crates.io/crates/clap-sys) today; in-tree
+//! takeover planned (`docs/clap-sys.md`). Extensions and layouts always follow
+//! free-audio headers.
 //!
 //! ```ignore
 //! aura_clap::export!(MyPlugin);
