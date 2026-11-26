@@ -7,6 +7,13 @@ Versioning: [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Added caller-controlled `aura_dsp::oversampling::Oversampler2x`: halfband FIR
+  interpolation/decimation with allocation-free processing and reset, explicit
+  63-sample latency, and 4x composition. Included driven-tanh alias measurements
+  against an independent 4x reference; existing filter APIs remain unchanged.
+
 ### Fixed
 
 - Preserved Steiner-Parker low-cutoff DC gain with double-precision coefficients

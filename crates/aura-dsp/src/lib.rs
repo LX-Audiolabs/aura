@@ -121,6 +121,7 @@ pub mod mod_route_table;
 pub mod modulation;
 pub mod noise;
 pub mod oscillator;
+pub mod oversampling;
 pub mod panning;
 pub mod reverb;
 pub mod smoothing;
