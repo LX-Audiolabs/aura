@@ -12,7 +12,10 @@ use crate::error::{DspError, Result};
 /// Moog ladder lowpass filter — 4th-order with resonant feedback.
 ///
 /// Uses a 4-stage cascade of one-pole filters with a `tanh` saturator
-/// on the final stage. Feedback through the resonance path (`rez`)
+/// on the final stage, antialiased with first-order ADAA of the existing
+/// rational transfer curve. Four cascade stages and their coefficients are retained;
+/// ADAA adds temporal smoothing and changes the final stage feedback dynamics.
+/// Feedback through the resonance path (`rez`)
 /// creates the characteristic Moog emphasis near cutoff.
 ///
 /// # Examples
@@ -41,9 +44,30 @@ pub struct MoogLadder {
     ps0: f32,
     ps1: f32,
     ps2: f32,
+    saturation_previous: f32,
 }
 
 impl MoogLadder {
+    /// Retarget coefficients without resetting signal history. Unchanged rate is a no-op.
+    ///
+    /// # Errors
+    /// Rejects invalid rates or a current cutoff at/above the new Nyquist;
+    /// errors leave parameters and state unchanged. Allocates nothing.
+    pub fn set_sample_rate(&mut self, sample_rate: f32) -> Result<()> {
+        if let Some(err) = crate::error::validate_sample_rate(sample_rate) {
+            return Err(err);
+        }
+        if sample_rate == self.sample_rate {
+            return Ok(());
+        }
+        if let Some(err) = crate::error::validate_frequency(self.cutoff, sample_rate) {
+            return Err(err);
+        }
+        self.sample_rate = sample_rate;
+        self.set_cutoff_q(self.cutoff, self.q);
+        Ok(())
+    }
+
     /// Create a new Moog ladder filter.
     ///
     /// # Errors
@@ -79,6 +103,7 @@ impl MoogLadder {
             ps0: 0.0,
             ps1: 0.0,
             ps2: 0.0,
+            saturation_previous: 0.0,
         };
         filter.set_cutoff_q(cutoff, q);
         Ok(filter)
@@ -144,6 +169,7 @@ impl MoogLadder {
         self.ps0 = 0.0;
         self.ps1 = 0.0;
         self.ps2 = 0.0;
+        self.saturation_previous = 0.0;
     }
 
     /// Process a single sample through the filter.
@@ -163,8 +189,9 @@ impl MoogLadder {
         // Stage 2
         self.s2 = crate::flush_denormal((self.s1 + self.ps1) * self.p - self.k * self.s2);
         // Stage 3 with tanh saturation
-        self.s3 = crate::flush_denormal(tanh_approx(
+        self.s3 = crate::flush_denormal(saturate_adaa(
             (self.s2 + self.ps2) * self.p - self.k * self.s3,
+            &mut self.saturation_previous,
         ));
 
         // Save state for next sample
@@ -204,6 +231,29 @@ fn tanh_approx(x: f32) -> f32 {
     let numerator = x * (27.0 + x2);
     let denominator = 27.0 + 9.0 * x2;
     numerator / denominator
+}
+
+// Exact primitive of the existing clamped rational tanh approximation.
+// Using log(cosh) here would subtly replace the ladder's static transfer curve.
+fn saturation_primitive(x: f64) -> f64 {
+    let a = x.abs().min(3.0);
+    a * a / 18.0 + (4.0 / 3.0) * (a * a / 3.0).ln_1p() + (x.abs() - 3.0).max(0.0)
+}
+
+#[inline]
+fn saturate_adaa(x: f32, previous: &mut f32) -> f32 {
+    if !x.is_finite() {
+        *previous = 0.0;
+        return 0.0;
+    }
+    let a = f64::from(x);
+    let b = f64::from(*previous);
+    *previous = crate::flush_denormal(x);
+    if (a - b).abs() < 1e-5 * (1.0 + a.abs().max(b.abs())) {
+        tanh_approx((0.5 * a + 0.5 * b) as f32)
+    } else {
+        ((saturation_primitive(a) - saturation_primitive(b)) / (a - b)) as f32
+    }
 }
 
 #[cfg(test)]
@@ -281,5 +331,96 @@ mod regressions {
         for x in [-100.0, -10.0, 10.0, 100.0] {
             assert!(tanh_approx(x).abs() <= 1.0);
         }
+    }
+}
+
+#[cfg(test)]
+mod adaa_tests {
+    use super::*;
+    // Reference is the pre-ADAA ladder recurrence, with the same poles and feedback.
+    fn naive_step(f: &mut MoogLadder, input: f32) -> f32 {
+        let x = input - f.rez * f.s3;
+        f.s0 = (x + f.px) * f.p - f.k * f.s0;
+        f.s1 = (f.s0 + f.ps0) * f.p - f.k * f.s1;
+        f.s2 = (f.s1 + f.ps1) * f.p - f.k * f.s2;
+        f.s3 = tanh_approx((f.s2 + f.ps2) * f.p - f.k * f.s3);
+        f.px = x;
+        f.ps0 = f.s0;
+        f.ps1 = f.s1;
+        f.ps2 = f.s2;
+        f.s3
+    }
+
+    #[test]
+    fn high_cutoff_driven_ladder_alias_energy_reduced() {
+        let mut filter = MoogLadder::new(48000.0, 18000.0, 0.2).unwrap();
+        let mut reference = filter.clone();
+        let mut clean = vec![];
+        let mut naive = vec![];
+        for n in 0..16384 {
+            let phase = std::f64::consts::TAU * 1703.0 * f64::from(n) / 8192.0;
+            let input = (8.0 * phase.sin()) as f32;
+            let y = filter.process_sample(input);
+            let r = naive_step(&mut reference, input);
+            if n >= 8192 {
+                clean.push(f64::from(y));
+                naive.push(f64::from(r));
+            }
+        }
+        let fft = realfft::RealFftPlanner::<f64>::new().plan_fft_forward(8192);
+        let energy = |samples: &mut [f64]| {
+            let mut spectrum = fft.make_output_vec();
+            fft.process(samples, &mut spectrum).unwrap();
+            let fundamental = spectrum[1703].norm_sqr();
+            spectrum
+                .iter()
+                .enumerate()
+                .skip(1)
+                .filter(|(i, _)| *i != 1703 && *i != 3406)
+                .map(|(_, z)| z.norm_sqr())
+                .sum::<f64>()
+                / fundamental
+        };
+        let a = energy(&mut clean);
+        let b = energy(&mut naive);
+        assert!(a < b * 0.5, "alias energy ADAA={a} naive={b}");
+    }
+
+    #[test]
+    fn adaa_preserves_static_transfer_and_handles_small_differences() {
+        for x in [-100.0, -3.0, -1.0, -0.00001, 0.0, 0.00001, 1.0, 3.0, 100.0] {
+            let mut previous = x;
+            assert_eq!(saturate_adaa(x, &mut previous), tanh_approx(x));
+            let y = saturate_adaa(x + 1e-6, &mut previous);
+            assert!((y - tanh_approx(x)).abs() < 1e-5);
+        }
+    }
+
+    #[test]
+    fn high_resonance_cutoff_drive_stay_finite() {
+        for cutoff in [1000.0, 18000.0, 23500.0] {
+            let mut f = MoogLadder::new(48000.0, cutoff, 0.9).unwrap();
+            for n in 0..48000 {
+                assert!(f.process_sample((n as f32 * 0.73).sin() * 20.0).is_finite());
+            }
+        }
+    }
+
+    #[test]
+    fn adaa_reduces_folded_third_harmonic() {
+        let mut previous = 0.0;
+        let mut naive = [0.0_f64; 2];
+        let mut adaa = [0.0_f64; 2];
+        for n in 0..8192 {
+            let phase = std::f64::consts::TAU * 1703.0 * f64::from(n) / 8192.0;
+            let x = (phase.sin() * 4.0) as f32;
+            let y = saturate_adaa(x, &mut previous);
+            let angle = 3.0 * phase;
+            naive[0] += f64::from(tanh_approx(x)) * angle.cos();
+            naive[1] += f64::from(tanh_approx(x)) * angle.sin();
+            adaa[0] += f64::from(y) * angle.cos();
+            adaa[1] += f64::from(y) * angle.sin();
+        }
+        assert!(adaa[0].hypot(adaa[1]) < naive[0].hypot(naive[1]) * 0.7);
     }
 }
