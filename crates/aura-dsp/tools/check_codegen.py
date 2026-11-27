@@ -12,7 +12,11 @@ from pathlib import Path
 
 
 def body(assembly, name):
-    match = re.search(r"^" + name + r":\n(.*?)(?=^\s*\.seh_endproc)", assembly, re.M | re.S)
+    match = re.search(
+        r"^" + name + r":\n(.*?)(?=^\s*\.seh_endproc)",
+        assembly,
+        re.MULTILINE | re.DOTALL,
+    )
     if not match:
         raise AssertionError(f"missing Windows x86_64 assembly symbol: {name}")
     return match[1]
@@ -39,7 +43,11 @@ def main():
         if name == "probe_delay":
             # Delay wrap/modulo is allowed BETWEEN linear interpolation spans.
             errors = [e for e in errors if e != "integer modulo/division"]
-            spans = [b for b in re.split(r"^\.LBB[^\n]*:\n", code, flags=re.M) if "vmulps" in b]
+            spans = [
+                b
+                for b in re.split(r"^\.LBB[^\n]*:\n", code, flags=re.MULTILINE)
+                if "vmulps" in b
+            ]
             assert spans, "missing vector delay span"
             assert all("integer modulo/division" not in violations(b) for b in spans), "delay interpolation wraps inside a vector span"
         assert not errors, f"{name}: {errors}"
