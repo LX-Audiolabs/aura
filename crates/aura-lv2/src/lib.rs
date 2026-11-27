@@ -393,6 +393,7 @@ unsafe extern "C" fn cleanup<L: PluginLogic>(instance: LV2_Handle) {
 
 unsafe extern "C" fn run<L: PluginLogic>(instance: LV2_Handle, sample_count: u32) {
     host_callback("LV2", "run", || {
+        let _denormals = aura_core::process::FtzDazGuard::new();
         let Some(inst) = Instance::<L>::from_handle(instance) else {
             return;
         };

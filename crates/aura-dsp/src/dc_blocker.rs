@@ -50,6 +50,29 @@ impl DcBlocker {
         self.y1 = 0.0;
     }
 
+    /// Process contiguous audio with a branchless f32 recurrence.
+    /// Finite validation runs before/after the kernel; invalid blocks become
+    /// silence and reset state. Host/product must enable FTZ/DAZ at callback edge.
+    /// This IIR is intentionally scalar over time.
+    #[inline]
+    pub fn process_block(&mut self, buffer: &mut [f32]) {
+        if !buffer.iter().all(|x| x.is_finite()) {
+            buffer.fill(0.0);
+            self.reset();
+            return;
+        }
+        for x in buffer.iter_mut() {
+            let y = self.r.mul_add(self.y1, *x - self.x1);
+            self.x1 = *x;
+            self.y1 = y;
+            *x = y;
+        }
+        if !self.y1.is_finite() || !buffer.iter().all(|x| x.is_finite()) {
+            buffer.fill(0.0);
+            self.reset();
+        }
+    }
+
     /// Process one sample. Non-finite input → `0.0`. Denormals flushed on state.
     #[inline]
     #[must_use]

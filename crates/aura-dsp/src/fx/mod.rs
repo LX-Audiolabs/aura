@@ -7,17 +7,10 @@
 
 pub mod state_migration;
 
-/// 2nd-order Biquad Filter structure for Butterworth LP/HP and Mono Maker.
-///
-/// Runs in **Transposed Direct Form II**: the state (`s1`/`s2`) holds partial
-/// sums rather than raw input/output history. This is far more robust to
-/// coefficient changes than Direct Form I — when fc/Q/gain jump in a single
-/// block (slider drag, A/B/C slope switch), DF-I leaves the large output
-/// history `y1`/`y2` mismatched against the new feedback coefficients, which
-/// fires a loud transient that rings on the new resonance (a low, narrow,
-/// high-gain band booms like a "mega low shelf"). TDF-II state stays
-/// consistent, so the transfer function is identical but the modulation glitch
-/// is gone.
+/// 2nd-order filter with f64 coefficient design and f32 delta-form audio/state.
+/// Block-first processing keeps validation and coefficient cache work outside
+/// the sample recurrence. This replaces the former f64 TDF-II tick; rounding
+/// and coefficient-change transients differ, while the transfer function remains.
 #[derive(Clone, Default)]
 pub struct Biquad {
     b0: f64,
@@ -25,8 +18,7 @@ pub struct Biquad {
     b2: f64,
     a1: f64,
     a2: f64,
-    s1: f64,
-    s2: f64,
+    kernel: crate::filter::biquad_kernel::BiquadKernel,
 }
 
 /// Single-sample audio filter. Every filter type in this module implements this,
@@ -44,26 +36,21 @@ impl Biquad {
         Self::default()
     }
 
+    /// One-sample compatibility wrapper. Prefer `process_buffer` for callbacks.
     #[inline]
     pub fn process(&mut self, x: f32) -> f32 {
-        let x_f64 = f64::from(x);
-        // Transposed Direct Form II
-        let y = self.b0 * x_f64 + self.s1;
-        let s1 = self.b1 * x_f64 - self.a1 * y + self.s2;
-        let s2 = self.b2 * x_f64 - self.a2 * y;
-        // Finite-guard (last line of defense): if the state ever goes non-finite,
-        // reset instead of poisoning every downstream persistent accumulator
-        // (later filters, goniometer correlation, FFT) forever — that was the
-        // "Reaper freezes until Reset" failure mode.
-        if !y.is_finite() || !s1.is_finite() || !s2.is_finite() {
-            self.s1 = 0.0;
-            self.s2 = 0.0;
-            return 0.0;
-        }
-        // Avoid denormals in the state
-        self.s1 = if s1.abs() < 1e-30 { 0.0 } else { s1 };
-        self.s2 = if s2.abs() < 1e-30 { 0.0 } else { s2 };
-        y as f32
+        let mut sample = [x];
+        self.process_buffer(&mut sample);
+        sample[0]
+    }
+
+    /// f32 delta-form audio/state with f64 coefficient design/cache at block edges.
+    /// Invalid/overflowing blocks become silence and reset history. Enable FTZ/DAZ
+    /// at the product callback edge. Recurrence is intentionally scalar over time.
+    #[inline]
+    pub fn process_buffer(&mut self, buffer: &mut [f32]) {
+        self.kernel
+            .process_buffer(buffer, [self.b0, self.b1, self.b2, self.a1, self.a2]);
     }
 
     pub fn set_coefs(&mut self, b0: f64, b1: f64, b2: f64, a1: f64, a2: f64) {
@@ -264,8 +251,7 @@ impl Biquad {
     }
 
     pub fn reset(&mut self) {
-        self.s1 = 0.0;
-        self.s2 = 0.0;
+        self.kernel.reset();
     }
 }
 
@@ -1207,46 +1193,8 @@ impl MsBandLimiter {
 // CPU floating-point helper: set FTZ/DAZ inside a block, restore MXCSR on exit.
 // =============================================================================
 
-/// RAII guard that enables Flush-To-Zero and Denormals-Are-Zero on `x86_64`
-/// for the duration of the current scope and restores the previous MXCSR
-/// value when dropped. On non-`x86_64` targets it is a zero-cost no-op.
-pub struct FtzDazGuard {
-    #[cfg(target_arch = "x86_64")]
-    old_csr: u32,
-}
-
-impl FtzDazGuard {
-    /// Capture the current MXCSR, set FTZ/DAZ, and return the guard.
-    #[allow(deprecated)]
-    pub fn new() -> Self {
-        #[cfg(target_arch = "x86_64")]
-        {
-            let old_csr = unsafe { std::arch::x86_64::_mm_getcsr() };
-            unsafe { std::arch::x86_64::_mm_setcsr(old_csr | 0x8040) };
-            Self { old_csr }
-        }
-        #[cfg(not(target_arch = "x86_64"))]
-        {
-            Self {}
-        }
-    }
-}
-
-impl Default for FtzDazGuard {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Drop for FtzDazGuard {
-    #[allow(deprecated)]
-    fn drop(&mut self) {
-        #[cfg(target_arch = "x86_64")]
-        unsafe {
-            std::arch::x86_64::_mm_setcsr(self.old_csr);
-        }
-    }
-}
+/// Callback-scoped floating-point environment guard shared with format wrappers.
+pub use aura_core::process::FtzDazGuard;
 
 #[cfg(test)]
 mod tests {

@@ -5,6 +5,38 @@ filters, FX, analysis. Optional via `aura` feature `dsp` (default on).
 
 Third-party provenance: see repository root [`NOTICE`](../../NOTICE).
 
+## Hot-path house style
+
+New DSP uses block-first contiguous `&[f32]` / `&mut [f32]` audio and f32 state;
+coefficient/cutoff design can use f64 outside the tick. Keep finite validation
+in separate boundary passes, history wrap/copy outside tap loops, and denormal
+mode at the callback edge. No allocation or locks after construction.
+New hot-DSP PRs must include a failing regression plus assembly or Criterion
+evidence. Reject new per-sample wrapped/f64/sample-callback converter loops;
+explain unavoidable scalar recurrences explicitly.
+AURA CLAP/VST3/LV2 wrappers set/restore FTZ/DAZ on x86_64. Standalone products
+use `fx::FtzDazGuard`; on other architectures the host/product must set its
+platform denormal mode. The guard is thread-bound.
+
+Use `BiquadFilter::process_buffer`, `fx::Biquad::process_buffer`,
+`DcBlocker::process_block`, and `dsp_util::mix_add` for contiguous audio.
+`DelayLine::read_block` reads successive newest-to-oldest fractional tap snapshots,
+cycling through existing history; it does not write or advance the delay.
+Its interpolation spans are linear; wrap occurs only between spans.
+Biquads use f32 delta TDF-II state mirrored near Nyquist, with f64 coefficient
+preparation. This retains 1-Hz DC behavior and coefficient-independent history;
+rounding differs from the former f64 tick. Invalid/overflowing blocks silence
+and reset state. Input/gain to `mix_add` must be finite and bounded.
+
+IIR state recurrences remain scalar over time. Nonlinear Moog/Steiner processing
+remains intentionally scalar; Moog's existing divided-difference ADAA still uses
+f64 for cancellation accuracy, and Steiner retains f64 state for low-cutoff DC
+accuracy. Legacy FIR/sample callback APIs retain their
+existing behavior. This house style governs new hot paths rather than claiming
+that every historical kernel has been migrated.
+
+[Compiler and Criterion evidence](CODEGEN.md) records what actually vectorized.
+
 ## Oversampling
 
 `aura_dsp::oversampling::Oversampler2x` wraps caller DSP with halfband
@@ -25,6 +57,30 @@ Account for the fractional delay when aligning dry/wet paths or reporting host
 latency. At 48 kHz the 2x pair retains DC..19.2 kHz within 0.02 dB; the halfband
 transition extends to 28.8 kHz. Host Nyquist is attenuated by approximately
 6 dB. This is a bandwidth/latency tradeoff, not transparent full-band bypass.
+
+### Block nonlinear processing (opt-in IIR)
+
+```rust
+use aura_dsp::{filter::{BiquadFilter, FilterType}, oversampling::Oversampler2xIir};
+let _denormals = aura_dsp::fx::FtzDazGuard::new();
+let mut os = Oversampler2xIir::new();
+let mut filter = BiquadFilter::new(FilterType::LowPass, 96_000.0, 8_000.0, 0.707)?;
+let mut audio = [0.25_f32; 256];
+os.process_block_with(&mut audio, |high_rate| {
+    filter.process_buffer(high_rate);
+    for x in high_rate { *x = x.clamp(-0.5, 0.5); }
+});
+# Ok::<(), aura_dsp::DspError>(())
+```
+
+The callback gets chronological even/odd audio in at most 128 f32 stack slots
+(64 host samples). No callback for empty input. Caller state/automation must
+survive chunk boundaries; no voice mixing law is imposed. Guards run in separate
+passes around conversion/callback boundaries. Invalid chunks are silenced and
+converter state reset; caller manages recovery of its own state. Block FMA
+rounding/invalid recovery differ from the legacy IIR sample adapter. The existing
+`Oversampler2x` stays bit-compatible. IIR `LATENCY_SAMPLES = 3` is the identity
+impulse peak; group delay varies with frequency, so it is not a dry/wet aligner.
 
 ### Alias measurement
 

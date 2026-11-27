@@ -20,6 +20,7 @@ categories = ["multimedia::audio"]
 name = "aura_dsp"
 
 [dependencies]
+lx-aura-core = { workspace = true }
 lx-aura-params = { workspace = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

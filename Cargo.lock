@@ -3409,6 +3409,7 @@ dependencies = [
  "ebur128",
  "goonj",
  "hisab",
+ "lx-aura-core",
  "lx-aura-params",
  "realfft",
  "serde",

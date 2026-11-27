@@ -15,14 +15,22 @@
 //!
 //! ## Architecture
 //!
-//! All processing methods work on contiguous `&mut [f32]` slices. Hot-path
-//! methods (`next_sample`, `process_sample`) are `#[inline]` for cross-crate
-//! optimization. Buffer methods (`fill_buffer`, `process_buffer`) iterate
-//! over slices, enabling SIMD auto-vectorization when compiled with
-//! appropriate target features (`-C target-cpu=native`).
+//! House style for new hot DSP: block-first contiguous f32 slices and f32
+//! audio/state. f64 is for coefficient/cutoff preparation outside the tick.
+//! Keep guards and circular wrap outside inner arithmetic loops. Block APIs
+//! expose independent work to LLVM; actual auto-vectorization needs evidence.
+//! Recursive IIR filters remain scalar over time. No explicit voice SIMD API.
 //!
-//! dhvani (the sound engine) handles buffer alignment and SIMD dispatch.
-//! aura-dsp provides the scalar reference implementations.
+//! [`oversampling::Oversampler2xIir::process_block_with`] supplies contiguous
+//! doubled-rate scratch to one block callback per chunk. Legacy sample callback
+//! methods and the f64 FIR [`oversampling::Oversampler2x`] remain compatible.
+//! Older nonlinear kernels (Moog's f64 ADAA primitive and Steiner's f64 state)
+//! retain their scalar implementation; this is not a claim that all historical DSP complies.
+//!
+//! AURA's CLAP/VST3/LV2 wrappers enable FTZ/DAZ once per callback on `x86_64` and
+//! restore the host environment. Standalone DSP users must do so themselves
+//! with [`fx::FtzDazGuard`]; on other architectures the product/host must enable
+//! its platform denormal mode. Block kernels do not flush every sample.
 //!
 //! ## Quick Start
 //!

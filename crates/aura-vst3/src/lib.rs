@@ -543,6 +543,7 @@ impl<L: PluginLogic> Component<L> {
     unsafe fn process_audio(&self, data: *mut ProcessData) -> tresult {
         // Author `process` must not unwind across the COM ABI.
         host_callback_with("VST3", "process", kInternalError, || {
+            let _denormals = aura_core::process::FtzDazGuard::new();
             if data.is_null() {
                 return kInvalidArgument;
             }

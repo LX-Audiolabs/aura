@@ -141,3 +141,73 @@ impl ProcessContext {
         self.ump_out.clear();
     }
 }
+
+/// RAII guard that enables Flush-To-Zero and Denormals-Are-Zero on `x86_64`
+/// for the duration of the current scope and restores the previous MXCSR
+/// value when dropped. Thread-bound: create/drop on the processing thread.
+/// On non-`x86_64` targets this is a no-op; the host/product must enable the
+/// platform denormal mode once at its callback edge.
+pub struct FtzDazGuard {
+    #[cfg(target_arch = "x86_64")]
+    old_csr: u32,
+    thread: std::marker::PhantomData<*mut ()>,
+}
+
+impl FtzDazGuard {
+    /// Capture the current MXCSR, set FTZ/DAZ, and return the guard.
+    #[must_use]
+    #[allow(deprecated)]
+    pub fn new() -> Self {
+        #[cfg(target_arch = "x86_64")]
+        {
+            // SAFETY: SSE/MXCSR is available on every x86_64 target.
+            let old_csr = unsafe { std::arch::x86_64::_mm_getcsr() };
+            // SAFETY: Only documented FTZ/DAZ bits are added to valid MXCSR.
+            unsafe { std::arch::x86_64::_mm_setcsr(old_csr | 0x8040) };
+            Self {
+                old_csr,
+                thread: std::marker::PhantomData,
+            }
+        }
+        #[cfg(not(target_arch = "x86_64"))]
+        {
+            Self {
+                thread: std::marker::PhantomData,
+            }
+        }
+    }
+}
+
+impl Default for FtzDazGuard {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Drop for FtzDazGuard {
+    #[allow(deprecated)]
+    fn drop(&mut self) {
+        #[cfg(target_arch = "x86_64")]
+        // SAFETY: Restore the saved MXCSR on the same thread.
+        unsafe {
+            std::arch::x86_64::_mm_setcsr(self.old_csr);
+        }
+    }
+}
+
+#[cfg(all(test, target_arch = "x86_64"))]
+mod ftz_tests {
+    #[test]
+    #[allow(deprecated)]
+    fn callback_guard_enables_ftz_daz_and_restores_caller_environment() {
+        let saved = unsafe { std::arch::x86_64::_mm_getcsr() };
+        unsafe { std::arch::x86_64::_mm_setcsr(saved & !0x8040) };
+        {
+            let _guard = super::FtzDazGuard::new();
+            assert_eq!(unsafe { std::arch::x86_64::_mm_getcsr() } & 0x8040, 0x8040);
+        }
+        let restored = unsafe { std::arch::x86_64::_mm_getcsr() };
+        unsafe { std::arch::x86_64::_mm_setcsr(saved) };
+        assert_eq!(restored, saved & !0x8040);
+    }
+}

@@ -160,8 +160,9 @@ fn allpass(mut x: f32, state: &mut [f32; 4], coefficients: &[f32; 4]) -> f32 {
 
 /// Low-cost f32 polyphase IIR 2x converter for nonlinear synthesis.
 ///
-/// Same chronological closure contract as [`Oversampler2x`]; 32 allpass
-/// multiplies (16 sections) plus averaging per host sample, fixed storage, no locks.
+/// Prefer [`Self::process_block_with`] for a contiguous doubled-rate callback.
+/// Sample callback methods retain the chronological contract of [`Oversampler2x`].
+/// 32 allpass multiplies (16 sections) plus averaging per host sample, fixed storage, no locks.
 /// Nonlinear phase: latency varies with frequency; not suitable for parallel
 /// dry/wet paths requiring exact phase alignment. Transition around host Nyquist.
 #[derive(Clone, Debug, Default)]
@@ -200,11 +201,82 @@ impl Oversampler2xIir {
         finite_sample(0.5 * a + 0.5 * b)
     }
 
-    /// Process host-rate samples in place; caller state persists across blocks.
+    /// Process a doubled-rate contiguous block with one callback per chunk.
+    ///
+    /// Uses 128 f32 stack slots (64 host samples); no allocation or circular
+    /// indexing. Callback receives chronological interleaved even/odd samples.
+    /// Empty input invokes no callback. Callback state must survive chunk edges.
+    /// Finite checks run in separate boundary passes, never inside allpass loops.
+    /// Invalid input/output rejects the chunk to silence and resets conversion
+    /// state; the caller owns recovery of its own processor state.
+    /// Enable FTZ/DAZ at the product callback edge; see `fx::FtzDazGuard` (`x86_64`).
+    /// IIR recurrence remains scalar over time; independent callback work may
+    /// auto-vectorize. The legacy sample callback methods retain their numerics.
+    #[inline]
+    pub fn process_block_with(&mut self, buffer: &mut [f32], mut process: impl FnMut(&mut [f32])) {
+        let mut scratch = [0.0; 128];
+        for host in buffer.chunks_mut(64) {
+            if !host.iter().all(|x| x.is_finite()) {
+                self.reset();
+                host.fill(0.0);
+                continue;
+            }
+            let high = &mut scratch[..host.len() * 2];
+            for (&x, pair) in host.iter().zip(high.as_chunks_mut::<2>().0) {
+                pair[0] = allpass_tick(x, &mut self.up_a, &IIR_A);
+                pair[1] = allpass_tick(x, &mut self.up_b, &IIR_B);
+            }
+            if !high.iter().all(|x| x.is_finite()) {
+                self.reset();
+                host.fill(0.0);
+                continue;
+            }
+            process(high);
+            if !high.iter().all(|x| x.is_finite()) {
+                self.reset();
+                host.fill(0.0);
+                continue;
+            }
+            for (out, pair) in host.iter_mut().zip(high.as_chunks::<2>().0) {
+                let a = allpass_tick(pair[0], &mut self.down_a, &IIR_A);
+                let b = allpass_tick(self.odd_delay, &mut self.down_b, &IIR_B);
+                self.odd_delay = pair[1];
+                *out = 0.5 * a + 0.5 * b;
+            }
+            if !host.iter().all(|x| x.is_finite()) || !self.state_is_finite() {
+                self.reset();
+                host.fill(0.0);
+            }
+        }
+    }
+
+    fn state_is_finite(&self) -> bool {
+        self.up_a
+            .iter()
+            .chain(&self.up_b)
+            .chain(&self.down_a)
+            .chain(&self.down_b)
+            .all(|x| x.is_finite())
+            && self.odd_delay.is_finite()
+    }
+
+    /// Legacy sample-callback adapter; invokes the closure twice per host sample.
+    /// Use `process_block_with` to expose contiguous work and avoid per-tick guards.
     #[inline]
     pub fn process_block(&mut self, buffer: &mut [f32], mut process: impl FnMut(f32) -> f32) {
         for x in buffer {
             *x = self.process_sample(*x, &mut process);
         }
     }
+}
+
+// Fixed linear state/coefficients, no history wrap, guards or f64 in the tick.
+#[inline]
+fn allpass_tick(mut x: f32, state: &mut [f32; 4], coefficients: &[f32; 4]) -> f32 {
+    for (s, &a) in state.iter_mut().zip(coefficients) {
+        let y = a.mul_add(x, *s);
+        *s = (-a).mul_add(y, x);
+        x = y;
+    }
+    x
 }

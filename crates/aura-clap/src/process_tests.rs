@@ -69,6 +69,13 @@ impl PluginLogic for StatusPlugin {
         _: &mut AudioBuffer<'_, f32>,
         _: &mut ProcessContext,
     ) -> ProcessStatus {
+        #[cfg(target_arch = "x86_64")]
+        {
+            #[allow(deprecated)]
+            // SAFETY: MXCSR is available on all x86_64 targets.
+            let csr = unsafe { std::arch::x86_64::_mm_getcsr() };
+            assert_eq!(csr & 0x8040, 0x8040);
+        }
         state.pop_front().expect("unexpected process chunk")
     }
 }
@@ -174,4 +181,18 @@ fn sleep_reaches_clap_and_only_all_sleep_chunks_suspend() {
     ] {
         assert_eq!(process_status(&statuses), expected, "{statuses:?}");
     }
+}
+
+#[cfg(target_arch = "x86_64")]
+#[test]
+#[allow(deprecated)]
+fn process_enables_denormal_mode_and_restores_host_environment() {
+    // SAFETY: All operations use valid x86_64 MXCSR values on this thread.
+    let saved = unsafe { std::arch::x86_64::_mm_getcsr() };
+    unsafe { std::arch::x86_64::_mm_setcsr(saved & !0x8040) };
+    let result = process_status(&[ProcessStatus::Continue]);
+    let restored = unsafe { std::arch::x86_64::_mm_getcsr() };
+    unsafe { std::arch::x86_64::_mm_setcsr(saved) };
+    assert_eq!(result, CLAP_PROCESS_CONTINUE);
+    assert_eq!(restored, saved & !0x8040);
 }

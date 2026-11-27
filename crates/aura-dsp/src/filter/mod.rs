@@ -10,6 +10,7 @@
 //!
 //! SEM remains a recipe using existing primitives; no dedicated SEM type.
 
+pub(crate) mod biquad_kernel;
 pub mod moog;
 pub mod ms20;
 pub mod polivoks;
@@ -51,22 +52,20 @@ pub enum FilterType {
 
 /// Biquad filter coefficients and state.
 ///
-/// Uses Direct Form II Transposed implementation for better
-/// numerical behavior with floating point.
+/// Coefficients are designed in f64; the delta-form audio recurrence and state
+/// are f32. Enable FTZ/DAZ at the product callback edge. Processing is scalar
+/// over time because each output depends on the preceding state.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BiquadFilter {
-    // Double coefficients and state preserve poles at sub-Hz cutoffs.
+    // Double coefficient design preserves the small denominator sum near DC.
     // Coefficients (normalized by a0)
     b0: f64,
     b1: f64,
     b2: f64,
     a1: f64,
     a2: f64,
-    // State variables (Direct Form II Transposed)
     #[serde(skip)]
-    z1: f64,
-    #[serde(skip)]
-    z2: f64,
+    kernel: biquad_kernel::BiquadKernel,
     // Parameters for recalculation
     filter_type: FilterType,
     sample_rate: f32,
@@ -152,8 +151,7 @@ impl BiquadFilter {
             b2: 0.0,
             a1: 0.0,
             a2: 0.0,
-            z1: 0.0,
-            z2: 0.0,
+            kernel: biquad_kernel::BiquadKernel::default(),
             filter_type,
             sample_rate,
             frequency,
@@ -261,33 +259,17 @@ impl BiquadFilter {
         self.a2 = a2 * inv_a0;
     }
 
-    /// Process a single sample through the filter.
-    ///
-    /// Uses Direct Form II Transposed for numerical stability.
-    /// State variables are flushed to prevent denormal slowdowns.
+    /// One-sample wrapper around the block path. Invalid input returns silence
+    /// without advancing history. Prefer `process_buffer` for audio callbacks.
     #[inline]
     #[must_use]
     pub fn process_sample(&mut self, input: f32) -> f32 {
         if !input.is_finite() {
             return 0.0;
         }
-        let input = f64::from(input);
-        let output = self.b0 * input + self.z1;
-        self.z1 = self.b1 * input - self.a1 * output + self.z2;
-        self.z2 = self.b2 * input - self.a2 * output;
-        if self.z1.abs() < f64::MIN_POSITIVE {
-            self.z1 = 0.0;
-        }
-        if self.z2.abs() < f64::MIN_POSITIVE {
-            self.z2 = 0.0;
-        }
-        let output = output as f32;
-        if output.is_finite() && self.z1.is_finite() && self.z2.is_finite() {
-            output
-        } else {
-            self.reset();
-            0.0
-        }
+        let mut sample = [input];
+        self.process_buffer(&mut sample);
+        sample[0]
     }
 
     /// Update filter parameters and recalculate coefficients.
@@ -312,18 +294,19 @@ impl BiquadFilter {
         Ok(())
     }
 
-    /// Process a buffer of samples in place.
+    /// Process f32 audio in place. Finite validation runs at block edges;
+    /// invalid/overflowing blocks become silence and reset state. No heap/locks.
+    /// Delta realization changes rounding and coefficient-change transients
+    /// relative to the former f64 DF-II tick; the transfer function is retained.
     #[inline]
     pub fn process_buffer(&mut self, buffer: &mut [f32]) {
-        for sample in buffer.iter_mut() {
-            *sample = self.process_sample(*sample);
-        }
+        self.kernel
+            .process_buffer(buffer, [self.b0, self.b1, self.b2, self.a1, self.a2]);
     }
 
     /// Reset filter state (clear delay line).
     pub fn reset(&mut self) {
-        self.z1 = 0.0;
-        self.z2 = 0.0;
+        self.kernel.reset();
     }
 }
 
