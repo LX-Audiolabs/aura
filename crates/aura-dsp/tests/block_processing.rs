@@ -18,6 +18,18 @@ fn block_dc_step_and_partitions() {
 }
 
 #[test]
+fn dc_block_rejects_invalid_input_atomically_and_recovers() {
+    let mut dc = DcBlocker::with_r(0.5);
+    let mut invalid = [1.0, f32::NAN, 1.0];
+    dc.process_block(&mut invalid);
+    assert_eq!(invalid, [0.0; 3]);
+    let mut fresh = DcBlocker::with_r(0.5);
+    let mut next = [1.0];
+    dc.process_block(&mut next);
+    assert_eq!(next[0], fresh.process(1.0));
+}
+
+#[test]
 fn mix_add_uses_gain_and_requires_matching_lengths() {
     let mut out = [1.0, 2.0, 3.0];
     mix_add(&mut out, &[2.0, -4.0, 8.0], 0.5);
