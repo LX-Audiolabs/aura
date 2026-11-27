@@ -30,6 +30,20 @@ pub fn db_to_amplitude(db: f32) -> f32 {
     }
 }
 
+/// Add `input * gain` to `output` using a contiguous f32 multiply-add loop.
+/// Caller supplies finite bounded audio/gain and enables FTZ/DAZ at callback edge.
+/// No allocation, locks, clipping, normalization or changes to the mixing law.
+///
+/// # Panics
+/// Panics on unequal buffer lengths, before modifying output.
+#[inline]
+pub fn mix_add(output: &mut [f32], input: &[f32], gain: f32) {
+    assert_eq!(output.len(), input.len());
+    for (out, &x) in output.iter_mut().zip(input) {
+        *out = x.mul_add(gain, *out);
+    }
+}
+
 /// Normalize a buffer so the peak absolute value is 1.0.
 ///
 /// Does nothing if the buffer is all zeros.

@@ -64,6 +64,38 @@ impl DelayLine {
         self.buffer[read_pos_0] * (1.0 - frac) + self.buffer[read_pos_1] * frac
     }
 
+    /// Read a snapshot of successive fractional taps, newest to oldest.
+    /// Tap zero is `read(delay)`. Subsequent taps move backward through stored
+    /// history, cycling at capacity; this does not write or advance the delay.
+    /// Delay is clamped once. Nonfinite delay silences output. Each linear
+    /// interpolation span is contiguous; circular wrap occurs between spans.
+    /// No allocation; caller must enable FTZ/DAZ at the product callback edge.
+    #[inline]
+    pub fn read_block(&self, delay: f32, mut output: &mut [f32]) {
+        if !delay.is_finite() {
+            output.fill(0.0);
+            return;
+        }
+        let delay = delay.clamp(0.0, (self.max_delay_samples - 1) as f32);
+        let floor = delay.floor() as usize;
+        let frac = delay - floor as f32;
+        let size = self.max_delay_samples;
+        let mut a = (self.write_pos + size - 1 - floor) % size;
+        let mut b = (a + size - 1) % size;
+        while !output.is_empty() {
+            let n = output.len().min(a + 1).min(b + 1);
+            let (span, rest) = output.split_at_mut(n);
+            let aa = self.buffer[a + 1 - n..=a].iter().rev();
+            let bb = self.buffer[b + 1 - n..=b].iter().rev();
+            for ((out, &x), &y) in span.iter_mut().zip(aa).zip(bb) {
+                *out = x * (1.0 - frac) + y * frac;
+            }
+            a = (a + size - n) % size;
+            b = (b + size - n) % size;
+            output = rest;
+        }
+    }
+
     /// Clear the delay line.
     pub fn clear(&mut self) {
         self.buffer.fill(0.0);

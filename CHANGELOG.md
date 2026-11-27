@@ -9,6 +9,12 @@ Versioning: [SemVer](https://semver.org/).
 
 ### Added
 
+- Added `Oversampler2xIir::process_block_with`: fixed contiguous f32 scratch,
+  one doubled-rate block callback per chunk, no wrapped MAC indexing or guards
+  inside the allpass kernel. Legacy FIR/sample-callback numerics stay unchanged.
+- Added block DC processing, scaled block mixing and contiguous fractional delay
+  tap snapshots. Processing uses fixed/previously allocated storage only.
+
 - Added allocation-free, state-preserving `set_sample_rate` to `BiquadFilter`,
   `StateVariableFilter`, `MoogLadder`, and `SteinerParkerFilter`. Invalid rates
   or a cutoff at/above the new Nyquist fail without changing the filter.
@@ -21,6 +27,19 @@ Versioning: [SemVer](https://semver.org/).
   interpolation/decimation with allocation-free processing and reset, explicit
   63-sample latency, and 4x composition. Included driven-tanh alias measurements
   against an independent 4x reference; existing filter APIs remain unchanged.
+
+### Changed
+
+- DSP house style: block-first contiguous f32 audio/state, f64 only for
+  coefficient/cutoff preparation, boundary validation and callback-scoped
+  denormal mode. Recursive IIR/nonlinear work stays scalar where dependencies
+  require it; existing legacy scalar kernels are documented exceptions.
+- `BiquadFilter` and `fx::Biquad` now use endpoint-aware f32 delta TDF-II state
+  with f64 coefficient design. Small denominator terms are retained near DC and
+  Nyquist; transfer functions and history are preserved, rounding changes.
+  Block invalid/overflow recovery now silences/resets the entire block.
+- CLAP/VST3/LV2 wrappers set/restore FTZ/DAZ once per x86_64 callback. The existing
+  `fx::FtzDazGuard` is re-exported from core and cannot move between threads.
 
 ### Fixed
 

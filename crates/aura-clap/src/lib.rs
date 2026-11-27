@@ -693,6 +693,7 @@ unsafe extern "C" fn plugin_process<L: PluginLogic>(
 ) -> clap_process_status {
     // Author `process` + buffer glue: never unwind into the host.
     host_callback_with("CLAP", "process", CLAP_PROCESS_ERROR, || {
+        let _denormals = aura_core::process::FtzDazGuard::new();
         let Some(inst) = (unsafe { Instance::<L>::from_plugin(plugin) }) else {
             return CLAP_PROCESS_ERROR;
         };

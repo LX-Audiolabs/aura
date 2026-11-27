@@ -441,3 +441,159 @@ fn retargeted_coefficients_match_new_filters_and_noop_preserves_history() {
         |f: &mut SteinerParkerFilter, x| f.process_sample(x, 0.0, 0.0)
     );
 }
+
+#[test]
+fn iir_block_callback_is_chronological_partition_invariant_and_allocation_free() {
+    use aura_dsp::oversampling::Oversampler2xIir;
+    let source: Vec<f32> = (0..257).map(|n| (n as f32 * 0.17).sin() * 0.5).collect();
+    let mut expected = source.clone();
+    let mut actual = source.clone();
+    let mut a = Oversampler2xIir::new();
+    let mut b = a.clone();
+    let mut prev_a = 0.0;
+    let mut prev_b = 0.0;
+    let mut calls = 0;
+    let mut samples = 0;
+    ALLOCATOR_EVENTS.with(|e| e.set(Some(0)));
+    a.process_block_with(&mut expected, |high| {
+        calls += 1;
+        samples += high.len();
+        for x in high {
+            let y = *x + 0.2 * prev_a;
+            prev_a = *x;
+            *x = y;
+        }
+    });
+    for chunk in actual.chunks_mut(7) {
+        b.process_block_with(chunk, |high| {
+            for x in high {
+                let y = *x + 0.2 * prev_b;
+                prev_b = *x;
+                *x = y;
+            }
+        });
+    }
+    a.process_block_with(&mut [], |_| panic!("empty callback"));
+    let events = ALLOCATOR_EVENTS.with(|e| e.replace(None).unwrap());
+    assert_eq!(events, 0);
+    assert_eq!(samples, source.len() * 2);
+    assert!(calls < source.len(), "block callback invoked per sample");
+    for (a, b) in actual.iter().zip(expected) {
+        assert!((*a - b).abs() < 2e-6);
+    }
+}
+
+#[test]
+fn iir_block_dc_stopband_latency_and_finite_recovery() {
+    use aura_dsp::oversampling::Oversampler2xIir;
+    let mut os = Oversampler2xIir::new();
+    let mut dc = [0.75; 2048];
+    os.process_block_with(&mut dc, |_| {});
+    assert!((dc[2047] - 0.75).abs() < 1e-5);
+    os.reset();
+    let mut impulse = [0.0_f32; 4096];
+    impulse[0] = 1.0;
+    os.process_block_with(&mut impulse, |_| {});
+    let peak = impulse
+        .iter()
+        .enumerate()
+        .max_by(|a, b| a.1.abs().total_cmp(&b.1.abs()))
+        .unwrap()
+        .0;
+    assert_eq!(peak, Oversampler2xIir::LATENCY_SAMPLES);
+    assert!((impulse.iter().sum::<f32>() - 1.0).abs() < 1e-5);
+
+    let tone_bin = 3277;
+    let mut input: Vec<f32> = (0..2 * N)
+        .map(|n| (TAU * tone_bin as f64 * n as f64 / N as f64).sin() as f32)
+        .collect();
+    let mut up = Vec::with_capacity(4 * N);
+    os.reset();
+    os.process_block_with(&mut input, |high| {
+        up.extend(high.iter().map(|x| f64::from(*x)));
+    });
+    let spectrum = magnitudes(up[2 * N..].to_vec());
+    let db = 20.0 * (spectrum[N - tone_bin] / spectrum[tone_bin]).log10();
+    assert!(db < -60.0, "block image: {db} dBc");
+    let mut phase = 0;
+    input.fill(0.0);
+    os.reset();
+    os.process_block_with(&mut input, |high| {
+        for x in high {
+            *x = (TAU * (N - tone_bin) as f64 * f64::from(phase) / (2 * N) as f64).sin() as f32;
+            phase += 1;
+        }
+    });
+    let spectrum = magnitudes(input[N..].iter().map(|x| f64::from(*x)).collect());
+    let db = 20.0 * spectrum[tone_bin].log10();
+    assert!(db < -60.0, "block alias: {db} dBFS");
+    for bad in [f32::NAN, f32::INFINITY, f32::MAX] {
+        let mut x = [bad; 64];
+        os.process_block_with(&mut x, |_| {});
+        assert!(x.iter().all(|x| x.is_finite()));
+        os.process_block_with(&mut x, |high| high.fill(bad));
+        assert!(x.iter().all(|x| x.is_finite()));
+    }
+}
+
+#[test]
+fn f32_block_primitives_do_not_allocate_or_deallocate() {
+    use aura_dsp::{
+        dc_blocker::DcBlocker,
+        delay::DelayLine,
+        dsp_util::mix_add,
+        filter::{BiquadFilter, FilterType},
+        fx::{Biquad, FtzDazGuard},
+    };
+    let mut b = BiquadFilter::new(FilterType::LowPass, 48000.0, 1000.0, 0.707).unwrap();
+    let mut fx = Biquad::new();
+    fx.set_butterworth_lp(1000.0, 48000.0);
+    let mut dc = DcBlocker::new();
+    let mut delay = DelayLine::new(128);
+    for _ in 0..128 {
+        delay.write(0.5);
+    }
+    let input = [0.25; 257];
+    let mut output = [0.0; 257];
+    ALLOCATOR_EVENTS.with(|e| e.set(Some(0)));
+    {
+        let _denormals = FtzDazGuard::new();
+        mix_add(&mut output, &input, 0.5);
+        b.process_buffer(&mut output);
+        fx.process_buffer(&mut output);
+        dc.process_block(&mut output);
+        delay.read_block(0.5, &mut output);
+        b.reset();
+        fx.reset();
+        dc.reset();
+        delay.clear();
+    }
+    let count = ALLOCATOR_EVENTS.with(|e| e.replace(None).unwrap());
+    assert_eq!(count, 0);
+}
+
+#[test]
+fn iir_linear_block_scratch_matches_legacy_sample_reference_without_history_wrap() {
+    use aura_dsp::oversampling::Oversampler2xIir;
+    let mut block = [0.0; 257];
+    for (i, x) in block.iter_mut().enumerate() {
+        *x = (i as f32 * 0.17).sin() * 0.5;
+    }
+    let input = block;
+    let mut reference = Oversampler2xIir::new();
+    let mut block_os = Oversampler2xIir::new();
+    let mut callbacks = 0;
+    block_os.process_block_with(&mut block, |linear_scratch| {
+        assert_eq!(linear_scratch.len() % 2, 0);
+        assert!(linear_scratch.len() <= 128);
+        callbacks += 1;
+        for x in linear_scratch {
+            *x *= 0.75;
+        }
+    });
+    assert_eq!(callbacks, 5); // Four full linear spans and the final sample.
+    for (x, y) in input.into_iter().zip(block) {
+        let expected = reference.process_sample(x, |high| high * 0.75);
+        assert!((expected - y).abs() < 2e-6, "{expected} vs {y}");
+    }
+}

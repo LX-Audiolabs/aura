@@ -252,8 +252,118 @@ fn karplus_strong_1024(c: &mut Criterion) {
     });
 }
 
+// Keep converter and biquad comparisons together under identical input/FTZ settings.
+#[allow(clippy::too_many_lines)]
+fn block_first(c: &mut Criterion) {
+    use aura_dsp::oversampling::{Oversampler2x, Oversampler2xIir};
+    let _denormals = aura_dsp::fx::FtzDazGuard::new();
+    let source: Vec<f32> = (0..256_u16)
+        .map(|n| (f32::from(n) * 0.17).sin() * 0.5)
+        .collect();
+    let mut group = c.benchmark_group("block_first");
+    group.throughput(criterion::Throughput::Elements(256));
+    group.bench_function("fir_legacy_sample", |b| {
+        let mut os = Oversampler2x::new();
+        let mut out = [0.0; 256];
+        b.iter(|| {
+            for (out, &x) in out.iter_mut().zip(black_box(&source)) {
+                *out = os.process_sample(x, |x| x.clamp(-0.4, 0.4));
+            }
+            black_box(&out);
+        });
+    });
+    group.bench_function("iir_legacy_sample", |b| {
+        let mut os = Oversampler2xIir::new();
+        let mut out = [0.0; 256];
+        b.iter(|| {
+            for (out, &x) in out.iter_mut().zip(black_box(&source)) {
+                *out = os.process_sample(x, |x| x.clamp(-0.4, 0.4));
+            }
+            black_box(&out);
+        });
+    });
+    group.bench_function("iir_block_callback", |b| {
+        let mut os = Oversampler2xIir::new();
+        let mut out = [0.0; 256];
+        b.iter(|| {
+            out.copy_from_slice(black_box(&source));
+            os.process_block_with(&mut out, |high| {
+                for x in high {
+                    *x = x.clamp(-0.4, 0.4);
+                }
+            });
+            black_box(&out);
+        });
+    });
+    group.bench_function("biquad_legacy_f64", |b| {
+        // Previous TDF-II tick, including its per-sample guards, as baseline.
+        let f = BiquadFilter::new(FilterType::LowPass, 48000.0, 1000.0, 0.707).unwrap();
+        let coefs = serde_json::to_value(f).unwrap();
+        let coefficient = |key: &str| coefs[key].as_f64().unwrap();
+        let (b0, b1, b2, a1, a2) = (
+            coefficient("b0"),
+            coefficient("b1"),
+            coefficient("b2"),
+            coefficient("a1"),
+            coefficient("a2"),
+        );
+        let (mut z1, mut z2) = (0.0_f64, 0.0_f64);
+        let mut out = [0.0; 256];
+        b.iter(|| {
+            for (out, &x) in out.iter_mut().zip(black_box(&source)) {
+                if !x.is_finite() {
+                    *out = 0.0;
+                    continue;
+                }
+                let x = f64::from(x);
+                let y = b0 * x + z1;
+                z1 = b1 * x - a1 * y + z2;
+                z2 = b2 * x - a2 * y;
+                if z1.abs() < f64::MIN_POSITIVE {
+                    z1 = 0.0;
+                }
+                if z2.abs() < f64::MIN_POSITIVE {
+                    z2 = 0.0;
+                }
+                // Values are intentionally narrowed to the audio API's f32.
+                #[allow(clippy::cast_possible_truncation)]
+                let y = y as f32;
+                if y.is_finite() && z1.is_finite() && z2.is_finite() {
+                    *out = y;
+                } else {
+                    z1 = 0.0;
+                    z2 = 0.0;
+                    *out = 0.0;
+                }
+            }
+            black_box(&out);
+        });
+    });
+    group.bench_function("biquad_sample_wrapper", |b| {
+        let mut f = BiquadFilter::new(FilterType::LowPass, 48000.0, 1000.0, 0.707).unwrap();
+        let mut out = [0.0; 256];
+        b.iter(|| {
+            for (out, &x) in out.iter_mut().zip(black_box(&source)) {
+                *out = f.process_sample(x);
+            }
+            black_box(&out);
+        });
+    });
+    group.bench_function("biquad_block", |b| {
+        let mut f = BiquadFilter::new(FilterType::LowPass, 48000.0, 1000.0, 0.707).unwrap();
+        let mut out = [0.0; 256];
+        b.iter(|| {
+            out.copy_from_slice(black_box(&source));
+            f.process_buffer(&mut out);
+            black_box(&out);
+        });
+    });
+    group.finish();
+}
+
 criterion_group!(
     core_benches,
+    block_first,
     oscillator_sine_1024,
     oscillator_saw_polyblep_1024,
     biquad_filter_1024,
