@@ -260,3 +260,184 @@ fn interpolation_rejects_images_and_decimation_rejects_out_of_band_dsp() {
     let alias_db = 20.0 * magnitudes(output)[tone_bin].log10();
     assert!(alias_db < -80.0, "decimation alias: {alias_db} dBFS");
 }
+
+#[test]
+fn filters_retarget_without_reset_or_allocation() {
+    use aura_dsp::filter::{
+        BiquadFilter, FilterType, MoogLadder, StateVariableFilter, SteinerParkerFilter,
+    };
+    let mut b = BiquadFilter::new(FilterType::LowPass, 48000.0, 1000.0, 0.7).unwrap();
+    let mut s = StateVariableFilter::new(1000.0, 0.7, 48000.0).unwrap();
+    let mut m = MoogLadder::new(48000.0, 1000.0, 0.4).unwrap();
+    let mut p = SteinerParkerFilter::new(48000.0, 1000.0, 0.4).unwrap();
+    for _ in 0..100 {
+        let _ = b.process_sample(0.5);
+        let _ = s.process_sample(0.5);
+        m.process_sample(0.5);
+        p.process_sample(0.5, 0.0, 0.0);
+    }
+    ALLOCATOR_EVENTS.with(|events| events.set(Some(0)));
+    for rate in [96000.0, 48000.0] {
+        b.set_sample_rate(rate).unwrap();
+        s.set_sample_rate(rate).unwrap();
+        m.set_sample_rate(rate).unwrap();
+        p.set_sample_rate(rate).unwrap();
+        assert!(b.process_sample(0.0).abs() > 0.001);
+        assert!(s.process_sample(0.0).low_pass.abs() > 0.001);
+        assert!(m.process_sample(0.0).abs() > 0.001);
+        assert!(p.process_sample(0.0, 0.0, 0.0).abs() > 0.001);
+        for bad in [0.0, f32::NAN, f32::INFINITY, 2000.0] {
+            assert!(b.set_sample_rate(bad).is_err());
+            assert!(s.set_sample_rate(bad).is_err());
+            assert!(m.set_sample_rate(bad).is_err());
+            assert!(p.set_sample_rate(bad).is_err());
+        }
+    }
+    let count = ALLOCATOR_EVENTS.with(|events| events.replace(None).unwrap());
+    assert_eq!(count, 0);
+    b.set_sample_rate(96000.0).unwrap();
+    s.set_sample_rate(96000.0).unwrap();
+    m.set_sample_rate(96000.0).unwrap();
+    p.set_sample_rate(96000.0).unwrap();
+    b.set_params(30000.0, 0.7, 0.0).unwrap();
+    s.set_params(30000.0, 0.7).unwrap();
+    m.set_cutoff(30000.0);
+    p.set_params(30000.0, 0.4).unwrap();
+    assert!(b.set_sample_rate(48000.0).is_err());
+    assert!(s.set_sample_rate(48000.0).is_err());
+    assert!(m.set_sample_rate(48000.0).is_err());
+    assert!(p.set_sample_rate(48000.0).is_err());
+}
+
+#[test]
+fn iir_converter_dc_block_reset_and_no_alloc() {
+    use aura_dsp::oversampling::Oversampler2xIir;
+    let mut a = Oversampler2xIir::new();
+    let mut b = a.clone();
+    let mut calls = 0;
+    assert_eq!(
+        a.process_sample(0.0, |x| {
+            calls += 1;
+            x
+        }),
+        0.0
+    );
+    assert_eq!(calls, 2);
+    let mut block = [0.75; 2048];
+    ALLOCATOR_EVENTS.with(|events| events.set(Some(0)));
+    a.process_block(&mut block, |x| x);
+    for y in block {
+        assert_eq!(y, b.process_sample(0.75, |x| x));
+    }
+    assert!((b.process_sample(0.75, |x| x) - 0.75).abs() < 1e-5);
+    a.reset();
+    assert_eq!(a.process_sample(0.0, |x| x), 0.0);
+    for bad in [f32::NAN, f32::INFINITY, f32::MAX] {
+        assert!(a.process_sample(bad, |x| x).is_finite());
+        assert!(a.process_sample(0.0, |_| bad).is_finite());
+    }
+    let count = ALLOCATOR_EVENTS.with(|events| events.replace(None).unwrap());
+    assert_eq!(count, 0);
+}
+
+#[test]
+fn iir_rejects_images_and_decimation_aliases() {
+    use aura_dsp::oversampling::Oversampler2xIir;
+    let tone_bin = 3277;
+    let mut os = Oversampler2xIir::new();
+    let mut up = Vec::new();
+    for n in 0..2 * N {
+        os.process_sample(
+            (TAU * tone_bin as f64 * n as f64 / N as f64).sin() as f32,
+            |x| {
+                if n >= N {
+                    up.push(f64::from(x));
+                }
+                x
+            },
+        );
+    }
+    let spectrum = magnitudes(up);
+    let db = 20.0 * (spectrum[N - tone_bin] / spectrum[tone_bin]).log10();
+    assert!(db < -60.0, "image {db}");
+    let mut phase = 0;
+    let out = (0..2 * N)
+        .filter_map(|n| {
+            let y = os.process_sample(0.0, |_| {
+                let x =
+                    (TAU * (N - tone_bin) as f64 * f64::from(phase) / (2 * N) as f64).sin() as f32;
+                phase += 1;
+                x
+            });
+            (n >= N).then_some(f64::from(y))
+        })
+        .collect();
+    let db = 20.0 * magnitudes(out)[tone_bin].log10();
+    assert!(db < -60.0, "alias {db}");
+}
+
+#[test]
+fn iir_impulse_peak_matches_documented_latency() {
+    use aura_dsp::oversampling::Oversampler2xIir;
+    let mut os = Oversampler2xIir::new();
+    let impulse: Vec<_> = (0..4096)
+        .map(|n| os.process_sample(if n == 0 { 1.0 } else { 0.0 }, |x| x))
+        .collect();
+    let peak = impulse
+        .iter()
+        .enumerate()
+        .max_by(|a, b| a.1.abs().total_cmp(&b.1.abs()))
+        .unwrap()
+        .0;
+    assert_eq!(peak, Oversampler2xIir::LATENCY_SAMPLES);
+    assert!((impulse.iter().sum::<f32>() - 1.0).abs() < 1e-5);
+}
+
+#[test]
+fn retargeted_coefficients_match_new_filters_and_noop_preserves_history() {
+    use aura_dsp::filter::{
+        BiquadFilter, FilterType, MoogLadder, StateVariableFilter, SteinerParkerFilter,
+    };
+    macro_rules! check {
+        ($make:expr, $step:expr) => {{
+            let make = $make;
+            let step = $step;
+            let mut filter = make(48000.0);
+            for rate in [96000.0, 48000.0] {
+                filter.set_sample_rate(rate).unwrap();
+                filter.reset();
+                let mut reference = make(rate);
+                for n in 0..512 {
+                    let x = (n as f32 * 0.77).sin();
+                    assert_eq!(step(&mut filter, x), step(&mut reference, x));
+                }
+                filter
+                    .set_sample_rate(if rate < 96000.0 { 96000.0 } else { 48000.0 })
+                    .unwrap();
+                filter.set_sample_rate(rate).unwrap();
+                filter.set_sample_rate(rate).unwrap();
+                assert!(filter.set_sample_rate(f32::NAN).is_err());
+                assert!(filter.set_sample_rate(1000.0).is_err());
+                for _ in 0..16 {
+                    assert_eq!(step(&mut filter, 0.0), step(&mut reference, 0.0));
+                }
+            }
+        }};
+    }
+    check!(
+        |rate| BiquadFilter::with_gain(FilterType::Peak, rate, 10000.0, 2.0, 6.0).unwrap(),
+        |f: &mut BiquadFilter, x| f.process_sample(x)
+    );
+    check!(
+        |rate| StateVariableFilter::new(10000.0, 2.0, rate).unwrap(),
+        |f: &mut StateVariableFilter, x| f.process_sample(x).low_pass
+    );
+    check!(
+        |rate| MoogLadder::new(rate, 10000.0, 0.7).unwrap(),
+        |f: &mut MoogLadder, x| f.process_sample(x)
+    );
+    check!(
+        |rate| SteinerParkerFilter::new(rate, 10000.0, 1.5).unwrap(),
+        |f: &mut SteinerParkerFilter, x| f.process_sample(x, 0.0, 0.0)
+    );
+}

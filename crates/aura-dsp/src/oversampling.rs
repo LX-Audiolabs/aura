@@ -142,3 +142,69 @@ fn finite_sample(sample: f32) -> f32 {
         0.0
     }
 }
+
+// Allpass coefficient design: Muon / MusicDSP, order 8 steep halfband.
+// https://www.musicdsp.org/en/latest/Filters/223-polyphase-filters-delphi.html
+const IIR_A: [f32; 4] = [0.077_115_08, 0.482_070_62, 0.796_820_46, 0.941_251_46];
+const IIR_B: [f32; 4] = [0.265_968_53, 0.665_104_15, 0.884_101_5, 0.982_005_4];
+
+#[inline]
+fn allpass(mut x: f32, state: &mut [f32; 4], coefficients: &[f32; 4]) -> f32 {
+    for (s, &a) in state.iter_mut().zip(coefficients) {
+        let y = finite_sample(a * x + *s);
+        *s = finite_sample(x - a * y);
+        x = y;
+    }
+    x
+}
+
+/// Low-cost f32 polyphase IIR 2x converter for nonlinear synthesis.
+///
+/// Same chronological closure contract as [`Oversampler2x`]; 32 allpass
+/// multiplies (16 sections) plus averaging per host sample, fixed storage, no locks.
+/// Nonlinear phase: latency varies with frequency; not suitable for parallel
+/// dry/wet paths requiring exact phase alignment. Transition around host Nyquist.
+#[derive(Clone, Debug, Default)]
+pub struct Oversampler2xIir {
+    up_a: [f32; 4],
+    up_b: [f32; 4],
+    down_a: [f32; 4],
+    down_b: [f32; 4],
+    odd_delay: f32,
+}
+
+impl Oversampler2xIir {
+    /// Nominal impulse-peak latency in host samples, excluding caller DSP.
+    /// Group delay is frequency dependent; this is not a linear-phase delay.
+    pub const LATENCY_SAMPLES: usize = 3;
+
+    /// Construct zeroed fixed storage.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Clear conversion history, leaving caller DSP untouched.
+    pub fn reset(&mut self) {
+        *self = Self::default();
+    }
+
+    /// Run caller twice, in chronological order, at double host rate.
+    #[inline]
+    pub fn process_sample(&mut self, input: f32, mut process: impl FnMut(f32) -> f32) -> f32 {
+        let x = finite_sample(input);
+        let even = finite_sample(process(allpass(x, &mut self.up_a, &IIR_A)));
+        let odd = finite_sample(process(allpass(x, &mut self.up_b, &IIR_B)));
+        let a = allpass(even, &mut self.down_a, &IIR_A);
+        let b = allpass(self.odd_delay, &mut self.down_b, &IIR_B);
+        self.odd_delay = odd;
+        finite_sample(0.5 * a + 0.5 * b)
+    }
+
+    /// Process host-rate samples in place; caller state persists across blocks.
+    #[inline]
+    pub fn process_block(&mut self, buffer: &mut [f32], mut process: impl FnMut(f32) -> f32) {
+        for x in buffer {
+            *x = self.process_sample(*x, &mut process);
+        }
+    }
+}

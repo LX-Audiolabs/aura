@@ -51,3 +51,28 @@ a universal factor for Helmira or characterize its stateful Moog/Steiner paths.
 Those paths and their modulation need separate measurements when integrated.
 
 License: GPL-3.0-or-later.
+
+
+### Runtime rate changes and low-cost 2x conversion
+
+`BiquadFilter`, `StateVariableFilter`, `MoogLadder`, and `SteinerParkerFilter`
+provide `set_sample_rate(f32) -> Result<()>`. Calls preserve signal history,
+recompute from the current Hz cutoff and resonance/Q, and allocate nothing.
+Unchanged rates are no-ops. Invalid rates or a cutoff at/above the new Nyquist
+return an error without mutation: lower the cutoff first when reducing rate.
+
+`oversampling::Oversampler2xIir` is an explicit f32 alternative to the existing
+127-tap linear-phase `Oversampler2x`. Both accept
+`process_sample(input, |x| nonlinear_path(x))`; the IIR also accepts an in-place
+`process_block(&mut samples, closure)`. Configure caller DSP at twice host rate.
+Conversion uses 16 first-order allpass sections (32 multiplies) per host sample plus averaging,
+with fixed storage and no tap-index wrapping. Feedback prevents vectorization
+across samples; block processing keeps the closure inlinable.
+
+IIR `LATENCY_SAMPLES = 3` describes the identity impulse peak, not a constant
+phase delay. Group delay varies with frequency; avoid assuming exact dry/wet
+alignment. Tests require imaging and decimation alias rejection below -60 dB at
+0.4/0.6 times host sample rate, and unity DC gain. Coefficient design provenance:
+[Muon / MusicDSP halfband design](https://www.musicdsp.org/en/latest/Filters/223-polyphase-filters-delphi.html).
+Moog applies ADAA only to its final saturator; this retains its rational static
+curve and four-pole topology, with temporal smoothing in the feedback path.

@@ -40,6 +40,26 @@ pub struct SteinerParkerFilter {
 }
 
 impl SteinerParkerFilter {
+    /// Retarget coefficients without resetting signal history. Unchanged rate is a no-op.
+    ///
+    /// # Errors
+    /// Rejects invalid rates or a current cutoff at/above the new Nyquist;
+    /// errors leave parameters and state unchanged. Allocates nothing.
+    pub fn set_sample_rate(&mut self, sample_rate: f32) -> Result<()> {
+        if let Some(err) = crate::error::validate_sample_rate(sample_rate) {
+            return Err(err);
+        }
+        if sample_rate == self.sample_rate {
+            return Ok(());
+        }
+        if let Some(err) = crate::error::validate_frequency(self.cutoff, sample_rate) {
+            return Err(err);
+        }
+        self.sample_rate = sample_rate;
+        self.set_params(self.cutoff, self.resonance)?;
+        Ok(())
+    }
+
     /// Create a three-feed Sallen-Key filter.
     ///
     /// # Errors

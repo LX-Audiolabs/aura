@@ -9,6 +9,14 @@ Versioning: [SemVer](https://semver.org/).
 
 ### Added
 
+- Added allocation-free, state-preserving `set_sample_rate` to `BiquadFilter`,
+  `StateVariableFilter`, `MoogLadder`, and `SteinerParkerFilter`. Invalid rates
+  or a cutoff at/above the new Nyquist fail without changing the filter.
+- Added opt-in `Oversampler2xIir`: f32 polyphase allpass 2x conversion with
+  compatible sample closures, in-place block processing, fixed storage and
+  3-host-sample impulse-peak latency (frequency-dependent group delay).
+  Existing `Oversampler2x` FIR numerics are unchanged.
+
 - Added caller-controlled `aura_dsp::oversampling::Oversampler2x`: halfband FIR
   interpolation/decimation with allocation-free processing and reset, explicit
   63-sample latency, and 4x composition. Included driven-tanh alias measurements
@@ -22,6 +30,12 @@ Versioning: [SemVer](https://semver.org/).
   heuristic, not a circuit-validated model, and has no internal antialiasing.
 
 ### Changed
+
+- Applied first-order ADAA only to the Moog final-stage saturator using the
+  exact primitive of its existing rational tanh curve, preserving the four
+  cascade stages and static transfer curve. Added finite/high-drive and alias-energy
+  regression tests. ADAA adds frequency-dependent smoothing to the saturation
+  and feedback; it does not eliminate all aliasing or promise sample identity.
 
 - Updated `clap-sys` to 0.6.0 (CLAP 1.2.10; `clap_plugin_tuning_t` renamed to
   `clap_plugin_tuning`).
