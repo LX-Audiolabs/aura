@@ -79,6 +79,8 @@ AURA = **Slint + baseview + CLAP-first**, with thin VST3/LV2 only on the ship ma
 
 AURA is a **CLAP-first framework** with full support for all CLAP extensions. For a comprehensive guide on how to use CLAP in AURA, see the **[CLAP Guide](./CLAP-GUIDE.md)**.
 
+Improvement backlog & review notes: **[docs/improvements.md](./docs/improvements.md)**.
+
 ---
 
 ## Quick start
