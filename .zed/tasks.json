@@ -40,6 +40,46 @@
     "allow_concurrent_runs": false
   },
   {
+    "label": "audit",
+    "command": "cargo audit",
+    "use_new_terminal": false,
+    "reveal": "no_focus",
+    "hide": "on_success",
+    "allow_concurrent_runs": false
+  },
+  {
+    "label": "deny",
+    "command": "cargo deny check",
+    "use_new_terminal": false,
+    "reveal": "no_focus",
+    "hide": "on_success",
+    "allow_concurrent_runs": false
+  },
+  {
+    "label": "semver-checks",
+    "command": "cargo semver-checks --default-features",
+    "use_new_terminal": false,
+    "reveal": "no_focus",
+    "hide": "on_success",
+    "allow_concurrent_runs": false
+  },
+  {
+    "label": "msrv",
+    "command": "cargo msrv verify",
+    "use_new_terminal": false,
+    "reveal": "no_focus",
+    "hide": "on_success",
+    "allow_concurrent_runs": false
+  },
+  {
+    "label": "hack (each-feature)",
+    "command": "cargo hack check --each-feature",
+    "use_new_terminal": false,
+    "reveal": "no_focus",
+    "hide": "on_success",
+    "allow_concurrent_runs": false
+  },
+  {
     "label": "preview",
     "command": "cargo aura preview",
     "use_new_terminal": true,

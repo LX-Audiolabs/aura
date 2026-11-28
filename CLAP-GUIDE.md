@@ -206,9 +206,12 @@ Maintainer fork: [lxndrbe/clap-validator](https://github.com/lxndrbe/clap-valida
 wrapper is planned; it is not an existing command. Validator execution is not
 required on every Forgejo push.
 
-The example's source can be compiled independently; automated coverage of all
-Markdown samples is a separate backlog item. A validator run also does not
-replace state round-trip tests or real-host tests.
+Run `cargo test --locked -p aura-docs` to compile the Rust fences directly from
+README and this guide against the checkout, and check that their examples match.
+Forgejo PR CI runs this check and runs workspace doc-tests on code changes.
+The published dependency baseline still needs the release checklist's consumer
+check. Shell/TOML snippets and other Markdown files are not compiled by this
+test. A validator run also does not replace state round-trip or real-host tests.
 
 ## Further reading
 

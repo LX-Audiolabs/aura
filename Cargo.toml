@@ -18,6 +18,7 @@ members = [
     "crates/aura-host",
     "tools/cargo-aura",
     "tools/aura-preview",
+    "tools/aura-docs",
     "examples/smoke-gain",
     "examples/smoke-midi-fx",
     "examples/smoke-sidechain",

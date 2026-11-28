@@ -32,6 +32,10 @@ Target workspace version: **0.15.0** (not yet published).
 
 ### Added
 
+- Added path-only `aura-docs` tests: compile README/CLAP-GUIDE Rust examples
+  directly with rustdoc and reject example drift. Forgejo PR CI runs the central
+  examples on every PR and workspace doc-tests on code changes.
+
 - Added `Oversampler2xIir::process_block_with`: fixed contiguous f32 scratch,
   one doubled-rate block callback per chunk, no wrapped MAC indexing or guards
   inside the allpass kernel. Legacy FIR/sample-callback numerics stay unchanged.

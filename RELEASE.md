@@ -26,9 +26,10 @@ if a check does not apply, record why.
   Keep published examples and versioned docs.rs links on the published API;
   clearly label any upcoming API separately.
 - [ ] Compile the Rust samples in both pages against their stated dependency
-  versions. Review shell and manifest examples as well. These checks are manual
-  until Markdown example coverage is automated; `cargo test --doc` alone does
-  not compile Markdown files.
+  versions. `cargo test --locked -p aura-docs` compiles README and CLAP-GUIDE Rust
+  fences against the checkout and checks example consistency. Verify published
+  dependency versions separately; review shell/manifest examples and other
+  Markdown manually. Workspace doc-tests alone do not cover Markdown files.
 - [ ] Check migration instructions against the previous published API and state
   format. Add a focused regression or round-trip test when behavior changes.
 - [ ] Run the [manual Forgejo semver workflow](.forgejo/workflows/semver.yml) on
@@ -43,15 +44,17 @@ cargo fmt --all -- --check
 cargo build --workspace
 cargo test --workspace
 cargo test --workspace --doc
+cargo test --locked -p aura-docs
 cargo clippy --workspace --all-targets -- -D warnings
 git diff --check
 ```
 
 Use supported platform/backend configurations; do not enable all mutually
 exclusive renderer features together. Record any platform exclusions and the
-corresponding check on a supported OS. Current PR CI covers formatting and
-Clippy for code changes; it does not replace this release checklist.
-Markdown tests remain follow-up work. Run CLAP validation
+corresponding check on a supported OS. PR CI checks README/guide Rust examples
+on every PR, plus formatting, Clippy, and workspace doc-tests for code changes;
+it does not replace this release checklist. Other Markdown coverage remains
+follow-up work. Run CLAP validation
 locally when changing the wrapper or plugin behavior; it is not a default
 Forgejo push/PR job.
 

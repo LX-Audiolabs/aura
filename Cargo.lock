@@ -532,6 +532,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "aura-docs"
+version = "0.15.0"
+dependencies = [
+ "lx-aura",
+]
+
+[[package]]
 name = "aura-example-open-parented"
 version = "0.1.0"
 dependencies = [

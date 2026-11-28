@@ -4,10 +4,10 @@
 [![Rust](https://img.shields.io/badge/rust-1.95-orange.svg)](rust-toolchain.toml)
 [![Slint](https://img.shields.io/badge/UI-Slint-2379F4.svg)](https://slint.dev)
 
-**Audio Unified Rust Architecture**  
+**Audio Unified Rust Architecture**\
 *(DE-Gag: **AU**dio **RA**hmenwerk)*
 
-CLAP-first plugin framework for **LX Audiolabs**.  
+CLAP-first plugin framework for **LX Audiolabs**.\
 Runtime + formats + build + CLI live here.
 
 Published API baseline: **0.14.6** ([crates.io](https://crates.io/crates/lx-aura/0.14.6)).
@@ -43,7 +43,7 @@ AURA is intentionally narrow. Wrong stack → use another framework.
 
 - **Always:** Slint UI + **baseview** host window (embed, scale, keys, clipboard, …).
 - **Choose renderer** (features / project config), not toolkit:
-  - **FemtoVG** — default: `backend-femtovg-gl` (OpenGL) or `backend-femtovg-wgpu` (wgpu)
+  - **`FemtoVG`** — default: `backend-femtovg-gl` (OpenGL) or `backend-femtovg-wgpu` (wgpu)
   - **Skia** — optional (`backend-skia`)
   - **Software** — optional (`backend-software`)
 - There is no “raw egui editor” mode and no second UI framework in AURA.
@@ -180,7 +180,7 @@ cargo clippy --workspace --all-targets
 
 ## Design principles
 
-1. **Slint + baseview only** — renderer is a backend choice (FemtoVG / Skia / software); toolkit is not.
+1. **Slint + baseview only** — renderer is a backend choice (`FemtoVG` / Skia / software); toolkit is not.
 2. **CLAP first, thin formats** — one plugin logic API; VST3/LV2 only on the ship matrix; no format-shaped core.
 3. **Framework layout** — `crates/` · `examples/` · `tools/` (product catalogs keep their own plugins outside AURA).
 4. **One CLI:** **`cargo aura`** — `new`, `init`, `add`, `add-ui`, `build`, `install`, `watch`, `preview`, `run`, `preset`, `doctor`
@@ -294,7 +294,7 @@ local crate docs (`cargo doc -p lx-aura --features clap --open`), and
 | `clap.preset-load` + factory discovery | done (`factory_presets`) |
 | Poly mod / note expression | done (CLAP → `ProcessContext.notes`; `NoteVoiceTable` + `NOTE_END`) |
 | Native MIDI 2 process | done (`ProcessContext.ump` / `ump_out`; 7-bit `midi` remains) |
-| notes_out / arp-seq path | done (CLAP native; VST3/LV2 map On/Off/Choke) |
+| `notes_out` / arp-seq path | done (CLAP native; VST3/LV2 map On/Off/Choke) |
 | `aura-host` standalone dev host | done (CLI + Slint shell; MIDI in, params, plugin-GUI embed) |
 
 Changelog: [CHANGELOG.md](./CHANGELOG.md). Releases are tagged `vX.Y.Z`.
@@ -309,12 +309,14 @@ Issues and PRs welcome on this framework repo.
 - Prefer small, tested changes. One assert for non-trivial logic.
 - Match workspace versioning: single version in root `Cargo.toml` + `CHANGELOG.md`.
 - Follow [the release checklist](RELEASE.md) before publishing or tagging a release.
-- CI (Forgejo, self-hosted): `fmt --check` + `clippy -D warnings`.
+- CI (Forgejo, self-hosted): README/guide Rust examples and sample consistency
+  on every PR; `fmt --check`, `clippy -D warnings`, and workspace doc-tests on code changes.
 - API compatibility: manual [semver workflow](.forgejo/workflows/semver.yml),
   run before releases; see [coverage and local commands](RELEASE.md#api-compatibility-check).
 
 ```bash
 cargo fmt --all
+cargo test --locked -p aura-docs   # README + CLAP-GUIDE Rust samples and consistency
 cargo test --workspace
 cargo clippy --workspace --all-targets
 ```
@@ -328,7 +330,7 @@ cargo clippy --workspace --all-targets
 | Project | Link | Notes |
 |---------|------|-------|
 | **naad** (rust-old) | [MacCracken/naad](https://github.com/MacCracken/naad/tree/main/rust-old) | DSP graph / Faust-like ops |
-| **fundsp** | [SamiPerttu/fundsp](https://github.com/SamiPerttu/fundsp) | Composable / SIMD-friendly AudioUnit graphs |
+| **fundsp** | [SamiPerttu/fundsp](https://github.com/SamiPerttu/fundsp) | Composable / SIMD-friendly `AudioUnit` graphs |
 | **infinitedsp** | [infinitedsp](https://github.com/infinitedsp/infinitedsp) | Typed compile-time DSP graphs |
 
 Also: [truce](https://github.com/truce-audio/truce), [CLAP](https://github.com/free-audio/clap), [Slint](https://slint.dev), and the Rust audio community.
@@ -339,7 +341,7 @@ Also: [truce](https://github.com/truce-audio/truce), [CLAP](https://github.com/f
 
 Copyright © 2026 LX Audiolabs
 
-This project is free software under the **GNU General Public License v3.0 or later**.  
+This project is free software under the **GNU General Public License v3.0 or later**.\
 Distributing plugins that link AURA implies GPL obligations for that combined work. Selling with source is fine; closed-only ships are not the goal.
 
 Third-party notes: **Slint** is triple-licensed; the default ship path uses its **GPLv3** option.

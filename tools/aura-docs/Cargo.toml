@@ -1,0 +1,14 @@
+[package]
+name = "aura-docs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+description = "Compile AURA's central Markdown examples against the checkout"
+
+[dependencies]
+lx-aura = { workspace = true, default-features = false, features = ["clap"] }
+
+[lints]
+workspace = true

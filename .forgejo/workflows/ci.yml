@@ -23,6 +23,8 @@ jobs:
           git -c "http.extraheader=Authorization: Basic $auth" fetch --depth 1 origin main "${{ forgejo.ref }}"
           git checkout --force "${{ forgejo.sha }}"
           test "$(git rev-parse HEAD)" = "${{ forgejo.sha }}"
+      - name: Check README and CLAP guide examples
+        run: cargo test --locked -p aura-docs
       - name: Check changes and Rust workspace
         run: |
           set -euo pipefail
@@ -31,4 +33,5 @@ jobs:
           if test -f Cargo.toml && git diff --name-only origin/main HEAD | grep -Eqv '^(docs/|README[.]md$|CHANGELOG[.]md$|RELEASE[.]md$|LICENSE$|NOTICE$|CLAP-GUIDE[.]md$|[.]forgejo/|[.]zed/|renovate[.]json$)'; then
             cargo fmt --all -- --check
             cargo clippy --workspace --all-targets -- -D warnings
+            cargo test --locked --workspace --doc
           fi
