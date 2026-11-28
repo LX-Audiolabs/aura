@@ -31,6 +31,10 @@ if a check does not apply, record why.
   not compile Markdown files.
 - [ ] Check migration instructions against the previous published API and state
   format. Add a focused regression or round-trip test when behavior changes.
+- [ ] Run the [manual Forgejo semver workflow](.forgejo/workflows/semver.yml) on
+  the candidate commit, or run the command below locally. Record baseline versions
+  from its output. Resolve unintended API breaks; intentional breaks require the
+  appropriate version bump and migration notes, not suppressed checks.
 - [ ] Run the checks below on the candidate and record results, toolchain, and OS.
   Verify the declared MSRV when changing Rust requirements or dependencies.
 
@@ -47,9 +51,53 @@ Use supported platform/backend configurations; do not enable all mutually
 exclusive renderer features together. Record any platform exclusions and the
 corresponding check on a supported OS. Current PR CI covers formatting and
 Clippy for code changes; it does not replace this release checklist.
-Semver automation and Markdown tests remain follow-up work. Run CLAP validation
+Markdown tests remain follow-up work. Run CLAP validation
 locally when changing the wrapper or plugin behavior; it is not a default
 Forgejo push/PR job.
+
+### API compatibility check
+
+The manual `semver` workflow uses `cargo-semver-checks` **0.51.0** and compares
+publishable workspace libraries against their latest eligible crates.io versions.
+It does not run on normal PRs or tag pushes. Check the same candidate SHA before
+release; a local pass does not imply a Forgejo run has happened.
+
+```bash
+cargo semver-checks --workspace --default-features
+# Reproduce a comparison against a specific shared release:
+cargo semver-checks --workspace --default-features --baseline-version 0.14.6
+```
+
+Use `cargo install cargo-semver-checks --version 0.51.0 --locked` if needed.
+Update the tool pin deliberately with Rust toolchain upgrades: rustdoc JSON
+compatibility depends on the tool version. See the
+[tool documentation](https://github.com/obi1kenobi/cargo-semver-checks).
+
+Default features avoid mutually exclusive renderer backends. This checks the
+default FemtoVG-GL UI path, not wgpu/Skia/software, and the umbrella's default DSP
+surface, not its optional `clap`/`vst3`/`lv2` re-exports. Publishable format crates
+are checked directly; `publish = false` crates and examples are excluded by the
+tool. This is a Rust API check, not a test of sound, saved states, host behavior,
+MSRV, or every possible API break. For pre-1.0 crates, an incompatible change
+requires a minor version bump (`0.14.x` to `0.15.0`).
+
+Initial local comparison (2026-11-28, Windows x86_64, Rust 1.99.1, tool 0.51.0):
+12 library crates checked against 0.14.6; 11 passed, `lx-aura-dsp` failed two
+lint categories. This is not a release pass. The derive proc-macro's expansion
+behavior and non-default features need separate tests.
+
+- [ ] Resolve `DspError` variant-order compatibility: inserting
+  `InvalidFilterParameters` before existing variants changes their Serde binary
+  encoding. A consumer probe confirmed `InvalidSampleRate`'s bincode index
+  changed from 1 to 2. Preserve old encodings or explicitly version the break.
+- [ ] Resolve the `struct_missing` report for `aura_dsp::fx::FtzDazGuard`.
+  The old import and constructor still compile through a re-export from core;
+  it is not simply a missing import. The replacement is also intentionally
+  thread-bound (`!Send`/`!Sync`), unlike the published guard. Review the report
+  and compatibility implications before choosing a fix or version bump.
+
+No lints are suppressed. The Forgejo workflow has not yet run; its runner
+installs the pinned tool if absent or at a different version.
 
 ## Publish and verify
 

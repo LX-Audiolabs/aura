@@ -310,6 +310,8 @@ Issues and PRs welcome on this framework repo.
 - Match workspace versioning: single version in root `Cargo.toml` + `CHANGELOG.md`.
 - Follow [the release checklist](RELEASE.md) before publishing or tagging a release.
 - CI (Forgejo, self-hosted): `fmt --check` + `clippy -D warnings`.
+- API compatibility: manual [semver workflow](.forgejo/workflows/semver.yml),
+  run before releases; see [coverage and local commands](RELEASE.md#api-compatibility-check).
 
 ```bash
 cargo fmt --all

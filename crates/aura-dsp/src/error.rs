@@ -80,6 +80,38 @@ mod tests {
     use super::*;
 
     #[test]
+    fn binary_errors_preserve_0_14_6_encoding() {
+        // Published bincode 1.x fixtures: u32 variant index, then field values.
+        let cases: [(DspError, &[u8]); 5] = [
+            (
+                DspError::InvalidFrequency { frequency: 0.0, nyquist: 0.0 },
+                &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            ),
+            (
+                DspError::InvalidSampleRate { sample_rate: 0.0 },
+                &[1, 0, 0, 0, 0, 0, 0, 0],
+            ),
+            (
+                DspError::InvalidParameter { name: String::new(), reason: String::new() },
+                &[2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            ),
+            (
+                DspError::BufferOverflow { attempted: 0, capacity: 0 },
+                &[3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            ),
+            (
+                DspError::ComputationError { message: String::new() },
+                &[4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            ),
+        ];
+        for (error, published_bytes) in cases {
+            assert_eq!(bincode::serialize(&error).unwrap(), published_bytes);
+            let restored: DspError = bincode::deserialize(published_bytes).unwrap();
+            assert_eq!(serde_json::to_value(restored).unwrap(), serde_json::to_value(error).unwrap());
+        }
+    }
+
+    #[test]
     fn test_error_display() {
         let err = DspError::InvalidFrequency {
             frequency: -1.0,

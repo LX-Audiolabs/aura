@@ -37,6 +37,7 @@ goonj = { version = "1", features = ["binaural"], optional = true }
 hisab = { version = "1.4", optional = true }
 
 [dev-dependencies]
+bincode = "1.3"
 criterion = { version = "0.8", features = ["html_reports"] }
 
 [features]

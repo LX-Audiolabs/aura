@@ -671,6 +671,15 @@ dependencies = [
 
 [[package]]
 name = "bincode"
+version = "1.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "bincode"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "36eaf5d7b090263e8150820482d5d93cd964a81e4019913c972f4edcc6edb740"
@@ -3405,6 +3414,7 @@ name = "lx-aura-dsp"
 version = "0.14.7"
 dependencies = [
  "atomic_float",
+ "bincode 1.3.3",
  "criterion",
  "ebur128",
  "goonj",
@@ -6164,7 +6174,7 @@ version = "3.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "898160f1dfd383b4e92e17f0512a7d62f3c51c44937b23b6ffc3a1614a8eaccd"
 dependencies = [
- "bincode",
+ "bincode 2.0.1",
  "serde",
 ]
 
