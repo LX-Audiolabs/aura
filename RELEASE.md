@@ -97,7 +97,7 @@ behavior and non-default features need separate tests.
   fixtures test encoding and decoding against 0.14.6's ordering.
 - [x] Accept the intentional `FtzDazGuard` type relocation and loss of
   `Send`/`Sync`; retain the shared thread-bound core guard and its DSP re-export.
-  The workspace now targets **0.15.0 development**, with migration instructions
+  The workspace release is **0.15.0**, with migration instructions
   in [CHANGELOG.md](CHANGELOG.md). Do not restore cross-thread movement to
   satisfy a compatibility check.
 
@@ -115,7 +115,15 @@ README/guide consumer sample passed. The normal workspace semver run against
 run with `--release-type minor` executes 202 checks: 201 pass, with only the
 accepted guard `struct_missing` report remaining. The enum-order report is gone.
 
-No lints are suppressed. The Forgejo workflow has not yet run; its runner
+All 13 publishable workspace crates were uploaded to crates.io as 0.15.0 on
+2026-11-28, from release commit `7d952da`. Published-version documentation is
+updated in a follow-up commit; the release tag stays on the packaged source.
+Registry API confirms every version is available and not yanked. The standalone
+gain consumer passes against `lx-aura = "=0.15.0"` from crates.io, including
+stereo processing and state round-trip. docs.rs pages were still returning 404
+at the initial post-publication check; hosted API-doc verification remains open.
+
+No lints are suppressed. The Forgejo semver workflow has not yet run; its runner
 installs the pinned tool if absent or at a different version.
 
 ## Publish and verify

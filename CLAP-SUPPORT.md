@@ -1,8 +1,8 @@
 # CLAP support matrix
 
-Implementation snapshot: **AURA 0.15.0 development**, checked **2026-11-28**.
-Published author API remains 0.14.6 until release. This page describes the
-checkout; it is not a certification of every extension or host.
+Implementation snapshot: **AURA 0.15.0**, published and checked **2026-11-28**.
+This page describes the release source; it is not a certification of every
+extension or host.
 
 Scope: the stable and draft extension modules shipped by the locked
 `clap-sys 0.6.0` bindings (CLAP 1.2.10), plus factories and core events.

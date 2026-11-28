@@ -13,8 +13,8 @@ Versioning: [SemVer](https://semver.org/).
 
 - Update `lx-aura` / `lx-aura-*` dependency requirements together from `0.14`
   to `0.15` when adopting the release. Path dependencies with an explicit
-  `0.14` version requirement also need updating. Refresh the consumer lockfile;
-  crates.io consumers must wait until 0.15.0 is published.
+  `0.14` version requirement also need updating. Refresh the consumer lockfile
+  to select the published 0.15.0 crates.
 - `aura_dsp::fx::FtzDazGuard` now re-exports the shared core guard. Existing
   imports, `new`, `Default`, and scope-based restoration remain available, but
   the type is intentionally `!Send` and `!Sync`. Create and drop it inside the

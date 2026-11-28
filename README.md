@@ -10,16 +10,16 @@
 CLAP-first plugin framework for **LX Audiolabs**.\
 Runtime + formats + build + CLI live here.
 
-Published API baseline: **0.14.6** ([crates.io](https://crates.io/crates/lx-aura/0.14.6)).
-The versioned [API reference on docs.rs](https://docs.rs/lx-aura/0.14.6/aura/) is
+Published API baseline: **0.15.0** ([crates.io](https://crates.io/crates/lx-aura/0.15.0)).
+The versioned [API reference on docs.rs](https://docs.rs/lx-aura/0.15.0/aura/) is
 canonical; the Rust example below targets that release and was also checked
-against the **0.15.0** development checkout on **2026-11-28**. Repository quickstart and smoke
+against the **0.15.0** release source on **2026-11-28**. Repository quickstart and smoke
 examples use the checkout, including release changes and any subsequent `[Unreleased]` work in
 [CHANGELOG.md](CHANGELOG.md).
 
 | | |
 |--|--|
-| **Status** | **0.15.0 development** — see migration notes in [CHANGELOG.md](CHANGELOG.md); framework used in production LX plugins ([lx-audiolabs-plugins](https://github.com/LX-Audiolabs/lx-audiolabs-plugins)) |
+| **Status** | **0.15.0 released** — see migration notes in [CHANGELOG.md](CHANGELOG.md); framework used in production LX plugins ([lx-audiolabs-plugins](https://github.com/LX-Audiolabs/lx-audiolabs-plugins)) |
 | **Dependency** | `lx-aura` / `lx-aura-*` published to crates.io; `aura-host` / `aura-hot` / examples path-only (`publish = false`) |
 | **License** | [GPL-3.0-or-later](./LICENSE) |
 | **Rust** | 1.95+ MSRV (stable channel in `rust-toolchain.toml`), edition 2024 |
@@ -191,7 +191,7 @@ cargo aura doctor
 version string does not prove its source commit; record the installation revision
 when updating the fork. The pin above is a tooling baseline, not an automatic
 update policy. Reinstall `cargo-aura` from this checkout if an older installed
-CLI does not have the command. The published framework API baseline remains 0.14.6.
+CLI does not have the command. The published framework API baseline is 0.15.0.
 
 ### Build / test the framework
 
@@ -297,7 +297,7 @@ aura::export!(MyGain);
 
 Param IDs are **required and wire-stable** — reordering fields does not renumber automation.
 
-More detail: the [published API reference](https://docs.rs/lx-aura/0.14.6/aura/),
+More detail: the [published API reference](https://docs.rs/lx-aura/0.15.0/aura/),
 local crate docs (`cargo doc -p lx-aura --features clap --open`), and
 [crates/aura-clap/README.md](./crates/aura-clap/README.md).
 
@@ -315,7 +315,7 @@ local crate docs (`cargo doc -p lx-aura --features clap --open`), and
 | Latency / remote-controls / tail / render | done |
 | VST3 (Win/mac) | done (host smoke) |
 | LV2 (Linux) process + UI extension | done (UI host smoke depends on host) |
-| crates.io publish | **0.14.6** published; checkout targets **0.15.0** (not yet published) |
+| crates.io publish | **0.15.0** published (`lx-aura` and 12 supporting crates) |
 | `clap.preset-load` + factory discovery | done (`factory_presets`) |
 | Poly mod / note expression | done (CLAP → `ProcessContext.notes`; `NoteVoiceTable` + `NOTE_END`) |
 | Native MIDI 2 process | done (`ProcessContext.ump` / `ump_out`; 7-bit `midi` remains) |

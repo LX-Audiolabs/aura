@@ -1,10 +1,10 @@
 # CLAP Guide for AURA
 
-API baseline: **AURA 0.14.6** (published).
-Repository workspace: **0.15.0 release candidate**, not yet published; migration notes under `[0.15.0]` in
-[CHANGELOG.md](CHANGELOG.md). Checked against both APIs on **2026-11-28**.
+API baseline: **AURA 0.15.0** (published).
+Repository workspace: **0.15.0**; migration notes under `[0.15.0]` in
+[CHANGELOG.md](CHANGELOG.md). Checked against release source and registry on **2026-11-28**.
 
-The versioned [API reference on docs.rs](https://docs.rs/lx-aura/0.14.6/aura/)
+The versioned [API reference on docs.rs](https://docs.rs/lx-aura/0.15.0/aura/)
 is canonical for the published API. This guide uses the same parameter macro and
 `PluginLogic` surface as the [README](README.md). Repository examples follow the
 checkout; they may include changes newer than the published release.
@@ -23,7 +23,7 @@ edition = "2024"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-lx-aura = { version = "=0.14.6", default-features = false, features = ["clap"] }
+lx-aura = { version = "=0.15.0", default-features = false, features = ["clap"] }
 ```
 
 Put this complete, headless gain plugin in `src/lib.rs`:
@@ -109,7 +109,7 @@ Declare mono modulation with `flags = "modulatable"`; add
 UI edits and host gestures go through the editor's `PluginContext` bridge.
 Direct parameter writes alone do not describe a complete host automation gesture.
 See [smoke-gain](examples/smoke-gain/src/lib.rs) for Slint integration and
-the [editor bridge API](https://docs.rs/lx-aura-core/0.14.6/aura_core/editor/index.html)
+the [editor bridge API](https://docs.rs/lx-aura-core/0.15.0/aura_core/editor/index.html)
 for the host-facing contract.
 
 ## Slint GUI
@@ -170,7 +170,7 @@ testing; implemented callbacks do not establish compatibility across all hosts.
 AURA implements a selected CLAP surface, not every CLAP extension.
 The [support matrix](CLAP-SUPPORT.md) covers the locked bindings' extension set,
 exposure conditions, implementation limits, local tests, and host evidence for
-the 0.15.0 development checkout. Unsupported does not automatically mean planned.
+the 0.15.0 release. Unsupported does not automatically mean planned.
 These author hooks describe implementation entry points, not a host certification matrix:
 
 | Capability | Author API / condition |
@@ -221,7 +221,7 @@ test. A validator run also does not replace state round-trip or real-host tests.
 
 ## Further reading
 
-- [Published API reference (0.14.6)](https://docs.rs/lx-aura/0.14.6/aura/)
+- [Published API reference (0.15.0)](https://docs.rs/lx-aura/0.15.0/aura/)
 - [README and CLI quickstart](README.md)
 - [CLAP specification](https://github.com/free-audio/clap)
 - [Slint](https://slint.dev/)

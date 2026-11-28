@@ -2,7 +2,7 @@
 
 CLAP format wrapper for AURA.
 
-Implementation and verification snapshot: **0.15.0 development**, **2026-11-28**.
+Implementation and verification snapshot: **0.15.0**, **2026-11-28**.
 The public [CLAP support matrix](../../CLAP-SUPPORT.md) is the coverage index:
 supported / partial / not implemented, opt-ins, tests, and separate host evidence.
 
