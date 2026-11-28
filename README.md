@@ -115,8 +115,8 @@ cargo aura watch --clap --hot
 # 5) Check toolchain / AURA_PATH / clap-validator
 cargo aura doctor
 
-# 6) Optional: clap-validator on the installed .clap
-clap-validator validate path/to/my-plugin.clap
+# 6) Optional: validate the installed .clap (requires clap-validator on PATH)
+cargo aura validate path/to/my-plugin.clap
 ```
 
 ### In-repo smoke examples
@@ -162,11 +162,35 @@ cargo aura run [-plug <name> | path.clap] […]        # aura-host: load .clap, 
 cargo aura preset list  [-plug <name> | path.clap]   # factory presets (discovery)
 cargo aura preset pull  [-plug <name> | path.clap] --key <K> --out <file>
 cargo aura doctor                                    # toolchain / AURA_PATH / clap-validator
+cargo aura validate <path.clap>... [validator-options] # local clap-validator validate wrapper
 ```
 
 `kinds`: `effect` (default) · `effect-mono` · `analyzer` · `instrument`. CLAP is always on;
 `--vst3` / `--lv2` add the extra format. `install --hot` writes the `aura-hot` proxy
 (`Name.clap` + `Name.impl.*`) so `watch` can replace DSP under a loaded host.
+
+### Local CLAP validation
+
+The development CLI's `validate` command delegates to `clap-validator validate`
+on PATH. It does not build or install a plugin, download tooling, or run in CI.
+Paths and validation options pass through as separate arguments; stdout/stderr
+are inherited unchanged, including `--json`. Numeric exit codes pass through;
+failure to launch, or termination without an exit code, returns 1.
+
+```bash
+# Install the maintainer fork at the checked source revision:
+cargo install --git https://github.com/lxndrbe/clap-validator --rev f806ebaa06c7179889778bfbd1ee98b92639715c --locked clap-validator
+cargo aura validate --help
+cargo aura validate "path with spaces/my-plugin.clap" --json
+cargo aura validate --version
+cargo aura doctor
+```
+
+`doctor` reports the resolved executable path and its version. The validator's
+version string does not prove its source commit; record the installation revision
+when updating the fork. The pin above is a tooling baseline, not an automatic
+update policy. Reinstall `cargo-aura` from this checkout if an older installed
+CLI does not have the command. The published framework API baseline remains 0.14.6.
 
 ### Build / test the framework
 
@@ -183,7 +207,7 @@ cargo clippy --workspace --all-targets
 1. **Slint + baseview only** — renderer is a backend choice (`FemtoVG` / Skia / software); toolkit is not.
 2. **CLAP first, thin formats** — one plugin logic API; VST3/LV2 only on the ship matrix; no format-shaped core.
 3. **Framework layout** — `crates/` · `examples/` · `tools/` (product catalogs keep their own plugins outside AURA).
-4. **One CLI:** **`cargo aura`** — `new`, `init`, `add`, `add-ui`, `build`, `install`, `watch`, `preview`, `run`, `preset`, `doctor`
+4. **One CLI:** **`cargo aura`** — `new`, `init`, `add`, `add-ui`, `build`, `install`, `watch`, `preview`, `run`, `preset`, `validate`, `doctor`
 5. **KISS for humans and agents** — `aura.toml`, boring paths.
 
 ---
@@ -208,7 +232,7 @@ cargo clippy --workspace --all-targets
 | `aura-hot` | CLAP hot-reload proxy (`cargo aura watch --hot`) |
 | `aura-host` | Standalone dev host — load `.clap`, MIDI in, params, plugin GUI (CLI + Slint shell) |
 | `lx-aura-test` (`aura_test`) | State round-trip + process smokes (`[dev-dependencies]`) |
-| `cargo-aura` | Scaffold, build, install, watch, doctor, preview, run |
+| `cargo-aura` | Scaffold, build, install, watch, validate, doctor, preview, run |
 | `aura-preview` | Slint UI preview (`cargo aura preview`) |
 
 > Cross-plugin shared-memory IPC (spectrum/relay + CV) moved **out of AURA** — it now lives in the product catalog as **`lx-shm`** (`lx-audiolabs-dev`).

@@ -198,13 +198,16 @@ These remain author responsibilities, not compile-time guarantees.
 Validate an installed plugin locally:
 
 ```bash
-clap-validator validate path/to/my-gain.clap
+cargo aura validate path/to/my-gain.clap
 ```
 
 Maintainer fork: [lxndrbe/clap-validator](https://github.com/lxndrbe/clap-validator).
-`cargo aura doctor` checks availability only. The `cargo aura validate`
-wrapper is planned; it is not an existing command. Validator execution is not
-required on every Forgejo push.
+The development CLI's `cargo aura validate` delegates to `clap-validator validate`
+on PATH, preserving arguments, output, and numeric exit status. It does not
+build the plugin or download the validator. `cargo aura doctor` reports the
+resolved executable path and version. See the [installation revision and
+examples](README.md#local-clap-validation); version output alone does not prove
+a source commit. Validator execution is not required on every Forgejo push.
 
 Run `cargo test --locked -p aura-docs` to compile the Rust fences directly from
 README and this guide against the checkout, and check that their examples match.

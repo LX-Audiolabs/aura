@@ -32,6 +32,11 @@ Target workspace version: **0.15.0** (not yet published).
 
 ### Added
 
+- Added local `cargo aura validate`: delegates to `clap-validator validate` on
+  PATH, preserving arguments, inherited output and numeric exit status without
+  rebuilding plugins. `doctor` now reports the executable path and version.
+  Documented the maintainer fork's checked installation revision.
+
 - Added path-only `aura-docs` tests: compile README/CLAP-GUIDE Rust examples
   directly with rustdoc and reject example drift. Forgejo PR CI runs the central
   examples on every PR and workspace doc-tests on code changes.

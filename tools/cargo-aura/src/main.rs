@@ -12,6 +12,7 @@
 //!   cargo aura watch [--clap|--vst3|--lv2] [--release] [-plug …] [--no-install]
 //!   cargo aura run [-plug <name> | path.clap] [aura-host-args…]
 //!   cargo aura doctor
+//!   cargo aura validate <path.clap> [validator-options…]
 
 use std::env;
 use std::fs;
@@ -43,6 +44,7 @@ fn main() -> ExitCode {
         "run" => cmd_run(&args[1..]),
         "preset" => cmd_preset(&args[1..]),
         "doctor" => cmd_doctor(),
+        "validate" => cmd_validate(&args[1..]),
         "help" | "--help" | "-h" => {
             print_help();
             ExitCode::SUCCESS
@@ -102,6 +104,9 @@ Commands:
   preset pull  [-plug <name> | path.clap] --key <K> --out <file>
                           load factory preset by key, write v1 state blob
   doctor                  Check toolchain / AURA path / clap-validator
+  validate <path.clap>... [validator-options…]
+                          run clap-validator validate (from PATH), without building
+                          args / output / exit status pass through; --help for options
   help                    This message
 
 Install path (first match wins):
@@ -163,8 +168,8 @@ fn cmd_doctor() -> ExitCode {
         }
     }
 
-    if which("clap-validator").is_some() {
-        println!("  ok  clap-validator on PATH");
+    if let Some(path) = which("clap-validator") {
+        ok &= check_cmd(&path.to_string_lossy(), &["--version"]);
     } else {
         println!("  --  clap-validator not on PATH (optional, recommended)");
     }
@@ -194,6 +199,24 @@ fn check_cmd(bin: &str, args: &[&str]) -> bool {
         _ => {
             eprintln!("  !!  {bin} not found");
             false
+        }
+    }
+}
+
+/// Local validation only: inherit stdio and preserve the child's numeric exit code.
+fn cmd_validate(args: &[String]) -> ExitCode {
+    match Command::new("clap-validator")
+        .arg("validate")
+        .args(args)
+        .status()
+    {
+        Ok(status) => std::process::exit(status.code().unwrap_or(1)),
+        Err(error) => {
+            eprintln!(
+                "failed to run clap-validator: {error}\n\
+                 Install from https://github.com/lxndrbe/clap-validator and add it to PATH."
+            );
+            ExitCode::FAILURE
         }
     }
 }

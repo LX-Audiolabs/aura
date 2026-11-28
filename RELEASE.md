@@ -54,7 +54,7 @@ exclusive renderer features together. Record any platform exclusions and the
 corresponding check on a supported OS. PR CI checks README/guide Rust examples
 on every PR, plus formatting, Clippy, and workspace doc-tests for code changes;
 it does not replace this release checklist. Other Markdown coverage remains
-follow-up work. Run CLAP validation
+follow-up work. Run `cargo aura validate <path.clap>`
 locally when changing the wrapper or plugin behavior; it is not a default
 Forgejo push/PR job.
 
