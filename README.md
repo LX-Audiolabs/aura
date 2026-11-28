@@ -13,13 +13,13 @@ Runtime + formats + build + CLI live here.
 Published API baseline: **0.14.6** ([crates.io](https://crates.io/crates/lx-aura/0.14.6)).
 The versioned [API reference on docs.rs](https://docs.rs/lx-aura/0.14.6/aura/) is
 canonical; the Rust example below targets that release and was also checked
-against this **0.14.7** checkout on **2026-11-28**. Repository quickstart and smoke
+against the **0.15.0** development checkout on **2026-11-28**. Repository quickstart and smoke
 examples use the checkout, including changes listed under `[Unreleased]` in
 [CHANGELOG.md](CHANGELOG.md).
 
 | | |
 |--|--|
-| **Status** | **0.14.7** — basis complete; used in production LX plugins ([lx-audiolabs-plugins](https://github.com/LX-Audiolabs/lx-audiolabs-plugins)) |
+| **Status** | **0.15.0 development** — see migration notes in [CHANGELOG.md](CHANGELOG.md); framework used in production LX plugins ([lx-audiolabs-plugins](https://github.com/LX-Audiolabs/lx-audiolabs-plugins)) |
 | **Dependency** | `lx-aura` / `lx-aura-*` published to crates.io; `aura-host` / `aura-hot` / examples path-only (`publish = false`) |
 | **License** | [GPL-3.0-or-later](./LICENSE) |
 | **Rust** | 1.95+ MSRV (stable channel in `rust-toolchain.toml`), edition 2024 |
@@ -290,7 +290,7 @@ local crate docs (`cargo doc -p lx-aura --features clap --open`), and
 | Latency / remote-controls / tail / render | done |
 | VST3 (Win/mac) | done (host smoke) |
 | LV2 (Linux) process + UI extension | done (UI host smoke depends on host) |
-| crates.io publish | **0.14.6** published; checkout **0.14.7** plus `[Unreleased]` changes |
+| crates.io publish | **0.14.6** published; checkout targets **0.15.0** (not yet published) |
 | `clap.preset-load` + factory discovery | done (`factory_presets`) |
 | Poly mod / note expression | done (CLAP → `ProcessContext.notes`; `NoteVoiceTable` + `NOTE_END`) |
 | Native MIDI 2 process | done (`ProcessContext.ump` / `ump_out`; 7-bit `midi` remains) |

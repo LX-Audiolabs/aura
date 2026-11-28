@@ -86,15 +86,21 @@ Initial local comparison (2026-11-28, Windows x86_64, Rust 1.99.1, tool 0.51.0):
 lint categories. This is not a release pass. The derive proc-macro's expansion
 behavior and non-default features need separate tests.
 
-- [ ] Resolve `DspError` variant-order compatibility: inserting
-  `InvalidFilterParameters` before existing variants changes their Serde binary
-  encoding. A consumer probe confirmed `InvalidSampleRate`'s bincode index
-  changed from 1 to 2. Preserve old encodings or explicitly version the break.
-- [ ] Resolve the `struct_missing` report for `aura_dsp::fx::FtzDazGuard`.
-  The old import and constructor still compile through a re-export from core;
-  it is not simply a missing import. The replacement is also intentionally
-  thread-bound (`!Send`/`!Sync`), unlike the published guard. Review the report
-  and compatibility implications before choosing a fix or version bump.
+- [x] Restore `DspError` variant-order compatibility: append
+  `InvalidFilterParameters` after all five published variants. Fixed bincode
+  fixtures test encoding and decoding against 0.14.6's ordering.
+- [x] Accept the intentional `FtzDazGuard` type relocation and loss of
+  `Send`/`Sync`; retain the shared thread-bound core guard and its DSP re-export.
+  The workspace now targets **0.15.0 development**, with migration instructions
+  in [CHANGELOG.md](CHANGELOG.md). Do not restore cross-thread movement to
+  satisfy a compatibility check.
+
+Follow-up verification for 0.15.0 (same local environment): workspace build,
+tests including doc-tests, Clippy `--all-targets -- -D warnings`, and the
+README/guide consumer sample passed. The normal workspace semver run against
+0.14.6 accepts the version bump and skips breaking-change lints. A stricter DSP
+run with `--release-type minor` executes 202 checks: 201 pass, with only the
+accepted guard `struct_missing` report remaining. The enum-order report is gone.
 
 No lints are suppressed. The Forgejo workflow has not yet run; its runner
 installs the pinned tool if absent or at a different version.

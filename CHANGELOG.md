@@ -7,6 +7,29 @@ Versioning: [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+Target workspace version: **0.15.0** (not yet published).
+
+### Migration from 0.14.x
+
+- Update `lx-aura` / `lx-aura-*` dependency requirements together from `0.14`
+  to `0.15` when adopting the release. Path dependencies with an explicit
+  `0.14` version requirement also need updating. Refresh the consumer lockfile;
+  crates.io consumers must wait until 0.15.0 is published.
+- `aura_dsp::fx::FtzDazGuard` now re-exports the shared core guard. Existing
+  imports, `new`, `Default`, and scope-based restoration remain available, but
+  the type is intentionally `!Send` and `!Sync`. Create and drop it inside the
+  same audio callback/thread; remove it from state that must cross threads.
+  This safety restriction and type relocation are accepted breaking changes,
+  covered by the pre-1.0 minor bump to 0.15.0.
+- `DspError` preserves the five variants' binary Serde ordering from published
+  0.14.6. `InvalidFilterParameters` is appended; future variants must also be
+  appended. Code using variant names needs no migration. Unpublished checkouts
+  with the inserted-first variant used a different binary ordering; do not mix
+  serialized errors from those checkouts with released encodings.
+- DSP changes below can alter existing presets' sound; compare product renders
+  before upgrading. No new project-state schema or parameter-ID change is
+  introduced by the enum-order correction or guard versioning decision.
+
 ### Added
 
 - Added `Oversampler2xIir::process_block_with`: fixed contiguous f32 scratch,
@@ -42,6 +65,10 @@ Versioning: [SemVer](https://semver.org/).
   `fx::FtzDazGuard` is re-exported from core and cannot move between threads.
 
 ### Fixed
+
+- Restored published `DspError` binary variant indices by appending the new
+  filter error. Added fixed bincode fixtures for encoding and decoding all five
+  previously published variants.
 
 - Preserved Steiner-Parker low-cutoff DC gain with double-precision coefficients
   and recursive state; public sample and parameter APIs remain `f32`.

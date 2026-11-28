@@ -1,7 +1,7 @@
 # CLAP Guide for AURA
 
 API baseline: **AURA 0.14.6** (published).
-Repository workspace: **0.14.7**, with additional changes under `[Unreleased]` in
+Repository workspace: **0.15.0 development**, not yet published; migration notes under `[Unreleased]` in
 [CHANGELOG.md](CHANGELOG.md). Checked against both APIs on **2026-11-28**.
 
 The versioned [API reference on docs.rs](https://docs.rs/lx-aura/0.14.6/aura/)

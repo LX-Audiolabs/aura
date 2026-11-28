@@ -3,12 +3,10 @@
 use serde::{Deserialize, Serialize};
 
 /// Errors that can occur during audio synthesis operations.
+/// Append new variants to preserve existing binary Serde variant indices.
 #[derive(Debug, Clone, Serialize, Deserialize, thiserror::Error)]
 #[non_exhaustive]
 pub enum DspError {
-    /// Invalid filter parameters; allocation-free for audio-thread setters.
-    #[error("invalid filter parameters: values must be finite and within the documented range")]
-    InvalidFilterParameters,
     /// Frequency is out of valid range (must be > 0 and < Nyquist).
     #[error("invalid frequency {frequency}: must be > 0 and < {nyquist} (Nyquist)")]
     InvalidFrequency {
@@ -49,6 +47,10 @@ pub enum DspError {
         /// Description of the error.
         message: String,
     },
+
+    /// Invalid filter parameters; allocation-free for audio-thread setters.
+    #[error("invalid filter parameters: values must be finite and within the documented range")]
+    InvalidFilterParameters,
 }
 
 /// Result type alias for aura-dsp operations.
@@ -84,7 +86,10 @@ mod tests {
         // Published bincode 1.x fixtures: u32 variant index, then field values.
         let cases: [(DspError, &[u8]); 5] = [
             (
-                DspError::InvalidFrequency { frequency: 0.0, nyquist: 0.0 },
+                DspError::InvalidFrequency {
+                    frequency: 0.0,
+                    nyquist: 0.0,
+                },
                 &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             ),
             (
@@ -92,22 +97,33 @@ mod tests {
                 &[1, 0, 0, 0, 0, 0, 0, 0],
             ),
             (
-                DspError::InvalidParameter { name: String::new(), reason: String::new() },
+                DspError::InvalidParameter {
+                    name: String::new(),
+                    reason: String::new(),
+                },
                 &[2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             ),
             (
-                DspError::BufferOverflow { attempted: 0, capacity: 0 },
+                DspError::BufferOverflow {
+                    attempted: 0,
+                    capacity: 0,
+                },
                 &[3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             ),
             (
-                DspError::ComputationError { message: String::new() },
+                DspError::ComputationError {
+                    message: String::new(),
+                },
                 &[4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             ),
         ];
         for (error, published_bytes) in cases {
             assert_eq!(bincode::serialize(&error).unwrap(), published_bytes);
             let restored: DspError = bincode::deserialize(published_bytes).unwrap();
-            assert_eq!(serde_json::to_value(restored).unwrap(), serde_json::to_value(error).unwrap());
+            assert_eq!(
+                serde_json::to_value(restored).unwrap(),
+                serde_json::to_value(error).unwrap()
+            );
         }
     }
 
