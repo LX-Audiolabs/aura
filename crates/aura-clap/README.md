@@ -2,6 +2,10 @@
 
 CLAP format wrapper for AURA.
 
+Implementation and verification snapshot: **0.15.0 development**, **2026-11-28**.
+The public [CLAP support matrix](../../CLAP-SUPPORT.md) is the coverage index:
+supported / partial / not implemented, opt-ins, tests, and separate host evidence.
+
 ## Spec source of truth
 
 **We follow [free-audio/clap](https://github.com/free-audio/clap)** — the Clever Audio Plugin API (headers under `include/clap/`).
@@ -9,30 +13,33 @@ CLAP format wrapper for AURA.
 | Layer | What |
 |-------|------|
 | **Spec / ABI** | free-audio/clap (`CLAP_VERSION` on their `main` / releases) |
-| **Rust bindings** | crates.io [`clap-sys`](https://crates.io/crates/clap-sys) today — C layout + constants from those headers. **Intent:** in-tree takeover, see [`docs/clap-sys.md`](../../docs/clap-sys.md) |
+| **Rust bindings** | crates.io [`clap-sys`](https://crates.io/crates/clap-sys) 0.6.0 today. Maintainer [fork](https://github.com/lxndrbe/clap-sys) integration remains planned; no in-tree takeover has landed. |
 | **Our code** | `export!`, factory, process, audio-ports (+ config, sidechain), note-ports, params (sample-accurate + mono mod), state, GUI, remote-controls, latency, tail, render, **preset-load** (+ discovery when factory presets exist) |
 
 Rules:
 
 1. **New extensions and behaviour** come from free-audio docs/headers (product needs decide *which* extensions we ship).
-2. **Do not wait on crates.io `clap-sys`.** Major/minor 1.2 stay ABI-compatible (`clap_version_is_compatible`: major ≥ 1). Design against free-audio. AURA will maintain the bindings in-tree ([`docs/clap-sys.md`](../../docs/clap-sys.md)). Until that crate exists, vendor a newer header rather than wait for an upstream publish.
+2. Bindings updates or vendoring require an explicit source/revision choice and
+   compatibility checks. The current dependency remains crates.io 0.6.0; do not
+   describe the maintainer fork or a future in-tree crate as already integrated.
 3. **Do not invent** extension IDs or struct layouts — copy free-audio names.
 
 ### Version snapshot (check when bumping)
 
-Checked **2026-11-25**.
+Checked against the dependency lock **2026-11-28**; upstream reference below is
+a versioned header baseline, not a claim about today's newest upstream commit.
 
 | | Version |
 |--|---------|
-| free-audio/clap (upstream) | **1.2.10** (as of check against `main` `version.h`) |
+| free-audio/clap reference | **1.2.10** |
 | clap-sys (this workspace lock) | **0.6.0** — `CLAP_VERSION_*` = **1.2.10** |
 
-A crates.io bump is not the plan. New extension needed before the in-tree crate exists → vendor. Revision lag inside 1.2.x is not a ship blocker.
+Binding availability alone does not imply extension support; see the matrix.
 
 ## Usage
 
 ```toml
-aura = { path = "...", features = ["clap"] }
+lx-aura = { path = "../AURA/crates/aura", features = ["clap"] }
 ```
 
 ```rust
@@ -92,13 +99,17 @@ Products can override generated pages with `PluginLogic::remote_control_pages() 
 
 **Host track info:** `EditorBridge::track_info()` polls the host's track name and RGBA color on the editor/main thread. It returns `None` when the host extension is absent or its query fails; each field is independently optional.
 
-**Validator:** in-tree smokes (`smoke-gain`, `smoke-midi-fx`, `smoke-sidechain`, `smoke-synth`) — clap-validator **0 failed** (2026-08-11).
+**Validator:** fresh Windows/debug runs of all five smoke plugins, validator
+0.4.2 via `cargo aura validate`: **0 failed** (2026-11-28). Per-plugin pass/skip
+counts and limitations: [support matrix](../../CLAP-SUPPORT.md#verification-and-host-evidence).
+The earlier four-plugin report dated 2026-08-11 is historical evidence only.
 
 ---
 
 ## Outstanding (CLAP) — do not forget
 
-Ship-capable CLAP core is **done**. Remaining work is product-driven or optional host proof.
+The core surface is implemented. Host proof, implementation limits and missing
+extensions remain explicit in the support matrix.
 
 ### Product-driven (implement only when a plugin needs it)
 
@@ -108,7 +119,8 @@ Ship-capable CLAP core is **done**. Remaining work is product-driven or optional
 | **Rich state hooks** (host blob > flat params) | v2 envelope is params + `#[persist]`. Extra opaque bytes = G5 | preset that is not param+persist |
 | **SysEx typed decode** | raw `SysEx8` / Flex already on `ump` | hardware bridge that wants a typed API |
 
-Framework **done**, not this cycle: poly mod, note expression, MIDI 2, one aux, preset-load.
+Implemented: poly mod, note expression, MIDI 2, one aux, preset-load. This does
+not establish coverage in every host.
 
 ### Host proof (framework landed; Bitwig re-check 2026-08-28)
 
@@ -137,8 +149,9 @@ Install: `cargo aura install --clap --release -plug smoke-synth smoke-midi-fx sm
 
 ### Spec / bindings (not a ship blocker)
 
-- crates.io `clap-sys` may lag free-audio 1.2.x — do not wait on it. Takeover plan: [`docs/clap-sys.md`](../../docs/clap-sys.md).
-- Do **not** claim “full CLAP zoo” (thread-pool, surround/ambisonic ports, context-menu, track-info, …) unless product requires it.
+- The maintainer `clap-sys` fork is not yet the workspace dependency.
+- Do **not** claim all extensions: thread-pool and surround/ambisonic are absent;
+  context-menu and host track-info are implemented with documented limits.
 
 ### Explicit non-goals (AURA)
 

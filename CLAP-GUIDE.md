@@ -1,7 +1,7 @@
 # CLAP Guide for AURA
 
 API baseline: **AURA 0.14.6** (published).
-Repository workspace: **0.15.0 development**, not yet published; migration notes under `[Unreleased]` in
+Repository workspace: **0.15.0 release candidate**, not yet published; migration notes under `[0.15.0]` in
 [CHANGELOG.md](CHANGELOG.md). Checked against both APIs on **2026-11-28**.
 
 The versioned [API reference on docs.rs](https://docs.rs/lx-aura/0.14.6/aura/)
@@ -168,6 +168,9 @@ testing; implemented callbacks do not establish compatibility across all hosts.
 ## Other extension hooks
 
 AURA implements a selected CLAP surface, not every CLAP extension.
+The [support matrix](CLAP-SUPPORT.md) covers the locked bindings' extension set,
+exposure conditions, implementation limits, local tests, and host evidence for
+the 0.15.0 development checkout. Unsupported does not automatically mean planned.
 These author hooks describe implementation entry points, not a host certification matrix:
 
 | Capability | Author API / condition |

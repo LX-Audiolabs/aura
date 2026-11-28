@@ -7,7 +7,7 @@ Versioning: [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
-Target workspace version: **0.15.0** (not yet published).
+## [0.15.0] - 2026-11-28
 
 ### Migration from 0.14.x
 
@@ -31,6 +31,10 @@ Target workspace version: **0.15.0** (not yet published).
   introduced by the enum-order correction or guard versioning decision.
 
 ### Added
+
+- Added `CLAP-SUPPORT.md`: source-checked extension/factory/event coverage,
+  explicit limits and opt-ins, fresh five-plugin validator results, and a host
+  matrix that distinguishes historical reports from unverified behavior.
 
 - Added local `cargo aura validate`: delegates to `clap-validator validate` on
   PATH, preserving arguments, inherited output and numeric exit status without

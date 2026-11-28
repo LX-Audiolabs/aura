@@ -30,7 +30,7 @@ jobs:
           set -euo pipefail
           git diff --check origin/main HEAD
           # Docs/config-only PRs skip cargo fmt/clippy.
-          if test -f Cargo.toml && git diff --name-only origin/main HEAD | grep -Eqv '^(docs/|README[.]md$|CHANGELOG[.]md$|RELEASE[.]md$|LICENSE$|NOTICE$|CLAP-GUIDE[.]md$|[.]forgejo/|[.]zed/|renovate[.]json$)'; then
+          if test -f Cargo.toml && git diff --name-only origin/main HEAD | grep -Eqv '^(docs/|README[.]md$|CHANGELOG[.]md$|RELEASE[.]md$|CLAP-SUPPORT[.]md$|LICENSE$|NOTICE$|CLAP-GUIDE[.]md$|[.]forgejo/|[.]zed/|renovate[.]json$)'; then
             cargo fmt --all -- --check
             cargo clippy --workspace --all-targets -- -D warnings
             cargo test --locked --workspace --doc

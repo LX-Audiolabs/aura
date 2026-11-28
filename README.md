@@ -14,7 +14,7 @@ Published API baseline: **0.14.6** ([crates.io](https://crates.io/crates/lx-aura
 The versioned [API reference on docs.rs](https://docs.rs/lx-aura/0.14.6/aura/) is
 canonical; the Rust example below targets that release and was also checked
 against the **0.15.0** development checkout on **2026-11-28**. Repository quickstart and smoke
-examples use the checkout, including changes listed under `[Unreleased]` in
+examples use the checkout, including release changes and any subsequent `[Unreleased]` work in
 [CHANGELOG.md](CHANGELOG.md).
 
 | | |
@@ -85,7 +85,8 @@ AURA = **Slint + baseview + CLAP-first**, with thin VST3/LV2 only on the ship ma
 ## CLAP Guide
 
 AURA implements a selected CLAP surface. For the author API, extension hooks,
-and current limits, see the **[CLAP Guide](./CLAP-GUIDE.md)** and
+and current limits, see the **[CLAP Guide](./CLAP-GUIDE.md)**,
+the **[CLAP support matrix](CLAP-SUPPORT.md)** (implementation and host evidence), and
 [wrapper implementation notes](./crates/aura-clap/README.md).
 
 ---
@@ -307,7 +308,7 @@ local crate docs (`cargo doc -p lx-aura --features clap --open`), and
 | Area | State |
 |------|--------|
 | `PluginLogic` + `#[derive(Params)]` | done |
-| CLAP process / params / state / GUI | done (Bitwig host smoke) |
+| CLAP process / params / state / GUI | implemented; [support and host evidence](CLAP-SUPPORT.md) |
 | Sample-accurate automation + mono mod | done |
 | Sidechain (one optional bus) + MIDI I/O | done |
 | Aux out (one optional bus) | done (`BusLayout::with_aux`, `smoke-aux`) |

@@ -21,6 +21,9 @@ if a check does not apply, record why.
 - [ ] Review [README.md](README.md) and [CLAP-GUIDE.md](CLAP-GUIDE.md) together.
   Check parameter macros, `PluginLogic` signatures, feature names, package names,
   CLI commands, and local links against the release source.
+- [ ] Reconcile [CLAP-SUPPORT.md](CLAP-SUPPORT.md) with extension dispatch, host
+  queries, tests and recorded host runs. Update pass/skip/failure counts; retain
+  explicit unknowns instead of inferring support from a validator pass.
 - [ ] Update their API baseline, checkout version, and verification date accurately.
   A candidate must not be described as published before crates.io confirms it.
   Keep published examples and versioned docs.rs links on the published API;
@@ -97,6 +100,13 @@ behavior and non-default features need separate tests.
   The workspace now targets **0.15.0 development**, with migration instructions
   in [CHANGELOG.md](CHANGELOG.md). Do not restore cross-thread movement to
   satisfy a compatibility check.
+
+0.15.0 candidate checks (2026-11-28): source matrix reconciled with all locked
+CLAP extension modules; 32 CLAP unit tests pass. Full Windows/debug validator
+runs across five smoke plugins report 169 passes, 51 skips, zero failures.
+`cargo publish --workspace --dry-run --allow-dirty --locked` packaged and verified
+all 13 publishable crates against registry dependencies. Linux/macOS DAW checks
+and a fresh Rust 1.95/MSRV run are not part of this local evidence.
 
 Follow-up verification for 0.15.0 (same local environment): workspace build,
 tests including doc-tests, Clippy `--all-targets -- -D warnings`, and the
