@@ -10,6 +10,13 @@
 CLAP-first plugin framework for **LX Audiolabs**.  
 Runtime + formats + build + CLI live here.
 
+Published API baseline: **0.14.6** ([crates.io](https://crates.io/crates/lx-aura/0.14.6)).
+The versioned [API reference on docs.rs](https://docs.rs/lx-aura/0.14.6/aura/) is
+canonical; the Rust example below targets that release and was also checked
+against this **0.14.7** checkout on **2026-11-28**. Repository quickstart and smoke
+examples use the checkout, including changes listed under `[Unreleased]` in
+[CHANGELOG.md](CHANGELOG.md).
+
 | | |
 |--|--|
 | **Status** | **0.14.7** — basis complete; used in production LX plugins ([lx-audiolabs-plugins](https://github.com/LX-Audiolabs/lx-audiolabs-plugins)) |
@@ -47,7 +54,7 @@ Required UI path: **`aura-baseview`** (window/renderer) + **`aura-editor`** (hos
 
 Same rule as Slint: one primary format, no kitchen-sink matrix.
 
-- **CLAP** primary — one native path on Linux, Windows, macOS (`cargo aura new`, CI validator, Bitwig-first).
+- **CLAP** primary — one native path on Linux, Windows, macOS (`cargo aura new`, local validator, Bitwig-first).
 - **VST3** second path: **Windows and macOS only**. Linux VST3 (Wine etc.) unsupported.
 - **LV2** = Linux only (process/params/state/UI). No Win/mac ship path.
 
@@ -77,9 +84,9 @@ AURA = **Slint + baseview + CLAP-first**, with thin VST3/LV2 only on the ship ma
 
 ## CLAP Guide
 
-AURA is a **CLAP-first framework** with full support for all CLAP extensions. For a comprehensive guide on how to use CLAP in AURA, see the **[CLAP Guide](./CLAP-GUIDE.md)**.
-
-Improvement backlog & review notes: **[docs/improvements.md](./docs/improvements.md)**.
+AURA implements a selected CLAP surface. For the author API, extension hooks,
+and current limits, see the **[CLAP Guide](./CLAP-GUIDE.md)** and
+[wrapper implementation notes](./crates/aura-clap/README.md).
 
 ---
 
@@ -165,7 +172,7 @@ cargo aura doctor                                    # toolchain / AURA_PATH / c
 
 ```bash
 cargo build --workspace
-cargo test --workspace          # on non-Linux: --exclude aura-lv2
+cargo test --workspace          # on non-Linux: --exclude lx-aura-lv2
 cargo clippy --workspace --all-targets
 ```
 
@@ -210,6 +217,9 @@ cargo clippy --workspace --all-targets
 
 ## Author surface (minimal)
 
+Complete headless gain plugin; enable the `lx-aura` dependency's `clap` feature.
+The [CLAP Guide](CLAP-GUIDE.md#minimal-clap-plugin) includes its standalone manifest.
+
 ```rust
 use aura::prelude::*;
 
@@ -220,33 +230,51 @@ pub struct GainParams {
 }
 
 pub struct MyGain;
-pub struct DspState;
 
 impl PluginLogic for MyGain {
     type Params = GainParams;
-    type DspState = DspState;
+    type DspState = ();
 
-    fn info() -> PluginInfo { /* clap_id, vst3_id, … */ }
+    fn info() -> PluginInfo {
+        let mut info = PluginInfo::new("My Gain", "Example", "0.1.0", "my-gain");
+        info.clap_id = "com.example.my-gain";
+        info
+    }
+
+    fn init(_params: &GainParams, _sample_rate: f64) {}
+
+    fn reset(_state: &mut (), _params: &GainParams, _config: &AudioConfig) {}
 
     fn process(
-        _ctx: &mut PluginContext,
+        _state: &mut (),
         params: &GainParams,
-        _state: &mut DspState,
-        buf: &mut AudioBuffer,
-        _pc: &ProcessContext,
+        buffer: &mut AudioBuffer<'_, f32>,
+        _context: &mut ProcessContext,
     ) -> ProcessStatus {
-        // realtime-safe DSP here
+        let channels = buffer.num_inputs().min(buffer.num_outputs());
+        for sample in 0..buffer.num_samples() {
+            // Advance the smoother once per frame, shared by all channels.
+            let gain = 10.0_f32.powf(params.gain.read() / 20.0);
+            for channel in 0..channels {
+                let input = buffer.input(channel)[sample];
+                buffer.output(channel)[sample] = input * gain;
+            }
+        }
+        for channel in channels..buffer.num_outputs() {
+            buffer.output(channel).fill(0.0);
+        }
         ProcessStatus::Continue
     }
 }
 
-#[cfg(feature = "clap")]
 aura::export!(MyGain);
 ```
 
 Param IDs are **required and wire-stable** — reordering fields does not renumber automation.
 
-More detail: crate docs (`cargo doc -p aura --open`) and [crates/aura-clap/README.md](./crates/aura-clap/README.md).
+More detail: the [published API reference](https://docs.rs/lx-aura/0.14.6/aura/),
+local crate docs (`cargo doc -p lx-aura --features clap --open`), and
+[crates/aura-clap/README.md](./crates/aura-clap/README.md).
 
 ---
 
@@ -262,7 +290,7 @@ More detail: crate docs (`cargo doc -p aura --open`) and [crates/aura-clap/READM
 | Latency / remote-controls / tail / render | done |
 | VST3 (Win/mac) | done (host smoke) |
 | LV2 (Linux) process + UI extension | done (UI host smoke depends on host) |
-| crates.io publish | done (`lx-aura-*` on crates.io; workspace **0.14.5**) |
+| crates.io publish | **0.14.6** published; checkout **0.14.7** plus `[Unreleased]` changes |
 | `clap.preset-load` + factory discovery | done (`factory_presets`) |
 | Poly mod / note expression | done (CLAP → `ProcessContext.notes`; `NoteVoiceTable` + `NOTE_END`) |
 | Native MIDI 2 process | done (`ProcessContext.ump` / `ump_out`; 7-bit `midi` remains) |
@@ -280,6 +308,7 @@ Issues and PRs welcome on this framework repo.
 - Keep the **scope** (Slint + CLAP-first ship matrix). Do not add AU/egui/AAX “just in case.”
 - Prefer small, tested changes. One assert for non-trivial logic.
 - Match workspace versioning: single version in root `Cargo.toml` + `CHANGELOG.md`.
+- Follow [the release checklist](RELEASE.md) before publishing or tagging a release.
 - CI (Forgejo, self-hosted): `fmt --check` + `clippy -D warnings`.
 
 ```bash

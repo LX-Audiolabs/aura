@@ -1,381 +1,218 @@
 # CLAP Guide for AURA
 
-*A comprehensive guide to using CLAP extensions in AURA*
+API baseline: **AURA 0.14.6** (published).
+Repository workspace: **0.14.7**, with additional changes under `[Unreleased]` in
+[CHANGELOG.md](CHANGELOG.md). Checked against both APIs on **2026-11-28**.
 
-## **1. Introduction to CLAP**
+The versioned [API reference on docs.rs](https://docs.rs/lx-aura/0.14.6/aura/)
+is canonical for the published API. This guide uses the same parameter macro and
+`PluginLogic` surface as the [README](README.md). Repository examples follow the
+checkout; they may include changes newer than the published release.
 
-### Why CLAP?
-CLAP (CLever Audio Plugin) is a modern, open-source plugin format designed for **modularity, performance, and extensibility**. Unlike VST3, LV2, AU, or AAX, CLAP is **not tied to a specific company** and offers **first-class support for advanced features** like:
-- **Polyphonic modulation**
-- **Note expressions**
-- **Remote controls**
-- **Tuning systems**
-- **State management**
+## Minimal CLAP plugin
 
-### AURA’s CLAP Advantages
-AURA is a **CLAP-first framework** that provides:
-- **Full support for all CLAP extensions** (no compromises).
-- **Abstraction over low-level details** (e.g., `clap-sys`).
-- **Seamless integration with Slint for UI**.
-- **Cross-platform compatibility** (Windows, macOS, Linux).
+Create a Rust library with this manifest:
 
----
+```toml
+[package]
+name = "my-gain"
+version = "0.1.0"
+edition = "2024"
 
-## **2. Getting Started: A Minimal CLAP Plugin**
+[lib]
+crate-type = ["cdylib", "rlib"]
 
-### Basic Structure
-Here’s a minimal example of a CLAP plugin in AURA:
-
-```rust
-use aura_clap::Instance;
-use clap_sys::plugin::clap_plugin_descriptor;
-use aura_core::Plugin;
-
-#[derive(Default)]
-struct MyPlugin;
-
-impl Plugin for MyPlugin {
-    fn process(&mut self, instance: &mut Instance, process: &clap_process) -> Result<(), ()> {
-        // Audio processing logic here
-        Ok(())
-    }
-}
-
-// CLAP descriptor
-#[no_mangle]
-pub static CLAP_DESCRIPTOR: clap_plugin_descriptor = clap_plugin_descriptor {
-    clap_version: clap_sys::version::CLAP_VERSION,
-    id: b"com.example.myplugin\0".as_ptr() as *const _,
-    name: b"My Plugin\0".as_ptr() as *const _,
-    vendor: b"Example\0".as_ptr() as *const _,
-    url: b"https://example.com\0".as_ptr() as *const _,
-    manual_url: b"https://example.com/manual\0".as_ptr() as *const _,
-    support_url: b"https://example.com/support\0".as_ptr() as *const _,
-    version: b"1.0.0\0".as_ptr() as *const _,
-    description: b"A simple CLAP plugin\0".as_ptr() as *const _,
-    features: &[
-        clap_sys::plugin_features::CLAP_PLUGIN_FEATURE_AUDIO_EFFECT,
-        std::ptr::null(),
-    ][0] as *const _,
-};
+[dependencies]
+lx-aura = { version = "=0.14.6", default-features = false, features = ["clap"] }
 ```
 
----
-
-## **3. CLAP Extensions in AURA**
-
-AURA supports **all CLAP extensions**. Below are the most important ones with examples.
-
-### **3.1 Parameters (`clap.params`)**
-
-#### Dynamic Parameters
-Use `aura-params` to define and manage parameters:
+Put this complete, headless gain plugin in `src/lib.rs`:
 
 ```rust
-use aura_params::Param;
+use aura::prelude::*;
 
 #[derive(Params)]
-struct MyParams {
-    #[id = "gain"]
-    gain: Param<f32>,
-    #[id = "cutoff"]
-    cutoff: Param<f32>,
+pub struct GainParams {
+    #[param(id = 1, name = "Gain", range = "linear(-24, 24)", default = 0.0, unit = "db")]
+    pub gain: FloatParam,
 }
 
-impl Default for MyParams {
-    fn default() -> Self {
-        Self {
-            gain: Param::new("Gain", 0.5, 0.0..=1.0),
-            cutoff: Param::new("Cutoff", 1000.0, 20.0..=20000.0),
-        }
+pub struct MyGain;
+
+impl PluginLogic for MyGain {
+    type Params = GainParams;
+    type DspState = ();
+
+    fn info() -> PluginInfo {
+        let mut info = PluginInfo::new("My Gain", "Example", "0.1.0", "my-gain");
+        info.clap_id = "com.example.my-gain";
+        info
     }
-}
-```
 
-#### Parameter Events
-Handle parameter changes in the audio thread:
+    fn init(_params: &GainParams, _sample_rate: f64) {}
 
-```rust
-unsafe fn emit_param_events(instance: &mut Instance, events: &[clap_event_param_value]) {
-    for event in events {
-        instance.param_events.push(*event);
-    }
-}
-```
+    fn reset(_state: &mut (), _params: &GainParams, _config: &AudioConfig) {}
 
----
-
-### **3.2 GUI (`clap.gui`)**
-
-#### Creating a GUI
-Use `aura-baseview` and `Slint` for hardware-accelerated UIs:
-
-```rust
-use aura_baseview::SlintParentedWindow;
-use slint::PhysicalSize;
-
-fn create_gui(instance: &mut Instance) {
-    let window = SlintParentedWindow::new(
-        PhysicalSize::new(800, 600),
-        instance.host_scale(),
-    );
-    instance.set_editor(window);
-}
-```
-
-#### Scaling for HiDPI
-AURA automatically handles scaling between logical and physical pixels:
-
-```rust
-fn set_scale(instance: &mut Instance, scale: f64) {
-    instance.set_host_scale(scale);
-}
-```
-
----
-
-### **3.3 State (`clap.state`)**
-
-#### Saving and Loading State
-Serialize and deserialize plugin state:
-
-```rust
-use clap_sys::stream::{clap_istream, clap_ostream};
-
-unsafe extern "C" fn state_save(
-    plugin: *const clap_plugin,
-    stream: *const clap_ostream,
-) -> bool {
-    let instance = &mut *(plugin as *mut Instance);
-    let data = bincode::serialize(&instance.state).unwrap();
-    let written = (*stream).write.unwrap()(stream as *const _, data.as_ptr() as *const _, data.len());
-    written == data.len()
-}
-
-unsafe extern "C" fn state_load(
-    plugin: *const clap_plugin,
-    stream: *const clap_istream,
-) -> bool {
-    let instance = &mut *(plugin as *mut Instance);
-    let mut data = vec![0u8; (*stream).size as usize];
-    let read = (*stream).read.unwrap()(stream as *const _, data.as_mut_ptr() as *mut _, data.len());
-    if read == data.len() {
-        instance.state = bincode::deserialize(&data).unwrap();
-        true
-    } else {
-        false
-    }
-}
-```
-
----
-
-### **3.4 Remote Controls (`clap.remote-controls`)**
-
-#### MIDI Mapping for Hardware Controllers
-Define remote control pages for hardware integration:
-
-```rust
-use clap_sys::remote_controls::clap_remote_controls_page;
-
-fn create_remote_controls() -> Vec<clap_remote_controls_page> {
-    vec![
-        clap_remote_controls_page {
-            section_name: b"Main\0".as_ptr() as *const _,
-            page_name: b"Gain\0".as_ptr() as *const _,
-            param_ids: &[0, std::ptr::null()][0] as *const _,
-            is_for_preset: false,
-        },
-    ]
-}
-```
-
----
-
-### **3.5 Note Ports (`clap.note-ports`)**
-
-#### MIDI and Note Events
-Define note ports for MIDI and polyphonic modulation:
-
-```rust
-use clap_sys::note_ports::clap_note_port_info;
-
-fn note_ports() -> Vec<clap_note_port_info> {
-    vec![
-        clap_note_port_info {
-            id: 0,
-            supported_dialects: clap_sys::note_dialect::CLAP_NOTE_DIALECT_MIDI,
-            preferred_dialect: clap_sys::note_dialect::CLAP_NOTE_DIALECT_MIDI,
-            name: b"MIDI In\0".as_ptr() as *const _,
-        },
-    ]
-}
-```
-
-#### Handling Note Events
-Process note events in the audio thread:
-
-```rust
-unsafe fn process_note_events(instance: &mut Instance, events: &[clap_event_note]) {
-    for event in events {
-        match event.header.event_type {
-            clap_sys::events::CLAP_EVENT_NOTE_ON => {
-                // Handle note-on
+    fn process(
+        _state: &mut (),
+        params: &GainParams,
+        buffer: &mut AudioBuffer<'_, f32>,
+        _context: &mut ProcessContext,
+    ) -> ProcessStatus {
+        let channels = buffer.num_inputs().min(buffer.num_outputs());
+        for sample in 0..buffer.num_samples() {
+            // Advance the smoother once per frame, shared by all channels.
+            let gain = 10.0_f32.powf(params.gain.read() / 20.0);
+            for channel in 0..channels {
+                let input = buffer.input(channel)[sample];
+                buffer.output(channel)[sample] = input * gain;
             }
-            clap_sys::events::CLAP_EVENT_NOTE_OFF => {
-                // Handle note-off
-            }
-            _ => {}
         }
+        for channel in channels..buffer.num_outputs() {
+            buffer.output(channel).fill(0.0);
+        }
+        ProcessStatus::Continue
     }
 }
+
+aura::export!(MyGain);
 ```
 
----
+Build with `cargo build --release`. The format wrapper owns the CLAP entry,
+descriptor, callbacks, and extension registration. Authors implement
+`PluginLogic`; they do not construct `clap_plugin_descriptor` or cast host
+pointers to an AURA instance.
 
-### **3.6 Voice Info (`clap.voice-info`)**
+For scaffolding, installation, and UI setup, follow the README quickstart.
+That workflow uses the cloned checkout through `AURA_PATH`, whereas the manifest
+above deliberately targets the published release.
 
-#### Polyphony and Voice Management
-Define voice capabilities for polyphonic plugins:
+## Parameters and automation
 
-```rust
-use clap_sys::voice_info::clap_voice_info;
+Use `#[derive(Params)]`, `FloatParam` / `IntParam` / `BoolParam` / `EnumParam`,
+and explicit numeric `#[param(id = N, ...)]` attributes. The derive supplies
+`Default` and a typed parameter-ID enum (here `GainParamsParamId::Gain.id()`).
+IDs are persistent host automation/state identifiers: never renumber them after shipping.
 
-fn voice_info() -> clap_voice_info {
-    clap_voice_info {
-        voice_count: 16,
-        voice_capacity: 16,
-        flags: clap_sys::voice_info::CLAP_VOICE_INFO_SUPPORTS_OVERLAPPING_NOTES,
-    }
-}
-```
+The prelude imports `FloatParamReadF32`. `gain.read()` advances its smoother
+toward the effective target, including mono modulation; call it once per sample
+frame, not once per channel. The minimal example defaults to no smoothing.
+Choose a smoothing style and configure it for the sample rate in
+a product; see the parameter API reference.
 
----
+CLAP splits processing at sample offsets for parameters marked
+`ParamFlags::CHUNKED` (default); `#[param(chunk = false)]` opts out.
+Declare mono modulation with `flags = "modulatable"`; add
+`modulatable_per_note` for per-note modulation. Per-note offsets arrive in
+`ProcessContext.notes` and require voice-specific handling.
 
-### **3.7 Latency and Tail (`clap.latency`, `clap.tail`)**
+UI edits and host gestures go through the editor's `PluginContext` bridge.
+Direct parameter writes alone do not describe a complete host automation gesture.
+See [smoke-gain](examples/smoke-gain/src/lib.rs) for Slint integration and
+the [editor bridge API](https://docs.rs/lx-aura-core/0.14.6/aura_core/editor/index.html)
+for the host-facing contract.
 
-#### Latency Compensation
-Report plugin latency to the host:
+## Slint GUI
 
-```rust
-fn latency() -> u32 {
-    128 // Samples
-}
-```
+Override `PluginLogic::editor(Arc<Self::Params>) -> Option<Box<dyn Editor>>`.
+The supported stack is `aura_editor::AuraSlintEditor` over `aura-baseview`,
+with `aura-build` compiling the Slint component. The default returns `None`.
 
-#### Infinite Tail for Reverb/Delay
-Define an infinite tail for effects like reverb:
+Use [smoke-gain](examples/smoke-gain/) as the complete UI/build reference.
+Host parenting, scale, and resize use the editor adapter; there is no author API
+named `SlintParentedWindow::new` or `Instance::set_host_scale`.
 
-```rust
-fn tail() -> u32 {
-    clap_sys::tail::CLAP_TAIL_INFINITE
-}
-```
+Run `cargo aura preview` for UI work without loading a DAW. This previews the
+component; it does not validate the CLAP wrapper or DSP.
 
----
+## State and presets
 
-### **3.8 Tuning (`clap.tuning`)**
+The wrappers call `PluginLogic::save_state_with_context` and
+`load_state_with_context`. Defaults use `aura::encode_state` /
+`aura::decode_state`: an `AURA` magic header, version-2 envelope, parameter
+values, and `#[persist]` data. The decoder also accepts legacy version-1
+parameter blobs. Do not replace these with raw FFI stream callbacks.
 
-#### Microtonal Scales
-Support custom tuning systems:
+`StateContext` distinguishes `Project`, `Preset`, and `Duplicate`.
+Override `state_context_supported() -> bool` to opt into the CLAP state-context
+extension. Custom codecs must validate their input and snap parameter smoothers
+after restoring values.
 
-```rust
-use clap_sys::tuning::clap_tuning;
+`factory_presets()` supplies bundled `FactoryPreset` entries; non-empty lists
+enable preset discovery. The preset-load path uses `load_preset_from_file`
+for files and `apply_factory_preset` for factory entries. The existence of
+state versioning does not imply arbitrary product-state migrations or bounded
+host-stream loading; those require separate verification.
 
-fn tuning() -> clap_tuning {
-    clap_tuning {
-        tuning: b"12-TET\0".as_ptr() as *const _,
-        is_dynamic: false,
-    }
-}
-```
+## Notes, MIDI, voices, and tuning
 
----
+Declare note input/output through `PluginInfo.accepts_midi_in` and
+`PluginInfo.emits_midi`. Current wrappers expose at most one input and one
+output note port. There is no arbitrary multi-note-port author API.
 
-## **4. Advanced Topics**
+Choose `midi_input_dialect` / `midi_output_dialect` with `MidiDialect`.
+`Clap` prefers native CLAP notes; `Midi2` prefers MIDI 2.
+`ProcessContext` provides incoming `notes`, `midi`, and `ump`, plus their
+output counterparts. Preserve sample offsets and note identity when generating
+events; `NoteVoiceTable` helps track overlapping notes and expressions.
+`NOTE_END` reports voice completion, while generated notes need an output port.
 
-### **4.1 Threading and Real-Time Safety**
+Set `PluginInfo.voice_count` and `voice_capacity` to advertise voice info.
+For host tuning, set `supports_tuning = true` and query `context.tuning`;
+`PluginLogic::tuning_changed` handles tuning-pool notifications.
 
-#### Audio Thread vs. GUI Thread
-- **Never block the audio thread** (e.g., no file I/O, no allocations).
-- Use **atomic variables** or **message passing** for communication:
+References: [smoke-synth](examples/smoke-synth/src/lib.rs) and
+[smoke-midi-fx](examples/smoke-midi-fx/src/lib.rs). Host behavior needs separate
+testing; implemented callbacks do not establish compatibility across all hosts.
 
-```rust
-use std::sync::atomic::{AtomicBool, Ordering};
+## Other extension hooks
 
-static GUI_DIRTY: AtomicBool = AtomicBool::new(false);
+AURA implements a selected CLAP surface, not every CLAP extension.
+These author hooks describe implementation entry points, not a host certification matrix:
 
-fn process_audio() {
-    if GUI_DIRTY.load(Ordering::Relaxed) {
-        // Update GUI
-        GUI_DIRTY.store(false, Ordering::Relaxed);
-    }
-}
-```
+| Capability | Author API / condition |
+|------------|------------------------|
+| Audio layouts | `bus_layouts()`; one optional sidechain and one aux output |
+| Remote controls | Parameter groups or `remote_control_pages()`; not MIDI CC mapping |
+| Latency | `latency(&state)` in samples |
+| Tail | `tail_length(&state)` in samples |
+| Offline rendering | `ProcessContext.process_mode` |
+| Note names | Non-empty `note_names()` |
+| Parameter indication | `on_param_mapping` / `on_param_automation` |
+| Parameter context menus | `context_menu_supported()` and related callbacks |
 
----
+See [aura-clap implementation notes](crates/aura-clap/README.md) and
+`plugin_get_extension` in [the wrapper source](crates/aura-clap/src/lib.rs)
+for extension exposure and conditions. Adding an extension is framework work:
+implement the wrapper against the CLAP headers, expose the needed author hook,
+and test it. There is no generic extension trait registration API.
 
-### **4.2 Debugging and Testing**
+## Realtime rules and validation
 
-#### CLAP Validator
-Validate your plugin with the official CLAP validator:
+Allocate and prepare DSP storage during `init` / `reset`. In `process`, avoid
+allocation/deallocation, locks, file I/O, formatting/logging, and GUI calls.
+Publish bounded data for a non-audio thread to consume; UI drawing and logging
+belong on that thread. An atomic flag does not make a GUI call realtime-safe.
+These remain author responsibilities, not compile-time guarantees.
+
+Validate an installed plugin locally:
 
 ```bash
-clap-validator path/to/your/plugin.clap
+clap-validator validate path/to/my-gain.clap
 ```
 
-#### Logging
-Use the `log` crate for debugging:
+Maintainer fork: [lxndrbe/clap-validator](https://github.com/lxndrbe/clap-validator).
+`cargo aura doctor` checks availability only. The `cargo aura validate`
+wrapper is planned; it is not an existing command. Validator execution is not
+required on every Forgejo push.
 
-```rust
-use log::info;
+The example's source can be compiled independently; automated coverage of all
+Markdown samples is a separate backlog item. A validator run also does not
+replace state round-trip tests or real-host tests.
 
-fn process_audio() {
-    info!("Processing audio block");
-}
-```
+## Further reading
 
-#### Unit Tests
-Test your plugin logic:
-
-```rust
-#[test]
-fn test_gain_parameter() {
-    let params = MyParams::default();
-    assert_eq!(params.gain.value(), 0.5);
-}
-```
-
----
-
-## **5. Example: A Complete CLAP Plugin**
-
-For a complete example, see the `examples/` directory in this repository.
-
----
-
-## **6. FAQ**
-
-### **How do I add a new CLAP extension?**
-1. Implement the corresponding **extension trait** in `aura-clap`.
-2. Register the extension in the `plugin_get_extension` function.
-
-### **How do I optimize performance?**
-- Use `#[inline]` for critical paths.
-- Avoid heap allocations in the audio thread.
-- Use **FemtoVG** for hardware-accelerated UI rendering.
-
-### **How do I debug GUI issues?**
-- Use **Slint previews** for rapid UI iteration.
-- Enable OpenGL debugging with `export MESA_DEBUG=1` (Linux/macOS).
-
-### **How do I handle MIDI CC?**
-- Use the `clap.note-ports` extension for MIDI input.
-- Map MIDI CC to parameters using `clap.remote-controls`.
-
----
-
-## **7. Further Reading**
-- [CLAP Specification](https://github.com/free-audio/clap)
-- [AURA Documentation](https://docs.rs/lx-aura)
-- [Slint UI Framework](https://slint.dev/)
+- [Published API reference (0.14.6)](https://docs.rs/lx-aura/0.14.6/aura/)
+- [README and CLI quickstart](README.md)
+- [CLAP specification](https://github.com/free-audio/clap)
+- [Slint](https://slint.dev/)
