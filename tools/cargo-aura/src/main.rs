@@ -293,7 +293,7 @@ fn print_scaffold_success(verb: &str, dest: &Path, cd: Option<&str>, formats: &[
         .join(" ");
 
     println!("{verb} {}", dest.display());
-    println!("  aura.toml  ui/main.slint  src/lib.rs");
+    println!("  aura.toml  ui/main.slint  src/lib.rs  .agents/skills/aura-author/SKILL.md");
     println!();
     println!("next:");
     if let Some(dir) = cd {

@@ -270,6 +270,10 @@ dir = "%LOCALAPPDATA%\\Programs\\Common"
         ("build.rs".to_string(), build_rs),
         ("aura.toml".to_string(), aura_toml),
         (".gitignore".to_string(), gitignore),
+        (
+            ".agents/skills/aura-author/SKILL.md".to_string(),
+            include_str!("../skills/aura-author/SKILL.md").to_string(),
+        ),
         ("ui/main.slint".to_string(), main_slint),
         ("src/lib.rs".to_string(), lib_rs),
     ];
@@ -1728,6 +1732,7 @@ mod tests {
                 "build.rs",
                 "aura.toml",
                 ".gitignore",
+                ".agents/skills/aura-author/SKILL.md",
                 "ui/main.slint",
                 "src/lib.rs",
             ]
